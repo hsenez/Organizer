@@ -1,0 +1,4 @@
+# Organizer — outils de développement
+-r requirements-client.txt
+pytest==9.2.0
+ruff

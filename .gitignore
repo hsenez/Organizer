@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+# Données locales (base SQLite, pièces jointes, config client)
+data/
+*.db
+*.sqlite3
+.env
+.nicegui/

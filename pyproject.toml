@@ -1,0 +1,13 @@
+[project]
+name = "organizer"
+version = "0.1.0"
+description = "Organiseur de tâches multi-utilisateurs : serveur web (Raspberry Pi) + client bureau"
+requires-python = ">=3.11"
+
+[tool.ruff]
+# Le serveur tourne sur un Raspberry Pi en Python 3.11 : ruff refuse toute syntaxe plus récente.
+target-version = "py311"
+line-length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

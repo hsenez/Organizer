@@ -1,0 +1,392 @@
+# 📋 Organizer — Spécifications
+
+> Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
+> Version : 0.2 — 2026-11-07
+
+---
+
+## 1. Vision
+
+Un organiseur de tâches **agréable à l'œil, très user friendly**, avec des emojis et des infobulles partout pour
+s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry Pi du réseau local, utilisable :
+
+- 🖥️ depuis un **client bureau** (Linux / Windows) ;
+- 🌐 depuis un **navigateur** (`http://<ip-du-pi>:2603`) ;
+- 📱 depuis un **téléphone** (interface adaptée, installable sur l'écran d'accueil — PWA).
+
+---
+
+## 2. Architecture
+
+```
+                   ┌───────────────────────────── Raspberry Pi 5 (Python 3.11) ─────────────┐
+ 📱 Téléphone  ─┐  │  Uvicorn :2603                                                          │
+ 🌐 Navigateur ─┼──┼─▶ NiceGUI (pages web)  ──┐                                              │
+                │  │                          ├─▶ Services métier ─▶ SQLModel ─▶ SQLite      │
+ 🖥️ Client  ────┼──┼─▶ API REST /api/v1  ─────┘        │                                     │
+   bureau       │  │   WebSocket /api/v1/events ◀──────┘ (diffusion des changements)         │
+                │  │   Pièces jointes : data/uploads/                                        │
+                │  └─────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Une seule interface**, écrite une fois avec NiceGUI (pages, composants, cartes, éditeur).
+  - Côté **serveur**, elle accède aux données via les services métier directement (`LocalDataSource`).
+  - Côté **client bureau**, la même interface tourne localement dans une fenêtre native (pywebview) et accède
+    aux données via l'API REST du serveur (`RemoteDataSource`, httpx).
+  - Les deux implémentent la même interface `DataSource` : le code UI ne sait pas où sont les données.
+- **Temps réel** : toute modification est diffusée (bus d'événements interne + WebSocket pour les clients bureau)
+  pour que les autres écrans se rafraîchissent.
+- **Pas de mode hors ligne** en v1 : le client bureau a besoin du serveur.
+
+### 2.1 Bibliothèques
+
+| Rôle | Bibliothèque | Version |
+|---|---|---|
+| Interface web/bureau + serveur HTTP | NiceGUI (FastAPI, Uvicorn, Quasar/Vue) | 4.0.0 |
+| ORM + modèles | SQLModel / SQLAlchemy | 0.0.48 / 2.1.8 |
+| Hachage des mots de passe | argon2-cffi | 25.1.0 |
+| Signature des cookies / jetons | itsdangerous | 2.2.0 |
+| Client HTTP (client bureau → API) | httpx | 0.28.1 |
+| Fenêtre native du client bureau | pywebview (+ PyGObject sous Linux) | 6.2.1 |
+| Éditeur markdown (JS embarqué) | CodeMirror 6 (fichiers vendorisés dans `static/vendor/`) | 6.x |
+| Notifications système (client bureau) | desktop-notifier *(à installer à l'étape concernée)* | — |
+| Tests / lint | pytest, ruff (`target-version = py311`) | — |
+
+Fichiers : `requirements.txt` (serveur), `requirements-client.txt` (client bureau), `requirements-dev.txt` (dev).
+
+### 2.2 Arborescence prévue
+
+```
+organizer/
+  config.py              # chemins, port, paramètres (variables d'environnement)
+  core/
+    enums.py             # Importance, Urgence, Statut, Type : valeur, libellé, emoji, infobulle, couleur
+    models.py            # tables SQLModel
+    schemas.py           # objets échangés (Pydantic)
+    services/            # logique métier : tâches, sous-tâches, boards, projets, tags, utilisateurs
+    datasource.py        # interface DataSource + LocalDataSource
+  server/
+    app.py               # point d'entrée serveur (FastAPI + NiceGUI)
+    db.py                # moteur SQLite, création / migration du schéma
+    auth.py              # sessions, cookies, jetons API
+    api/                 # routes REST /api/v1 + WebSocket d'événements
+  client/
+    main.py              # point d'entrée client bureau (fenêtre native)
+    remote.py            # RemoteDataSource (httpx)
+    system.py            # ouverture de fichiers/liens, notifications
+  ui/
+    theme.py             # couleurs, CSS, thème clair/sombre
+    layout.py            # colonne de gauche, en-tête, mise en page responsive
+    components/          # task_card, task_editor, markdown_editor, level_slider, filter_bar, ...
+    pages/               # login, accueil, liste, kanban, matrice, réglages
+  static/                # css, js, icônes, manifeste PWA, vendor/codemirror
+tests/
+deploy/organizer.service # service systemd pour le Raspberry Pi
+run_server.py
+run_client.py
+```
+
+---
+
+## 3. Utilisateurs, authentification, partage
+
+- **Comptes** : le **premier compte créé est admin** (écran d'initialisation au premier lancement). L'admin crée
+  les autres comptes ; pas d'inscription libre.
+- **Connexion web** : identifiant + mot de passe, case « 🍪 Se souvenir de moi » → cookie de session
+  (HttpOnly, SameSite=Lax) valable **30 jours** ; sinon cookie de session de navigateur.
+- **Connexion client bureau** : adresse du serveur + identifiant + mot de passe → **jeton API** stocké dans le
+  dossier de config utilisateur (jamais le mot de passe). Reconnexion automatique au lancement.
+- **Sessions** : visibles et révocables dans les réglages (« appareils connectés »).
+- **Visibilité des tâches** :
+  - chaque tâche a un **propriétaire** ; elle est privée par défaut ;
+  - elle peut être **partagée** avec d'autres utilisateurs (droit d'édition) ;
+  - **partager un board** donne accès aux tâches posées dessus ;
+  - les **sous-tâches suivent la visibilité de leur parent**.
+- **Projets et tags** : chacun est **🌍 public** (visible et utilisable par tous) ou **🔒 privé** (visible
+  uniquement par son créateur), au choix. Voir 4.5.
+- Réseau local uniquement, **HTTP simple** en v1 (pas de HTTPS).
+
+---
+
+## 4. Modèle de données
+
+### 4.1 Tâche
+
+| Attribut | Détail |
+|---|---|
+| Titre | texte court, obligatoire |
+| Importance | 4 niveaux (voir 4.2) |
+| Urgence | 4 niveaux (voir 4.2) |
+| Échéance (due date) | date, optionnelle, éditable (heure optionnelle) |
+| Statut | ⏳ Pas commencé · 🚧 En cours · ⏸️ En pause · ✅ Fini · ❌ Annulé |
+| Type | 📌 À faire · 👁️ Suivi |
+| Date de rappel | pour le type Suivi (voir 4.3) |
+| Projet / sujet | un seul projet (optionnel), choisi dans la liste des réglages |
+| Tags | plusieurs, choisis dans la liste des réglages |
+| Notes | markdown (voir §6) |
+| Liens | hyperliens, chemins de fichiers locaux, pièces jointes (voir 4.4) |
+| Parent | tâche parente si c'est une sous-tâche (voir §5) |
+| Méta | propriétaire, partages, création, modification, date de fin |
+
+### 4.2 Niveaux (avec emoji, couleur et infobulle)
+
+| Niveau | Importance | Urgence |
+|---|---|---|
+| 1 | ⚪ Mineure — « Peu d'impact si ce n'est pas fait » | 🐢 Quand possible — « Aucune pression de temps » |
+| 2 | 🔵 Normale — « Utile, à faire en temps voulu » | 🕐 Bientôt — « À traiter dans les prochains jours » |
+| 3 | 🟠 Importante — « Impact réel, à ne pas négliger » | ⏰ Pressant — « À traiter rapidement » |
+| 4 | 🔴 Critique — « Conséquences lourdes si raté » | 🔥 Immédiat — « À traiter maintenant » |
+
+Infobulles détaillées également sur les statuts et les types.
+
+### 4.3 Type Suivi et rappel
+
+- Par défaut, **rappel = échéance − N jours** (N = 2 par défaut, réglable globalement et par tâche).
+  Si l'échéance bouge, le rappel suit.
+- Le rappel peut être **fixé manuellement** : il ne suit plus l'échéance (bouton 🔗 pour le re-corréler).
+- Au rappel : la tâche remonte sur l'**accueil** (section 🔔 Rappels) et le **client bureau** affiche une
+  **notification système**.
+
+### 4.4 Liens
+
+| Type | Web / téléphone | Client bureau |
+|---|---|---|
+| 🌐 Hyperlien | ouvre un nouvel onglet | ouvre le navigateur par défaut |
+| 📁 Chemin local (`C:\…`, `/home/…`) | **copie le chemin dans le presse-papiers** (+ toast) | ouvre avec l'application par défaut de l'OS |
+| 📎 Pièce jointe (envoyée au serveur) | téléchargement / ouverture | téléchargement puis ouverture |
+
+### 4.5 Projets et tags
+
+- **Projet / sujet** : nom, emoji, couleur, description, archivé oui/non. Une tâche → zéro ou un projet.
+- **Tag** : nom, couleur. Une tâche → plusieurs tags. Autocomplétion dans l'éditeur ; création à la volée
+  possible depuis l'éditeur (ajoute le tag à la liste, privé par défaut).
+- **Visibilité** : chaque projet / tag a un créateur et un drapeau **🌍 public / 🔒 privé**.
+  - Public : visible et utilisable par tous ; modifiable par son créateur et les admins.
+  - Privé : visible, utilisable et modifiable uniquement par son créateur.
+  - Sur une tâche partagée, un projet ou un tag privé d'un autre utilisateur **n'apparaît pas** aux autres.
+  - Les noms doivent être uniques parmi ce qu'un utilisateur voit (ses privés + les publics).
+- Gestion complète (créer, renommer, recolorer, réordonner, archiver, supprimer, fusionner deux tags) dans
+  **⚙️ Réglages**.
+
+### 4.6 Boards
+
+- **Board** : nom, emoji, propriétaire, partages, type (prédéfini / personnalisé), filtres enregistrés.
+- **Colonne** (boards personnalisés) : nom, emoji, couleur, position.
+- **Placement** : (board, colonne, tâche, position). Une tâche peut être sur plusieurs boards personnalisés.
+
+---
+
+## 5. Sous-tâches
+
+- Une sous-tâche est une **vraie tâche** (tous les attributs) rattachée à un parent. **Un seul niveau** de
+  profondeur.
+- **Éditeur du parent** : section « 🌳 Sous-tâches » : ajout rapide (titre + Entrée), case pour terminer d'un clic,
+  ✏️ pour ouvrir l'éditeur complet, réordonnancement par glisser-déposer. À la création, la sous-tâche hérite
+  importance / urgence / échéance / projet du parent (modifiables).
+- **Carte du parent** : barre de progression `▰▰▰▱▱ 3/5` (les annulées ne comptent pas).
+- **Carte d'une sous-tâche** : badge `↳ Nom du parent`, cliquable.
+- **Automatismes** :
+  - une sous-tâche passe « En cours » → le parent passe « En cours » s'il était « Pas commencé » ;
+  - toutes les sous-tâches finies → **proposition** (non forcée) de terminer le parent ;
+  - échéance de la sous-tâche postérieure à celle du parent → ⚠️ avec infobulle.
+- **Suppression d'un parent** : choix entre supprimer les sous-tâches ou les détacher (deviennent indépendantes).
+- **Affichage** : masquées par défaut dans kanbans / matrice / liste (filtre « inclure les sous-tâches ») ;
+  remontent quand même sur l'accueil si en retard ou urgentes.
+
+### 5.1 Rattacher par glisser-déposer (Ctrl + drop)
+
+Partout où des tâches apparaissent en cartes (liste, kanbans, matrice, accueil) :
+
+- **Glisser-déposer** normal : déplace la carte (change colonne / quadrant / ordre).
+- **Glisser avec Ctrl enfoncé au-dessus d'une autre carte** : la carte cible se met en **surbrillance** ;
+  au relâchement, la tâche déposée **devient une sous-tâche de la cible**.
+  - 🟢 Surbrillance verte : rattachement possible.
+  - 🔴 Surbrillance rouge + infobulle : impossible, et rien ne se passe. Cas :
+    la cible est elle-même une sous-tâche · la tâche déposée a déjà des sous-tâches · cible = elle-même.
+  - Si la tâche déposée était déjà sous-tâche d'un autre parent, elle change de parent.
+  - **Pas de confirmation** : l'action est immédiate et s'annule avec **Ctrl+Z** (voir §6.1).
+- **Détacher** : bouton « Détacher du parent » dans l'éditeur et dans le menu de la carte.
+- **Sur téléphone** (pas de touche Ctrl) : on glisse la carte (appui long) et on la **maintient ~1 s au-dessus
+  d'une autre carte** : la cible se met en surbrillance (même code couleur), et le relâchement rattache.
+  Alternative toujours disponible : menu de la carte → « 🌳 Rattacher à… » (sélecteur de tâche avec recherche).
+
+---
+
+## 6. Éditeur de tâche
+
+S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
+
+- **Titre** en grand, éditable directement.
+- **Curseurs (slide bars)** pour importance, urgence, statut et type : on peut glisser ou cliquer directement
+  sur un cran. Chaque cran a son emoji et son **infobulle** explicative ; la couleur du curseur suit le niveau.
+- **Échéance** : sélecteur de date + raccourcis (Aujourd'hui, Demain, +1 semaine, Aucune).
+- **Rappel** (type Suivi) : décalage en jours ou date manuelle (voir 4.3).
+- **Projet**, **tags** (autocomplétion), **partage**.
+- **Liens** : liste avec icône par type, ajout d'URL / chemin local / pièce jointe.
+- **Sous-tâches** (voir §5).
+- **Notes markdown façon Obsidian** (CodeMirror 6, *live preview*) :
+  - la mise en forme s'applique pendant la frappe (titres, gras, italique, code, citations, liens) ; les
+    symboles markdown s'estompent hors de la ligne en cours d'édition ;
+  - **continuation automatique des listes** : Entrée sur `1. …` crée `2. `, sur `- …` crée `- `, sur
+    `- [ ] …` crée `- [ ] ` ; Entrée sur un élément vide termine la liste ; Tab / Maj+Tab indente / désindente ;
+    renumérotation automatique des listes numérotées ;
+  - **cases à cocher cliquables** ;
+  - **liens double-cliquables** : URL, chemin local, `[texte](url)` — comportement selon le §4.4.
+- **Sauvegarde automatique** (avec indicateur discret « ✔ enregistré »).
+
+### 6.1 ↩️ Annuler / rétablir (général)
+
+- **Ctrl+Z** annule la dernière action, **Ctrl+Maj+Z** (ou **Ctrl+Y**) la rétablit — partout dans l'application.
+- Dans un champ texte ou l'éditeur de notes ayant le focus, Ctrl+Z annule d'abord la **frappe** (historique
+  propre à l'éditeur) ; hors champ, c'est l'historique des actions qui est utilisé.
+- Actions annulables : création, modification (attributs, notes, liens…), suppression, déplacement de carte,
+  rattachement / détachement de sous-tâche, changements de projets / tags / boards.
+- **Historique par utilisateur, côté serveur** (50 dernières actions) : il fonctionne de la même façon sur le
+  web, le téléphone et le client bureau. Les modifications successives rapides d'un même champ
+  (sauvegarde automatique) sont regroupées en une seule action.
+- Chaque action enregistre l'état **avant / après** des lignes touchées. Si une ligne a été modifiée depuis
+  (par quelqu'un d'autre), l'annulation est refusée avec un message explicite plutôt que d'écraser ce travail.
+- Un petit toast indique ce qui a été annulé (« ↩️ Annulé : déplacement de *X* »).
+- **Téléphone** : boutons ↩️ / ↪️ dans la barre du haut (visibles seulement s'il y a quelque chose à annuler).
+
+---
+
+## 7. Cartes de tâches
+
+Repérer l'état d'une tâche d'un coup d'œil :
+
+| Élément visuel | Signification |
+|---|---|
+| **Liseré gauche** coloré (épaisseur croissante) | importance |
+| Emoji d'urgence en haut à droite (🔥 pulse doucement) | urgence |
+| **Fond teinté** léger | statut (en cours = bleu léger, en pause = jaune pâle, …) |
+| Fini : carte estompée, titre barré · Annulé : gris, bordure pointillée | statut terminal |
+| Pastille d'échéance : 🔴 en retard · 🟠 aujourd'hui · 🟡 ≤ 3 jours · neutre sinon | échéance |
+| 📌 / 👁️ + 🔔 date de rappel | type et rappel |
+| Puce projet (emoji + couleur) | projet |
+| Pastilles colorées | tags |
+| `▰▰▱ 2/3` | progression des sous-tâches |
+| `↳ Parent` | c'est une sous-tâche |
+| 📝 / 🔗 n / 👥 | a des notes / des liens / est partagée |
+
+Chaque élément a une **infobulle**. Clic → éditeur ; menu ⋯ → actions rapides (changer statut, dupliquer,
+rattacher, détacher, supprimer).
+
+---
+
+## 8. Navigation et modules
+
+**Colonne de gauche** (repliable ; menu ☰ sur téléphone) :
+
+1. 🏠 **Accueil** — résumé des points chauds
+2. 📋 **Toutes les tâches** — liste générale
+3. 📊 **Kanbans** — boards prédéfinis + personnalisés
+4. 🎯 **Matrice d'Eisenhower**
+5. 🔍 **Recherche** (aussi accessible partout par `Ctrl+K`)
+6. ⚙️ **Réglages**
+
+Bouton flottant **➕ Nouvelle tâche** sur tous les écrans.
+
+### 8.1 🏠 Accueil
+
+- Salutation + date du jour.
+- 🔥 **En retard** · 📅 **Aujourd'hui** · 🔔 **Rappels** (suivis dont le rappel est atteint) ·
+  🎯 **À faire maintenant** (quadrant « Faire ») · 🚧 **En cours**.
+- Petites statistiques : tâches finies cette semaine, en retard, en cours.
+
+### 8.2 📋 Liste générale
+
+- Cartes en liste (ou vue compacte), **tri** : échéance, importance, urgence, priorité combinée, création,
+  titre ; **regroupement** : aucun, projet, statut, type, échéance.
+- Barre de filtres (voir 8.5).
+
+### 8.3 📊 Kanbans
+
+Boards **prédéfinis** (déplacer une carte modifie l'attribut correspondant) :
+
+| Board | Colonnes | Effet du dépôt |
+|---|---|---|
+| 📊 Par statut | les 5 statuts | change le statut |
+| 📅 Par échéance | ⚠️ En retard · 📅 Aujourd'hui · 🌅 Demain · 🗓️ Cette semaine · 🔭 Plus tard · ∅ Sans échéance | Aujourd'hui / Demain → cette date ; Cette semaine → vendredi ; Plus tard → +7 j ; Sans échéance → efface ; En retard → dépôt interdit |
+| 🗂️ Par type | 📌 À faire · 👁️ Suivi | change le type |
+| 📁 Par projet | un projet par colonne + « Sans projet » | change le projet |
+
+Boards **personnalisés** : colonnes libres (nom, emoji, couleur), cartes rangées à la main par glisser-déposer,
+une tâche peut figurer sur plusieurs boards, partageables.
+
+- Option : masquer les tâches finies depuis plus de N jours.
+- Barre de filtres sur tous les boards (voir 8.5) ; filtres mémorisés par board.
+
+### 8.4 🎯 Matrice d'Eisenhower
+
+Module indépendant, fonctionne comme un **kanban en 2D** :
+
+- **Vue 2×2** (par défaut) — axes : important = importance ≥ 3, urgent = urgence ≥ 3 :
+  🔥 **Faire** (important + urgent) · 📅 **Planifier** (important, pas urgent) ·
+  🤝 **Déléguer** (urgent, pas important) · 🗑️ **Éliminer** (ni l'un ni l'autre).
+- Déposer une carte dans un autre quadrant ajuste importance / urgence au **minimum nécessaire** pour
+  entrer dans ce quadrant (ex. importance 2 → 3 ; une valeur déjà compatible n'est pas modifiée).
+- **Vue détaillée 4×4** (bascule) : une case par combinaison exacte ; le dépôt fixe les deux valeurs.
+- Mêmes filtres que les kanbans ; les tâches finies / annulées sont masquées par défaut.
+
+### 8.5 Barre de filtres
+
+- Champ texte général (titre, notes, tags, projet).
+- Menus déroulants multi-sélection : importance, urgence, statut, type, projet, tags, échéance
+  (en retard / aujourd'hui / cette semaine / sans échéance), propriétaire / partagées avec moi.
+- Case « inclure les sous-tâches ». Bouton « réinitialiser ».
+
+### 8.6 ⚙️ Réglages
+
+- 👤 **Profil** : nom affiché, mot de passe.
+- 🎨 **Apparence** : thème clair / sombre / auto.
+- 🔔 **Rappels** : décalage par défaut (jours), notifications bureau oui/non.
+- 📁 **Projets** et 🏷️ **Tags** : gestion des listes (voir 4.5).
+- 📊 **Boards** : créer / renommer / supprimer / partager les boards personnalisés et leurs colonnes.
+- 💻 **Appareils connectés** : sessions actives, révocation.
+- 👥 **Utilisateurs** (admin) : créer, réinitialiser le mot de passe, désactiver, promouvoir admin.
+- 🔌 **Connexion** (client bureau) : adresse du serveur, déconnexion.
+
+---
+
+## 9. Responsive / téléphone
+
+- La colonne de gauche devient un tiroir (☰).
+- Kanbans : colonnes en défilement horizontal au doigt ; matrice 2×2 empilée.
+- Éditeur en plein écran ; curseurs utilisables au doigt.
+- Glisser-déposer tactile (appui long pour saisir une carte).
+- Manifeste **PWA** : ajout à l'écran d'accueil, icône, plein écran.
+
+---
+
+## 10. Déploiement
+
+- **Serveur** : Raspberry Pi 5, Python 3.11, écoute sur `0.0.0.0:2603`. Données dans `data/`
+  (`organizer.db`, `uploads/`), chemin configurable par variable d'environnement.
+- **Service systemd** fourni (`deploy/organizer.service`) : démarrage automatique, redémarrage en cas d'erreur.
+- **Client bureau** : Linux (GTK/WebKit) et Windows (Edge WebView2), lancé par `run_client.py`.
+- Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
+
+---
+
+## 11. Feuille de route
+
+| Étape | Contenu |
+|---|---|
+| 1 | Socle : config, modèles, base SQLite, services tâches / projets / tags / sous-tâches, historique annuler/rétablir + tests |
+| 2 | Serveur : authentification (cookies, jetons), API REST, premier compte admin |
+| 3 | Interface : thème, layout responsive, cartes, éditeur avec curseurs |
+| 4 | Éditeur markdown CodeMirror (live preview, listes, cases, liens) |
+| 5 | Modules : accueil, liste, filtres, recherche |
+| 6 | Kanbans (prédéfinis + personnalisés), matrice, glisser-déposer, Ctrl+drop |
+| 7 | Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
+| 8 | Temps réel, partage, PWA, service systemd, finitions |
+
+---
+
+## 12. Historique des changements
+
+| Date | Version | Changement |
+|---|---|---|
+| 2026-11-07 | 0.1 | Spécification initiale |
+| 2026-11-07 | 0.2 | Ctrl+drop sans confirmation ; annuler / rétablir général (Ctrl+Z) ; projets et tags publics ou privés ; rattachement sur téléphone par maintien |
