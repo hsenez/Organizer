@@ -99,6 +99,40 @@ body.body--dark { background: #12141a; }
 .q-dialog__inner--right { padding: 0 !important; }
 .q-dialog__inner--right > div { max-height: 100vh !important; }
 
+/* --- Éditeur markdown (notes) ----------------------------------------------------------------------- */
+.md-editor .cm-editor { font-size: 15px; line-height: 1.6; border: 1px solid rgba(120, 130, 150, .35);
+    border-radius: 10px; padding: 6px 12px; min-height: 160px; background: transparent; }
+.md-editor .cm-editor.cm-focused { outline: none; border-color: #5c7cfa; box-shadow: 0 0 0 3px rgba(92, 124, 250, .18); }
+.md-editor .cm-scroller { font-family: inherit; }
+.md-editor .cm-content { caret-color: currentColor; padding: 4px 0; }
+.md-editor .cm-placeholder { color: #adb5bd; font-style: italic; }
+.md-editor .cm-line.cm-md-h { font-weight: 700; line-height: 1.35; padding-top: 4px; }
+.md-editor .cm-md-h1 { font-size: 1.6em; }
+.md-editor .cm-md-h2 { font-size: 1.35em; }
+.md-editor .cm-md-h3 { font-size: 1.15em; }
+.md-editor .cm-md-h4, .md-editor .cm-md-h5, .md-editor .cm-md-h6 { font-size: 1.05em; }
+.md-editor .cm-md-strong { font-weight: 700; }
+.md-editor .cm-md-em { font-style: italic; }
+.md-editor .cm-md-strike { text-decoration: line-through; opacity: .7; }
+.md-editor .cm-md-code { font-family: ui-monospace, monospace; font-size: .9em; background: rgba(120, 130, 150, .16);
+    border-radius: 4px; padding: 1px 4px; }
+.md-editor .cm-line.cm-md-codeblock { font-family: ui-monospace, monospace; font-size: .9em;
+    background: rgba(120, 130, 150, .10); }
+.md-editor .cm-md-link { color: #3b5bdb; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.md-editor .cm-md-path { color: #d9480f; }
+.body--dark .md-editor .cm-md-link { color: #91a7ff; }
+.body--dark .md-editor .cm-md-path { color: #ffa94d; }
+.md-editor .cm-line.cm-md-quote { border-left: 3px solid #adb5bd; padding-left: 12px; color: #868e96; }
+.md-editor .cm-line.cm-md-hr { border-bottom: 2px solid rgba(120, 130, 150, .35); }
+.md-editor .cm-md-bullet { display: inline-block; width: 1.1em; color: #5c7cfa; font-weight: 700; font-size: 1.3em; line-height: 1; vertical-align: -1px; }
+.md-editor .cm-md-olmark { color: #5c7cfa; font-weight: 600; }
+.md-editor .cm-md-checkbox { width: 16px; height: 16px; margin: 0 7px 0 1px; vertical-align: -2px;
+    cursor: pointer; accent-color: #40c057; }
+.md-editor .cm-md-task-done { color: #868e96; text-decoration: line-through; }
+.body--dark .md-editor .cm-selectionBackground, .body--dark .md-editor .cm-focused .cm-selectionBackground
+    { background: rgba(92, 124, 250, .35) !important; }
+.body--dark .md-editor .cm-cursor { border-left-color: #e9ecef; }
+
 /* --- Curseurs de niveaux ---------------------------------------------------------------------------- */
 .level-option { cursor: pointer; user-select: none; border-radius: 8px; padding: 2px 4px;
     transition: background .1s; text-align: center; }

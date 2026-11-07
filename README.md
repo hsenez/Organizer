@@ -11,9 +11,9 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — étapes 1 à 3 sur 8 : cœur métier, serveur, API et première
-> interface (accueil, liste, cartes, éditeur). À venir : éditeur markdown, filtres, kanbans, matrice, réglages,
-> client bureau.
+> 🚧 **Projet en cours de construction** — étapes 1 à 4 sur 8 : cœur métier, serveur, API, interface
+> (accueil, liste, cartes, éditeur) et notes markdown façon Obsidian. À venir : filtres, recherche, réglages,
+> kanbans, matrice, client bureau.
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -107,5 +107,5 @@ rétablir), `organizer/server/` le serveur (API, authentification, pages), `test
 | argon2-cffi | hachage des mots de passe |
 | httpx | client bureau → API du serveur |
 | pywebview (+ PyGObject sous Linux) | fenêtre native du client bureau |
-| CodeMirror 6 (JS, embarqué) | éditeur markdown en direct |
+| CodeMirror 6 (fourni par NiceGUI) | éditeur de notes markdown en direct, façon Obsidian |
 | pytest, pytest-asyncio, ruff | tests (dont pages web simulées) et lint |

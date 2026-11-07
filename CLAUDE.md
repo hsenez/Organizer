@@ -17,8 +17,9 @@ Référence fonctionnelle complète : **`specifications.md`**.
   relevés en cours de route). Y ajouter ce qui est reporté ; retirer ce qui est fait.
 - **Dépendances** : toujours dans le venv `.venv/`. Annoncer à l'utilisateur toute nouvelle bibliothèque, puis
   l'ajouter avec sa version au bon fichier `requirements*.txt`.
-- **Tout en Python**, sauf le strict nécessaire en JS/CSS pour l'interface (éditeur CodeMirror, glisser-déposer),
-  vendorisé dans `organizer/static/` (pas de CDN à l'exécution : le Pi peut être sans Internet).
+- **Tout en Python**, sauf le strict nécessaire en JS/CSS pour l'interface (éditeur markdown, glisser-déposer),
+  livré avec le projet (pas de CDN à l'exécution : le Pi peut être sans Internet). Réutiliser en priorité ce
+  que NiceGUI embarque déjà (CodeMirror 6, Quasar…).
 
 ## Contraintes techniques
 
@@ -82,6 +83,23 @@ Référence fonctionnelle complète : **`specifications.md`**.
   création (mode *brouillon* : `self.draft` contient les champs de `TaskCreate`, `self.task` un `TaskOut`
   fictif d'id 0 construit par `_draft_out()` ; `_save()` alimente le brouillon tant qu'il n'y a pas de titre,
   puis crée la tâche). Pas de création « à vide » en base.
+- **Éditeur markdown** (`components/markdown_editor.py` + `.js`) : composant Vue maison autour de
+  CodeMirror 6 **tel que fourni par NiceGUI** (`import * as CM from "nicegui-codemirror"`, importer
+  `nicegui.elements.codemirror` côté Python enregistre ce paquet). Le module `lang-markdown` (GFM, keymap des
+  listes) est un fichier haché du paquet : `markdown_module()` le retrouve **par son contenu**. Si NiceGUI
+  change de version, vérifier qu'il est toujours trouvé (le serveur lève une erreur explicite sinon).
+  - Rendu en direct = `ViewPlugin` qui recalcule des décorations (marques, remplacements, widgets case à
+    cocher / puce) à partir de `syntaxTree` à chaque changement de texte, de sélection ou de focus.
+  - Synchronisation : le JS émet `update:value` (texte complet, 0,4 s après la dernière frappe, et au
+    `blur`) ; `LOOPBACK = False`. L'éditeur de tâche enregistre (throttle 1,5 s, `blur`, fermeture).
+  - Le JS arrête la propagation des touches (sauf Échap) : sinon `ui.keyboard`, qui ne reconnaît que
+    `input` / `textarea`, intercepterait Ctrl+Z dans une zone `contenteditable`.
+  - Liens : `mousedown` ouvre (émet `open-link`) sauf si la sélection touche déjà le lien (édition) ;
+    Ctrl/⌘+clic ouvre toujours ; `openTarget()` dédoublonne (double-clic = 2 clics + dblclick).
+  - Le simulateur de test ne peut pas taper dans ce composant : fixer `.value` puis `trigger("blur")`.
+  - Tests manuels dans Firefox headless : ajouter `user_pref("focusmanager.testmode", true);` au profil,
+    sinon `view.hasFocus` reste faux (fenêtre jamais active) et la syntaxe ne se révèle jamais ; ouvrir un
+    onglet fait aussi perdre le focus à la page.
 - **`UiContext`** (`ui/context.py`) : `ds` (DataSource), `refresh()` (tous les blocs `ui.refreshable` abonnés
   via `on_refresh`), `call()` / `attempt()` (erreur métier → toast rouge), `undo()` / `redo()`, `editor`.
 - Appels à la DataSource **synchrones** dans les gestionnaires d'événements (SQLite local rapide ; client
@@ -132,8 +150,9 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 126 tests au total.
-- ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, ajout rapide, accueil, liste.
-- ⏭️ Étape 4 : éditeur markdown CodeMirror 6 (live preview, listes, cases, liens double-cliquables).
+- 130 tests au total.
+- ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
+- ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
+- ⏭️ Étape 5 : accueil, liste avec filtres et tris, recherche (Ctrl+K), réglages (projets, tags, appareils…).
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.

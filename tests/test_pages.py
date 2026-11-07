@@ -200,8 +200,47 @@ async def test_editor_adds_subtasks_and_notes(user: User):
     await user.should_see("Cartons")
     subs = sv.tasks.subtasks(task.id)
     assert [s.title for s in subs] == ["Cartons"]
-    user.find(marker="editor-notes").type("1. réserver le camion").trigger("blur")
+    notes = user.find(marker="editor-notes")
+    with user.client:
+        next(iter(notes.elements)).value = "1. réserver le camion"  # comme envoyé par l'éditeur markdown
+    notes.trigger("blur")
     assert sv.tasks.get(task.id).notes == "1. réserver le camion"
+
+
+async def test_notes_saved_when_editor_closes(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Courses"))
+    await user.open(f"/tasks?task={task.id}")
+    editor = next(iter(user.find(marker="editor-notes").elements))
+    with user.client:
+        editor.value = "- [ ] lait"  # dernière frappe, pas encore enregistrée
+    user.find(marker="task-editor-dialog").trigger("hide")  # fermeture côté navigateur
+    assert sv.tasks.get(task.id).notes == "- [ ] lait"
+
+
+async def test_double_click_on_note_link(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Lire", notes="Voir /home/alice/doc.pdf"))
+    await user.open(f"/tasks?task={task.id}")
+    user.find(marker="editor-notes").trigger("open-link", {"target": "/home/alice/doc.pdf", "kind": "path"})
+    await user.should_see("Chemin copié")
+
+
+async def test_note_web_link_is_opened_not_copied(user: User, monkeypatch):
+    from organizer.ui.components import task_editor
+
+    opened = []
+    monkeypatch.setattr(
+        task_editor, "open_link", lambda kind, target, ds: opened.append((kind.value, target))
+    )
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Lire", notes="[le site](google.fr) et https://example.org"))
+    await user.open(f"/tasks?task={task.id}")
+    notes = user.find(marker="editor-notes")
+    notes.trigger("open-link", {"target": "google.fr", "kind": "link"})
+    notes.trigger("open-link", {"target": "https://example.org", "kind": "url"})
+    notes.trigger("open-link", {"target": "~/Documents", "kind": "path"})
+    assert opened == [("url", "google.fr"), ("url", "https://example.org"), ("path", "~/Documents")]
 
 
 async def test_editor_creates_tag_on_the_fly(user: User):

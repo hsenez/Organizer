@@ -43,12 +43,38 @@ def test_normalize_text_ignores_case_and_accents():
         ("www.example.org", LinkKind.URL),
         ("mailto:a@b.c", LinkKind.URL),
         ("obsidian://open?vault=x", LinkKind.URL),
+        ("google.fr", LinkKind.URL),
+        ("exemple.com/page?x=1", LinkKind.URL),
+        ("sub.domaine.co.uk/x", LinkKind.URL),
+        ("localhost:2603", LinkKind.URL),
+        ("192.168.1.20:2603/tasks", LinkKind.URL),
         ("/home/moi/doc.pdf", LinkKind.PATH),
+        ("~/Documents", LinkKind.PATH),
+        ("./relatif.txt", LinkKind.PATH),
         (r"C:\Users\moi\doc.pdf", LinkKind.PATH),
+        (r"\\nas\partage", LinkKind.PATH),
+        ("file:///home/moi", LinkKind.PATH),
+        ("notes.txt", LinkKind.PATH),
+        ("rapport final.pdf", LinkKind.PATH),
     ],
 )
 def test_detect_link_kind(text, kind):
     assert rules.detect_link_kind(text) is kind
+
+
+@pytest.mark.parametrize(
+    ("text", "url"),
+    [
+        ("https://example.org", "https://example.org"),
+        ("mailto:a@b.c", "mailto:a@b.c"),
+        ("google.fr", "https://google.fr"),
+        ("www.example.org/page", "https://www.example.org/page"),
+        ("localhost:2603", "http://localhost:2603"),
+        ("192.168.1.20:2603/tasks", "http://192.168.1.20:2603/tasks"),
+    ],
+)
+def test_normalize_url(text, url):
+    assert rules.normalize_url(text) == url
 
 
 @pytest.mark.parametrize(

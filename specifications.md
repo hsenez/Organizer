@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 0.6 — 2026-11-07
+> Version : 0.9 — 2026-11-08
 
 ---
 
@@ -48,7 +48,7 @@ s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry P
 | Jetons de session | `secrets` + SHA-256 (bibliothèque standard) | — |
 | Client HTTP (client bureau → API) | httpx | 0.28.1 |
 | Fenêtre native du client bureau | pywebview (+ PyGObject sous Linux) | 6.2.1 |
-| Éditeur markdown (JS embarqué) | CodeMirror 6 (fichiers vendorisés dans `static/vendor/`) | 6.x |
+| Éditeur markdown | CodeMirror 6 **fourni par NiceGUI** (paquet ESM `nicegui-codemirror`) + composant maison `markdown_editor.js` | 6.x |
 | Notifications système (client bureau) | desktop-notifier *(à installer à l'étape concernée)* | — |
 | Tests / lint | pytest, pytest-asyncio (tests des pages NiceGUI), ruff (`target-version = py311`) | — |
 
@@ -86,9 +86,9 @@ organizer/
     context.py           # UiContext : source de données, rafraîchissement, Ctrl+Z, erreurs → toasts
     format.py            # dates en français (« Aujourd'hui », « lun. 9 nov. », « dans 3 j »)
     layout.py            # en-tête (☰, ↩️ ↪️, compte), colonne de gauche, raccourcis clavier, bouton ➕
-    components/          # task_card, level_slider, task_editor, quick_add (filter_bar, markdown à venir)
+    components/          # task_card, level_slider, task_editor, markdown_editor (.py + .js) ; filter_bar à venir
     pages/               # accueil, toutes les tâches ; kanban / matrice / recherche / réglages à venir
-  static/                # css, js, icônes, manifeste PWA, vendor/codemirror
+  static/                # icônes, manifeste PWA (à venir)
 tests/
 scripts/demo.py          # démo terminal + données d'exemple (base data/demo.db)
 deploy/organizer.service # service systemd pour le Raspberry Pi
@@ -182,6 +182,13 @@ Infobulles détaillées également sur les statuts et les types.
 | 📁 Chemin local (`C:\…`, `/home/…`) | **copie le chemin dans le presse-papiers** (+ toast) | ouvre avec l'application par défaut de l'OS |
 | 📎 Pièce jointe (envoyée au serveur) | téléchargement / ouverture | téléchargement puis ouverture |
 
+**Reconnaissance web / fichier** (`rules.detect_link_kind`) : est un **chemin** ce qui commence par `/`, `~`,
+`./`, `../`, `C:\`, `\\serveur` ou `file://`, ainsi qu'un simple nom de fichier (`notes.txt`) ; est une
+**adresse web** ce qui a un protocole (`https://`, `mailto:`…), commence par `www.`, est un serveur local
+(`localhost:2603`, `192.168.1.20:2603`) ou ressemble à un nom de domaine (`google.fr`, `exemple.com/page`).
+Sans protocole, on ouvre en `https://` (en `http://` pour un serveur local). Dans les notes, une adresse
+reconnue comme web par le markdown est toujours ouverte.
+
 Pièces jointes : stockées dans `data/uploads/` (50 Mo max par fichier), accessibles au déposant et à quiconque
 voit une tâche qui les référence. Seuls les types sûrs (PDF, images, texte brut, mp3/mp4) s'affichent dans le
 navigateur ; tout le reste (HTML, SVG…) est forcé en téléchargement, avec `Content-Security-Policy: sandbox`.
@@ -256,14 +263,25 @@ S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
 - **Projet**, **tags** (autocomplétion), **partage**.
 - **Liens** : liste avec icône par type, ajout d'URL / chemin local / pièce jointe.
 - **Sous-tâches** (voir §5).
-- **Notes markdown façon Obsidian** (CodeMirror 6, *live preview*) :
-  - la mise en forme s'applique pendant la frappe (titres, gras, italique, code, citations, liens) ; les
-    symboles markdown s'estompent hors de la ligne en cours d'édition ;
-  - **continuation automatique des listes** : Entrée sur `1. …` crée `2. `, sur `- …` crée `- `, sur
-    `- [ ] …` crée `- [ ] ` ; Entrée sur un élément vide termine la liste ; Tab / Maj+Tab indente / désindente ;
-    renumérotation automatique des listes numérotées ;
-  - **cases à cocher cliquables** ;
-  - **liens double-cliquables** : URL, chemin local, `[texte](url)` — comportement selon le §4.4.
+- **Notes markdown façon Obsidian** (CodeMirror 6, *live preview*, ✅ étape 4) :
+  - la mise en forme s'applique pendant la frappe : titres `#`…`######`, **gras**, *italique*, ~~barré~~,
+    `code`, blocs de code, citations `>`, règles `---`, liens `[texte](url)`, adresses web et chemins de
+    fichiers (`/home/…`, `~/…`, `C:\…`) soulignés ;
+  - la syntaxe est **masquée** et réapparaît quand le curseur la touche (titres et citations : quand le curseur
+    est sur la ligne ; puces et cases : quand il est dans le marqueur) ; sans le focus, tout est rendu ;
+  - puces `-` / `*` affichées « • » ; numéros colorés ; `- [ ]` / `- [x]` affichés en **cases à cocher
+    cliquables** (tâche cochée barrée) ;
+  - **continuation automatique des listes** : Entrée sur `1. …` crée `2. ` (et renumérote la suite), sur
+    `- …` crée `- `, sur `- [ ] …` crée `- [ ] ` ; Entrée sur un élément vide termine la liste ; Retour
+    arrière en début d'élément retire la puce ; Tab / Maj+Tab indente / désindente (4 espaces) ;
+  - **clic** sur un lien, une adresse ou un chemin → ouverture selon le §4.4 (web : nouvel onglet ;
+    chemin : copié dans le presse-papiers ; client bureau : ouverture du fichier), sans déplacer le curseur.
+    Si le curseur est déjà dans le lien (on l'édite, sa syntaxe est visible), le clic sert à éditer et
+    **Ctrl+clic** (⌘+clic sur Mac) l'ouvre. Le double-clic ouvre aussi (une seule ouverture) ;
+  - **Ctrl+Z / Ctrl+Maj+Z dans les notes** = annulation de la frappe (historique propre à l'éditeur) ; ils
+    ne déclenchent pas l'annulation des actions de la page ;
+  - enregistrement : au plus toutes les 1,5 s pendant la frappe, à la sortie du champ et à la fermeture de
+    l'éditeur.
 - **Sauvegarde automatique** (avec indicateur discret « ✔ enregistré ») : curseurs et listes immédiatement,
   titre à la sortie du champ (ou Entrée), notes toutes les 1,5 s pendant la frappe et à la sortie du champ.
 - **Création** : le bouton ➕ (ou **N**) ouvre l'**éditeur complet** sur un *brouillon* : curseurs, échéance,
@@ -435,7 +453,7 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 | 1 | ✅ Socle : config, modèles, base SQLite, services tâches / projets / tags / sous-tâches, historique annuler/rétablir + tests |
 | 2 | ✅ Serveur : authentification (cookies, jetons), API REST, premier compte admin, pièces jointes, service systemd |
 | 3 | ✅ Interface : thème clair/sombre, layout responsive, cartes, éditeur avec curseurs, ajout rapide, accueil, liste simple |
-| 4 | Éditeur markdown CodeMirror (live preview, listes, cases, liens) |
+| 4 | ✅ Éditeur markdown CodeMirror (live preview, listes, cases, liens cliquables) |
 | 5 | Modules : accueil, liste, filtres, recherche |
 | 6 | Kanbans (prédéfinis + personnalisés), matrice, glisser-déposer, Ctrl+drop |
 | 7 | Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
@@ -453,3 +471,6 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 | 2026-11-07 | 0.4 | **Étape 2 livrée** : sessions (cookie / jeton, glissantes, empreinte SHA-256), anti force brute, API REST `/api/v1` (34 routes, doc `/docs`), pièces jointes, pages /login, /setup et accueil provisoire, service systemd ; 118 tests |
 | 2026-11-07 | 0.5 | **Étape 3 livrée** : interface NiceGUI (`organizer/ui`) — thème clair/sombre, colonne de gauche / tiroir mobile, cartes, éditeur latéral (curseurs, échéance, rappel, projet, tags créés à la volée, partage, sous-tâches, liens, pièces jointes, notes texte), ajout rapide, accueil « points chauds », liste, Ctrl+Z / N, lien `?task=` ; `DataSource` ; 126 tests |
 | 2026-11-07 | 0.6 | Retours sur l'étape 3 : création dans l'éditeur complet (brouillon), compteurs de l'accueil cliquables (liste des tâches), `?task=new` ; sujet des liens de fichiers consigné dans `TODO.md` ; 128 tests |
+| 2026-11-07 | 0.7 | **Étape 4 livrée** : éditeur de notes markdown façon Obsidian (CodeMirror 6 de NiceGUI) — rendu en direct, syntaxe masquée, puces, cases à cocher cliquables, continuation et renumérotation des listes, double-clic sur liens / adresses / chemins, Ctrl+Z local ; 130 tests + test interactif dans Firefox |
+| 2026-11-07 | 0.8 | Notes : liens ouverts d'un **simple clic** (Ctrl+clic pendant l'édition du lien), double-clic dédoublonné ; infobulle avec la cible |
+| 2026-11-08 | 0.9 | Liens web sans protocole (`google.fr`, `localhost:2603`…) ouverts au lieu d'être copiés ; règles de reconnaissance web / fichier précisées (§4.4) |

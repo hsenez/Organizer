@@ -1,7 +1,7 @@
 """Éditeur de tâche : panneau latéral (plein écran sur téléphone), enregistrement automatique.
 
 Chaque modification est enregistrée immédiatement (les frappes rapides sont regroupées dans l'historique
-annuler / rétablir). Les notes sont un champ texte en attendant l'éditeur markdown (étape 4).
+annuler / rétablir). Les notes utilisent l'éditeur markdown « façon Obsidian » (``markdown_editor``).
 
 **Création** (:meth:`TaskEditor.open_new`) : l'éditeur complet s'ouvre sur un *brouillon*. Les réglages
 (curseurs, échéance, projet, tags, notes…) sont gardés en mémoire ; la tâche est créée en base dès qu'elle a
@@ -21,6 +21,7 @@ from organizer.core.models import utcnow
 from organizer.core.schemas import LinkIn, TagIn, TaskCreate, TaskOut, TaskPatch
 from organizer.ui import format as fmt
 from organizer.ui.components.level_slider import LevelSlider
+from organizer.ui.components.markdown_editor import MarkdownEditor
 from organizer.ui.components.task_card import confirm_delete
 from organizer.ui.context import UiContext
 
@@ -33,7 +34,7 @@ class TaskEditor:
         self.task: TaskOut | None = None
         self.draft: dict | None = None  # champs de TaskCreate d'une tâche pas encore créée
         with (
-            ui.dialog().props("position=right full-height") as self.dialog,
+            ui.dialog().props("position=right full-height").mark("task-editor-dialog") as self.dialog,
             ui.card().classes("w-[660px] max-w-[100vw] h-full rounded-none p-0 gap-0").mark("task-editor"),
         ):
             self.body = ui.column().classes("w-full h-full overflow-y-auto p-4 sm:p-6 gap-4 no-wrap")
@@ -78,6 +79,7 @@ class TaskEditor:
         self._build()
 
     def _on_hide(self) -> None:
+        self._save_notes()  # dernières frappes pas encore enregistrées
         if self.is_draft and (self.title_input.value or "").strip():
             self._create_from_draft(self.title_input.value.strip(), rebuild=False)
         self.task = None
@@ -597,19 +599,36 @@ class TaskEditor:
     # --- notes ---
 
     def _notes(self, task: TaskOut) -> None:
-        notes = (
-            ui.textarea("📝 Notes", value=task.notes)
-            .props("outlined autogrow")
-            .classes("w-full")
-            .mark("editor-notes")
-        )
+        with ui.column().classes("w-full gap-1"):
+            with ui.row().classes("w-full items-baseline gap-2"):
+                ui.label("📝 Notes").classes("font-semibold")
+                ui.label("markdown · clic sur un lien pour l'ouvrir").classes("text-xs text-gray-500")
+            self.notes_editor = (
+                MarkdownEditor(
+                    task.notes,
+                    placeholder="Écrire ici… « - » liste, « 1. » numérotée, « - [ ] » case à cocher, "
+                    "**gras**, # titre",
+                    on_open_link=self._open_note_link,
+                )
+                .classes("w-full")
+                .mark("editor-notes")
+            )
+        self.notes_editor.on("update:value", self._save_notes, throttle=1.5, leading_events=False)
+        self.notes_editor.on("blur", self._save_notes)
 
-        def save_notes() -> None:
-            if self.task is not None and (notes.value or "") != self.task.notes:
-                self._save(notes=notes.value or "")
+    def _open_note_link(self, target: str, kind: str) -> None:
+        """Clic sur un lien des notes : une adresse reconnue comme web par le markdown est toujours ouverte ;
+        sinon on devine (adresse web ou chemin de fichier)."""
+        link_kind = LinkKind.URL if kind == "url" else rules.detect_link_kind(target)
+        open_link(link_kind, target, self.ds)
 
-        notes.on("update:model-value", save_notes, throttle=1.5, leading_events=False)
-        notes.on("blur", save_notes)
+    def _save_notes(self) -> None:
+        """Enregistre les notes si elles ont changé (frappe : au plus toutes les 1,5 s ; sortie du champ)."""
+        if self.task is None:
+            return
+        text = self.notes_editor.value or ""
+        if text != self.task.notes:
+            self._save(notes=text)
 
     def _footer(self, task: TaskOut) -> None:
         ui.separator()
@@ -646,8 +665,7 @@ def _link_action(kind: LinkKind, ds) -> str:
 
 def open_link(kind: LinkKind, target: str, ds) -> None:
     if kind is LinkKind.URL:
-        url = target if "://" in target or target.startswith("mailto:") else f"https://{target}"
-        ui.navigate.to(url, new_tab=True)
+        ui.navigate.to(rules.normalize_url(target), new_tab=True)
     elif kind is LinkKind.ATTACHMENT:
         ui.navigate.to(ds.attachment_url(target), new_tab=True)
     elif ds.is_desktop:

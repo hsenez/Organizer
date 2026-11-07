@@ -27,12 +27,48 @@ def normalize_text(text: str) -> str:
     return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
 
 
-_URL_RE = re.compile(r"^(?:[a-z][a-z0-9+.-]*://|mailto:|www\.)", re.IGNORECASE)
+_SCHEME_RE = re.compile(r"^(?:[a-z][a-z0-9+.-]*://|mailto:|tel:)", re.IGNORECASE)
+_PATH_RE = re.compile(r"^(?:/|~|\./|\.\./|\\\\|[a-z]:[\\/]|file://)", re.IGNORECASE)
+# Nom de domaine éventuellement suivi d'un port et d'un chemin : « google.fr », « exemple.com/page?x=1 ».
+_DOMAIN_RE = re.compile(
+    r"^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?P<tld>[a-z]{2,24})(?::\d{1,5})?(?:[/?#].*)?$", re.IGNORECASE
+)
+# « localhost:2603 », « 192.168.1.20:2603/tasks » : serveurs du réseau local.
+_HOST_RE = re.compile(r"^(?:localhost|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?(?:[/?#].*)?$", re.IGNORECASE)
+# Extensions de fichiers courantes : « notes.txt » est un fichier, pas un site web.
+_FILE_EXTENSIONS = {
+    "txt", "md", "pdf", "doc", "docx", "odt", "ods", "odp", "xls", "xlsx", "ppt", "pptx", "csv", "json",
+    "xml", "yaml", "yml", "ini", "log", "zip", "tar", "gz", "rar", "png", "jpg", "jpeg", "gif", "svg",
+    "webp", "mp3", "mp4", "mkv", "avi", "wav", "py", "js", "sh", "exe", "html", "htm",
+}  # fmt: skip
 
 
 def detect_link_kind(target: str) -> LinkKind:
-    """Devine si un texte saisi est un hyperlien ou un chemin de fichier local."""
-    return LinkKind.URL if _URL_RE.match(target.strip()) else LinkKind.PATH
+    """Devine si un texte saisi est un hyperlien ou un chemin de fichier local.
+
+    - ``https://…``, ``mailto:…``, ``www.…``, ``localhost:2603``, une adresse IP, et tout ce qui ressemble à
+      un nom de domaine (``google.fr``, ``exemple.com/page``) → hyperlien ;
+    - ``/…``, ``~/…``, ``./…``, ``C:\\…``, ``\\\\serveur\\…``, ``file://…`` et les noms de fichiers
+      (``notes.txt``) → chemin local.
+    """
+    text = target.strip()
+    if _PATH_RE.match(text):
+        return LinkKind.PATH
+    if _SCHEME_RE.match(text) or text.lower().startswith("www.") or _HOST_RE.match(text):
+        return LinkKind.URL
+    domain = _DOMAIN_RE.match(text)
+    if domain and ("/" in text or domain.group("tld").lower() not in _FILE_EXTENSIONS):
+        return LinkKind.URL
+    return LinkKind.PATH
+
+
+def normalize_url(target: str) -> str:
+    """Adresse complète à ouvrir : ajoute ``http://`` pour un serveur local (localhost, adresse IP), sinon
+    ``https://``, si aucun protocole n'est précisé."""
+    text = target.strip()
+    if _SCHEME_RE.match(text):
+        return text
+    return f"http://{text}" if _HOST_RE.match(text) else f"https://{text}"
 
 
 # --- Échéances --------------------------------------------------------------------------------------------
