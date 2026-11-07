@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 0.9 — 2026-11-08
+> Version : 1.2 — 2026-11-08
 
 ---
 
@@ -199,6 +199,10 @@ Retirer le lien (annulable) conserve le fichier.
 - **Projet / sujet** : nom, emoji, couleur, description, archivé oui/non. Une tâche → zéro ou un projet.
 - **Tag** : nom, couleur. Une tâche → plusieurs tags. Autocomplétion dans l'éditeur ; création à la volée
   possible depuis l'éditeur (ajoute le tag à la liste, privé par défaut).
+- **Couleur d'un nouveau tag** : choisie automatiquement dans une palette de 24 teintes (`rules.TAG_PALETTE`),
+  la plus **éloignée visuellement** (écart ΔE dans l'espace CIELAB) des couleurs des tags existants — et en
+  priorité de celles des tags déjà posés sur la tâche en cours d'édition — avec un peu de hasard parmi les
+  meilleures candidates. Le dialogue des réglages propose cette couleur, modifiable.
 - **Visibilité** : chaque projet / tag a un créateur et un drapeau **🌍 public / 🔒 privé**.
   - Public : visible et utilisable par tous ; modifiable par son créateur et les admins.
   - Privé : visible, utilisable et modifiable uniquement par son créateur.
@@ -293,7 +297,8 @@ S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
   `?task=new` ouvre l'éditeur sur une nouvelle tâche.
 - **Curseurs** : chaque cran occupe une cellule de même largeur (emoji + libellé + infobulle) ; on glisse,
   on clique sur la piste ou sur l'emoji. La couleur du curseur suit la valeur.
-- **Échéance** : champ date + raccourcis Aujourd'hui / Demain / +1 semaine / Aucune ; rappel de suivi :
+- **Échéance** : champ date + **heure facultative** + raccourcis Aujourd'hui / Demain / +1 semaine / Aucune
+  (effacer la date efface l'heure) ; rappel de suivi :
   « 🔗 Lié à l'échéance » (jours avant) ou « 📌 Date fixe ».
 - **Sous-tâches** dans l'éditeur du parent : case à cocher pour terminer, clic pour ouvrir, ajout rapide.
   Quand la dernière est cochée : fenêtre « 🎉 Terminer la tâche parente ? ».
@@ -333,13 +338,13 @@ Repérer l'état d'une tâche d'un coup d'œil :
 | Pastille d'échéance : 🔴 en retard · 🟠 aujourd'hui · 🟡 ≤ 3 jours · neutre sinon | échéance |
 | 📌 / 👁️ + 🔔 date de rappel | type et rappel |
 | Puce projet (emoji + couleur) | projet |
-| Pastilles colorées | tags |
+| Pastilles colorées (fond teinté de la couleur du tag) | tags — même rendu dans l'éditeur et les filtres |
 | `▰▰▱ 2/3` | progression des sous-tâches |
 | `↳ Parent` | c'est une sous-tâche |
 | 📝 / 🔗 n / 👥 | a des notes / des liens / est partagée |
 
-Chaque élément a une **infobulle**. Clic → éditeur ; menu ⋯ → actions rapides (changer statut, détacher,
-supprimer ; dupliquer et rattacher à venir). Supprimer est immédiat (Ctrl+Z annule) ; si la tâche a des
+Chaque élément a une **infobulle**. Clic → éditeur ; menu ⋯ → actions rapides (changer statut, 📋 dupliquer,
+détacher, supprimer ; rattacher à venir). Supprimer est immédiat (Ctrl+Z annule) ; si la tâche a des
 sous-tâches, on demande s'il faut les supprimer aussi ou les garder.
 
 ---
@@ -373,9 +378,23 @@ grisés s'il n'y a rien), menu du compte (réglages, déconnexion).
 
 ### 8.2 📋 Liste générale
 
-- Cartes en liste (ou vue compacte), **tri** : échéance, importance, urgence, priorité combinée, création,
-  titre ; **regroupement** : aucun, projet, statut, type, échéance.
-- Barre de filtres (voir 8.5).
+- Cartes, **tri** : ⚡ priorité combinée, 📅 échéance, 🔴 importance, 🔥 urgence, 🆕 création,
+  ✏️ modification, 🔤 titre — avec bouton ↓/↑ pour inverser ; **regroupement** : aucun, projet, statut, type,
+  échéance, importance (une section titrée par groupe, avec son nombre de tâches).
+- Barre de filtres (voir 8.5) ; compteur « N tâches ».
+- Les tâches finies / annulées sont repliées en bas (« ✅ Terminées et annulées ») sauf si un filtre de
+  statut est actif.
+- **Filtres, tri et regroupement sont mémorisés** pour chaque utilisateur (en base, table `user_pref` : ils
+  suivent l'utilisateur sur tous ses appareils).
+- *Vue compacte (une ligne par tâche) : à venir.*
+
+### 8.2 bis 🔍 Recherche
+
+- **Ctrl+K** (ou 🔍 dans l'en-tête), partout : fenêtre de recherche, résultats pendant la frappe (titre,
+  notes, tags, projet ; sans accents ni majuscules), sous-tâches et tâches terminées comprises (les ouvertes
+  d'abord). Clic ou Entrée → ouvre l'éditeur de la tâche. « Recherche avancée → » ouvre la page.
+- Page **`/search?q=…`** : même liste que « Toutes les tâches » (filtres, tri, regroupement), sous-tâches
+  incluses et tâches terminées mélangées aux autres ; préférences mémorisées séparément.
 
 ### 8.3 📊 Kanbans
 
@@ -408,21 +427,34 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 
 ### 8.5 Barre de filtres
 
-- Champ texte général (titre, notes, tags, projet).
-- Menus déroulants multi-sélection : importance, urgence, statut, type, projet, tags, échéance
-  (en retard / aujourd'hui / cette semaine / sans échéance), propriétaire / partagées avec moi.
-- Case « inclure les sous-tâches ». Bouton « réinitialiser ».
+- Champ texte général (titre, notes, tags, projet ; sans accents ni majuscules).
+- Bouton **« 🎛️ Filtres (n) »** qui déplie les menus déroulants multi-sélection : importance, urgence,
+  statut, type, projet (dont « ∅ Sans projet »), tags, échéance (en retard / aujourd'hui / demain / cette
+  semaine / plus tard / sans échéance), portée (toutes / les miennes / partagées avec moi) ; le nombre de
+  critères actifs s'affiche sur le bouton.
+- Case « 🌳 Inclure les sous-tâches ». Bouton « ↺ Réinitialiser ».
+- Composant réutilisable (`ui/components/filter_bar.py`) : kanbans et matrice à l'étape 6.
 
 ### 8.6 ⚙️ Réglages
 
-- 👤 **Profil** : nom affiché, mot de passe.
-- 🎨 **Apparence** : thème clair / sombre / auto.
-- 🔔 **Rappels** : décalage par défaut (jours), notifications bureau oui/non.
-- 📁 **Projets** et 🏷️ **Tags** : gestion des listes (voir 4.5).
-- 📊 **Boards** : créer / renommer / supprimer / partager les boards personnalisés et leurs colonnes.
-- 💻 **Appareils connectés** : sessions actives, révocation.
-- 👥 **Utilisateurs** (admin) : créer, réinitialiser le mot de passe, désactiver, promouvoir admin.
-- 🔌 **Connexion** (client bureau) : adresse du serveur, déconnexion.
+Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders|projects|tags|devices|users`) :
+
+- 👤 **Profil** : nom affiché ; changement de mot de passe (déconnecte les autres appareils).
+- 🎨 **Apparence** : thème 🖥️ comme le système / ☀️ clair / 🌙 sombre, appliqué immédiatement et mémorisé
+  pour le compte.
+- 🔔 **Rappels** : décalage par défaut (jours avant l'échéance), notifications bureau oui/non.
+- 📁 **Projets** : créer, modifier (nom, emoji avec palette, couleur, description, 🌍 public / 🔒 privé),
+  réordonner (↑ ↓), archiver / désarchiver, supprimer (les tâches restent, sans projet) ; les projets
+  publics d'autres utilisateurs sont en lecture seule (sauf pour les admins).
+- 🏷️ **Tags** : créer, modifier (nom, couleur, public / privé), réordonner, **fusionner** dans un autre tag,
+  supprimer.
+- 💻 **Appareils connectés** : navigateurs et clients bureau, date de connexion, dernière activité,
+  expiration ; déconnecter un appareil ou tous les autres.
+- 👥 **Utilisateurs** (admin) : créer un compte, réinitialiser un mot de passe, désactiver / réactiver,
+  donner / retirer les droits admin (pas sur soi-même).
+- *À venir* : 📊 **Boards** (étape 6), 🔌 **Connexion** du client bureau (étape 7).
+
+Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 
 ---
 
@@ -454,7 +486,7 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 | 2 | ✅ Serveur : authentification (cookies, jetons), API REST, premier compte admin, pièces jointes, service systemd |
 | 3 | ✅ Interface : thème clair/sombre, layout responsive, cartes, éditeur avec curseurs, ajout rapide, accueil, liste simple |
 | 4 | ✅ Éditeur markdown CodeMirror (live preview, listes, cases, liens cliquables) |
-| 5 | Modules : accueil, liste, filtres, recherche |
+| 5 | ✅ Modules : liste (filtres, tri, regroupement mémorisés), recherche Ctrl+K, réglages, dupliquer, heure d'échéance |
 | 6 | Kanbans (prédéfinis + personnalisés), matrice, glisser-déposer, Ctrl+drop |
 | 7 | Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
 | 8 | Temps réel, PWA, finitions |
@@ -474,3 +506,6 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 | 2026-11-07 | 0.7 | **Étape 4 livrée** : éditeur de notes markdown façon Obsidian (CodeMirror 6 de NiceGUI) — rendu en direct, syntaxe masquée, puces, cases à cocher cliquables, continuation et renumérotation des listes, double-clic sur liens / adresses / chemins, Ctrl+Z local ; 130 tests + test interactif dans Firefox |
 | 2026-11-07 | 0.8 | Notes : liens ouverts d'un **simple clic** (Ctrl+clic pendant l'édition du lien), double-clic dédoublonné ; infobulle avec la cible |
 | 2026-11-08 | 0.9 | Liens web sans protocole (`google.fr`, `localhost:2603`…) ouverts au lieu d'être copiés ; règles de reconnaissance web / fichier précisées (§4.4) |
+| 2026-11-08 | 1.0 | **Étape 5 livrée** : liste filtrable / triable / regroupable (préférences en base `user_pref`), barre de filtres réutilisable, recherche Ctrl+K + page `/search`, réglages complets (profil, mot de passe, thème, rappels, projets, tags, appareils, utilisateurs), dupliquer une tâche, heure d'échéance ; `AccountService` commun API / interface ; API : préférences et duplication (36 chemins, 49 opérations) ; 163 tests |
+| 2026-11-08 | 1.1 | Couleur des nouveaux tags choisie automatiquement, distincte des autres tags (et surtout de ceux de la tâche éditée) ; API `GET /tags/suggest-color` ; 168 tests |
+| 2026-11-08 | 1.2 | Tags affichés dans leur couleur partout (pastille + fond teinté) : cartes, sélecteur de l'éditeur et filtre « Tags » (puces et liste déroulante), puces légèrement espacées du libellé du champ |

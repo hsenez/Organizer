@@ -86,6 +86,12 @@ def delete_task(task_id: int, with_subtasks: bool = False, sv: Services = Depend
     return Response(status_code=204)
 
 
+@router.post("/tasks/{task_id}/duplicate", response_model=TaskOut, status_code=201)
+def duplicate_task(task_id: int, sv: Services = Depends(get_services)):
+    """Duplique la tâche et ses sous-tâches (statut « Pas commencé »)."""
+    return sv.tasks.duplicate(task_id)
+
+
 # --- sous-tâches ---
 
 

@@ -23,6 +23,7 @@ class UiContext:
         self.logout = logout
         self._refreshers: list[Callable[[], Any]] = []
         self.editor: Any = None  # TaskEditor de la page (créé par le layout)
+        self.dark: Any = None  # ui.dark_mode de la page (créé par le layout)
 
     @property
     def user(self):

@@ -24,7 +24,7 @@ ignore = ["RUF001", "RUF002", "RUF003", "RUF012"]
 
 [tool.ruff.lint.flake8-bugbear]
 # Idiome FastAPI : ``param = Depends(...)`` / ``File(...)`` en valeur par défaut.
-extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query"]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query", "fastapi.Body"]
 
 [tool.ruff.lint.per-file-ignores]
 # Feuille de style CSS dans une chaîne : les longues lignes y sont plus lisibles que coupées.

@@ -318,3 +318,18 @@ def test_attachment_link_cannot_be_forged(client, admin_token):
         f"{API}/tasks/{task['id']}/links", json={"kind": "attachment", "target": "abc"}, headers=h
     )
     assert r.status_code == 422
+
+
+def test_prefs_roundtrip(client, admin_token):
+    h = bearer(admin_token)
+    assert client.get(f"{API}/users/me/prefs/tasks", headers=h).json() is None
+    value = {"filter": {"text": "pain"}, "sort": {"key": "due"}, "group": "project"}
+    assert client.put(f"{API}/users/me/prefs/tasks", json=value, headers=h).status_code == 204
+    assert client.get(f"{API}/users/me/prefs/tasks", headers=h).json() == value
+
+
+def test_duplicate_route(client, admin_token):
+    h = bearer(admin_token)
+    task = client.post(f"{API}/tasks", json={"title": "Modèle"}, headers=h).json()
+    copy = client.post(f"{API}/tasks/{task['id']}/duplicate", headers=h)
+    assert copy.status_code == 201 and copy.json()["title"] == "Modèle (copie)"

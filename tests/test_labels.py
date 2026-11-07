@@ -113,3 +113,16 @@ def test_delete_and_merge_tags(alice):
         alice.tags.merge(b.id, b.id)
     alice.tags.delete(b.id)
     assert alice.tasks.get(t1.id).tags == []
+
+
+def test_new_tags_get_distinct_colors(alice):
+    from organizer.core import rules
+
+    first = alice.tags.create(TagIn(name="a"))
+    second = alice.tags.create(TagIn(name="b"))
+    assert first.color in rules.TAG_PALETTE and second.color in rules.TAG_PALETTE
+    assert rules.color_distance(first.color, second.color) > 30
+    explicit = alice.tags.create(TagIn(name="c", color="#123456"))
+    assert explicit.color == "#123456"
+    on_task = alice.tags.create(TagIn(name="d", avoid_colors=[first.color]))
+    assert rules.color_distance(on_task.color, first.color) > 30

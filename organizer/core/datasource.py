@@ -16,6 +16,7 @@ from typing import Protocol
 
 from organizer.core.schemas import UserOut, UserPublic
 from organizer.core.services import Services
+from organizer.core.services.account import AccountService
 from organizer.core.services.attachments import AttachmentService
 from organizer.core.services.labels import ProjectService, TagService
 from organizer.core.services.tasks import TaskService
@@ -30,6 +31,7 @@ class DataSource(Protocol):
     tags: TagService
     undo: UndoService
     attachments: AttachmentService
+    account: AccountService  # profil, mot de passe, appareils, comptes (admin)
 
     def users_public(self) -> list[UserPublic]: ...
 
@@ -41,9 +43,10 @@ class LocalDataSource:
 
     is_desktop = False
 
-    def __init__(self, services: Services, user: UserOut):
+    def __init__(self, services: Services, user: UserOut, account: AccountService):
         self._services = services
         self.user = user
+        self.account = account
         self.tasks = services.tasks
         self.projects = services.projects
         self.tags = services.tags

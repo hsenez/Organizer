@@ -11,9 +11,13 @@ from dataclasses import dataclass
 
 from nicegui import events, ui
 
+from organizer.ui.components.search_dialog import SearchDialog
 from organizer.ui.components.task_editor import TaskEditor
 from organizer.ui.context import UiContext
 from organizer.ui.theme import apply_theme
+
+# Thème choisi dans les réglages → valeur de ui.dark_mode (None = suivre le système).
+THEMES = {"auto": None, "light": False, "dark": True}
 
 
 @dataclass(frozen=True)
@@ -29,7 +33,7 @@ MODULES = [
     Module("/tasks", "📋", "Toutes les tâches", "La liste complète, triée par priorité"),
     Module("/kanban", "📊", "Kanbans", "Boards par statut, échéance, type, projet… et les vôtres"),
     Module("/matrix", "🎯", "Matrice", "Matrice d'Eisenhower : important × urgent"),
-    Module("/search", "🔍", "Recherche", "Rechercher dans les titres, notes, tags et projets"),
+    Module("/search", "🔍", "Recherche", "Rechercher dans les titres, notes, tags et projets (Ctrl+K)"),
 ]
 SETTINGS = Module("/settings", "⚙️", "Réglages", "Profil, projets, tags, appareils, utilisateurs")
 
@@ -42,8 +46,15 @@ def app_frame(ctx: UiContext, active: str, title: str, open_task: str | None = N
     ou ``new`` pour ouvrir l'éditeur sur une nouvelle tâche.
     """
     apply_theme()
+    ctx.dark = ui.dark_mode(THEMES.get(ctx.user.theme))
     ui.page_title(f"{title} · Organizer")
     ctx.editor = TaskEditor(ctx)
+    search = SearchDialog(ctx)
+    # Ctrl+K est réservé par certains navigateurs (barre de recherche de Firefox) : on le garde pour nous.
+    ui.add_body_html(
+        "<script>document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && "
+        "e.key.toLowerCase() === 'k') e.preventDefault(); });</script>"
+    )
 
     with ui.header().classes(
         "items-center gap-1 px-2 py-1 bg-white/90 dark:bg-slate-900/90 backdrop-blur "
@@ -52,6 +63,9 @@ def app_frame(ctx: UiContext, active: str, title: str, open_task: str | None = N
         menu_button = ui.button(icon="menu").props("flat round").tooltip("Afficher / masquer les modules")
         ui.label("📋 Organizer").classes("text-lg font-bold mr-2")
         ui.space()
+        ui.button(icon="search", on_click=search.open).props("flat round").tooltip(
+            "Rechercher (Ctrl+K)"
+        ).mark("search-button")
         with ui.button(icon="undo", on_click=ctx.undo).props("flat round").mark("undo-button") as undo_btn:
             undo_tip = ui.tooltip()
         with ui.button(icon="redo", on_click=ctx.redo).props("flat round").mark("redo-button") as redo_btn:
@@ -110,6 +124,8 @@ def app_frame(ctx: UiContext, active: str, title: str, open_task: str | None = N
                 ctx.redo()
             elif key == "z":
                 ctx.undo()
+            elif key == "k":
+                search.open()
         elif key == "n" and not e.modifiers.alt and not ctx.editor.dialog.value:
             ctx.editor.open_new()
 

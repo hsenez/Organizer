@@ -15,6 +15,7 @@ from organizer.core import rules
 from organizer.core.enums import DueBucket, LinkKind, Status, Urgency
 from organizer.core.schemas import TaskOut, TaskPatch
 from organizer.ui import format as fmt
+from organizer.ui.components.tag_chips import tag_chip
 from organizer.ui.context import UiContext
 from organizer.ui.theme import IMPORTANCE_BORDER_PX
 
@@ -65,9 +66,7 @@ def task_card(task: TaskOut, ctx: UiContext, *, show_parent: bool = True) -> ui.
                     f"background: {task.project.color}22; color: {task.project.color};"
                 ).tooltip(f"Projet : {task.project.name}")
             for tag in task.tags:
-                with ui.element("span").classes("chip").tooltip(f"Tag : {tag.name}"):
-                    ui.element("span").classes("tag-dot").style(f"background: {tag.color}")
-                    ui.label(tag.name)
+                tag_chip(tag.name, tag.color).tooltip(f"Tag : {tag.name}")
             if task.subtask_total:
                 percent = round(100 * task.subtask_done / task.subtask_total)
                 with (
@@ -138,10 +137,22 @@ def _card_menu(task: TaskOut, ctx: UiContext) -> None:
                     on_click=lambda s=status: set_status(s),
                 ).mark(f"card-status-{task.id}-{status.value}")
             ui.separator()
+            ui.menu_item("📋 Dupliquer", on_click=lambda: duplicate(task, ctx)).mark(
+                f"card-duplicate-{task.id}"
+            )
             if task.parent_id is not None:
                 ui.menu_item("🌳 Détacher du parent", on_click=detach)
             if task.can_delete:
                 ui.menu_item("🗑️ Supprimer", on_click=lambda: confirm_delete(task, ctx))
+
+
+def duplicate(task: TaskOut, ctx: UiContext) -> None:
+    """Duplique la tâche (et ses sous-tâches) puis ouvre la copie dans l'éditeur."""
+    copy = ctx.call(ctx.ds.tasks.duplicate, task.id)
+    if copy is not None:
+        ui.notify(f"📋 « {task.title} » dupliquée — Ctrl+Z pour annuler", position="top")
+        ctx.refresh()
+        ctx.editor.open(copy.id)
 
 
 def confirm_delete(task: TaskOut, ctx: UiContext, after=None) -> None:
@@ -173,3 +184,27 @@ def confirm_delete(task: TaskOut, ctx: UiContext, after=None) -> None:
                 on_click=lambda: (dialog.close(), do_delete(True)),
             )
     dialog.open()
+
+
+def task_row(task: TaskOut, ctx: UiContext, on_click) -> ui.row:
+    """Version compacte sur une ligne (résultats de recherche) : statut, importance, titre, projet,
+    échéance."""
+    row = (
+        ui.row()
+        .classes("task-row w-full items-center gap-2 no-wrap px-2 py-1.5 rounded-lg cursor-pointer")
+        .on("click", on_click)
+        .mark(f"task-row-{task.id}")
+    )
+    with row:
+        ui.label(task.status.meta.emoji).tooltip(task.status.meta.label)
+        ui.label(task.importance.meta.emoji).tooltip(f"Importance : {task.importance.meta.label}")
+        with ui.column().classes("flex-1 min-w-0 gap-0"):
+            title = ui.label(task.title).classes("truncate w-full font-medium")
+            if task.status.is_closed:
+                title.classes("line-through text-gray-500")
+            if task.parent_title:
+                ui.label(f"↳ {task.parent_title}").classes("text-xs text-gray-500 truncate w-full")
+        if task.project is not None:
+            ui.label(f"{task.project.emoji} {task.project.name}").classes("chip hidden sm:inline-flex")
+        _due_chip(task, ctx)
+    return row

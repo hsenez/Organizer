@@ -368,6 +368,8 @@ class TaskService(BaseService):
             for key in ("due_date", "due_time", "notes"):
                 if key in fields:
                     setattr(task, key, fields[key])
+            if "due_date" in fields and fields["due_date"] is None:
+                task.due_time = None  # pas d'heure sans date
             if "kind" in fields:
                 task.kind = str(fields["kind"])
             if "reminder_date" in fields:
@@ -535,6 +537,64 @@ class TaskService(BaseService):
             link, task = self._get_link(s, link_id)
             s.delete(link)
             self._touch(s, task)
+
+    # --- duplication ---
+
+    _COPIED_FIELDS = (
+        "importance",
+        "urgency",
+        "due_date",
+        "due_time",
+        "kind",
+        "reminder_offset_days",
+        "reminder_manual_date",
+        "notes",
+        "project_id",
+    )
+
+    def _copy_row(self, s: Session, source: Task, *, title: str, parent_id: int | None) -> Task:
+        """Copie une tâche (attributs, tags visibles, liens), remise à « Pas commencé »."""
+        copy = Task(
+            **{field: getattr(source, field) for field in self._COPIED_FIELDS},
+            title=title,
+            owner_id=self.actor.id,
+            parent_id=parent_id,
+            position=self._next_position(s, parent_id),
+            status=str(Status.NOT_STARTED),
+        )
+        if copy.project_id is not None and copy.project_id not in self.projects.visible_ids(s):
+            copy.project_id = None  # projet privé d'un autre utilisateur
+        s.add(copy)
+        s.flush()
+        visible_tags = self.tags.visible_ids(s)
+        for link in s.exec(select(TaskTag).where(TaskTag.task_id == source.id)).all():
+            if link.tag_id in visible_tags:
+                s.add(TaskTag(task_id=copy.id, tag_id=link.tag_id))
+        for link in s.exec(select(TaskLink).where(TaskLink.task_id == source.id)).all():
+            s.add(
+                TaskLink(
+                    task_id=copy.id,
+                    kind=link.kind,
+                    target=link.target,
+                    label=link.label,
+                    position=link.position,
+                )
+            )
+        return copy
+
+    def duplicate(self, task_id: int) -> TaskOut:
+        """Duplique une tâche et ses sous-tâches (statut « Pas commencé », titre « … (copie) »)."""
+        with self.uow() as probe:
+            title = self._get(probe.session, task_id).title
+        with self.uow(label=f"Dupliquer {quoted(title)}") as w:
+            s = w.session
+            source = self._get(s, task_id)
+            copy = self._copy_row(s, source, title=f"{source.title} (copie)", parent_id=source.parent_id)
+            subs = s.exec(select(Task).where(Task.parent_id == source.id).order_by(Task.position)).all()
+            for sub in subs:
+                self._copy_row(s, sub, title=sub.title, parent_id=copy.id)
+            s.flush()
+            return self._out(s, copy)
 
     # --- partage ---
 

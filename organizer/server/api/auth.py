@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from organizer.core.schemas import LoginIn, LoginOut, SessionOut, SetupIn, UserOut
+from organizer.core.services.account import AccountService
 from organizer.core.services.auth import ResolvedSession
-from organizer.server.api.deps import get_auth, get_state
+from organizer.server.api.deps import get_account, get_auth, get_state
 from organizer.server.security import client_ip
 from organizer.server.state import AppState
 
@@ -56,23 +57,21 @@ def me(auth: ResolvedSession = Depends(get_auth)):
 
 
 @router.get("/auth/sessions", response_model=list[SessionOut])
-def sessions(auth: ResolvedSession = Depends(get_auth), state: AppState = Depends(get_state)):
+def sessions(account: AccountService = Depends(get_account)):
     """Appareils connectés."""
-    return state.auth.list_sessions(auth.user.id, current_id=auth.session.id)
+    return account.sessions()
 
 
 @router.delete("/auth/sessions/{session_id}", status_code=204)
-def revoke_session(
-    session_id: int, auth: ResolvedSession = Depends(get_auth), state: AppState = Depends(get_state)
-):
-    state.auth.revoke(auth.user.id, session_id)
+def revoke_session(session_id: int, account: AccountService = Depends(get_account)):
+    account.revoke_session(session_id)
     return Response(status_code=204)
 
 
 @router.post("/auth/sessions/revoke-others", status_code=204)
-def revoke_others(auth: ResolvedSession = Depends(get_auth), state: AppState = Depends(get_state)):
+def revoke_others(account: AccountService = Depends(get_account)):
     """Déconnecte tous les autres appareils."""
-    state.auth.revoke_all(auth.user.id, except_session_id=auth.session.id)
+    account.revoke_other_sessions()
     return Response(status_code=204)
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 
 from organizer.core.schemas import ProjectIn, ProjectOut, ProjectPatch, TagIn, TagOut, TagPatch
@@ -66,6 +66,12 @@ def list_tags(sv: Services = Depends(get_services)):
 @router.post("/tags", response_model=TagOut, status_code=201)
 def create_tag(data: TagIn, sv: Services = Depends(get_services)):
     return sv.tags.create(data)
+
+
+@router.get("/tags/suggest-color")
+def suggest_tag_color(avoid: list[str] = Query(default=[]), sv: Services = Depends(get_services)) -> str:
+    """Couleur bien distincte des tags existants (et surtout des couleurs ``avoid``)."""
+    return sv.tags.suggest_color(avoid)
 
 
 @router.post("/tags/reorder", status_code=204)

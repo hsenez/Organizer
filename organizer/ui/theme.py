@@ -75,12 +75,15 @@ body.body--dark { background: #12141a; }
 .body--dark .chip-today { background: #5a3311; color: #ffd8a8; }
 .body--dark .chip-soon { background: #4d3d00; color: #ffec99; }
 .tag-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.tag-select .q-field__native { padding-top: 6px; }
 .progress-track { width: 54px; height: 6px; border-radius: 3px; background: rgba(120, 130, 150, .25);
     overflow: hidden; display: inline-block; }
 .progress-fill { height: 100%; background: #40c057; display: block; }
 
 @keyframes organizer-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.22); } }
 .pulse { display: inline-block; animation: organizer-pulse 1.6s ease-in-out infinite; }
+
+.task-row:hover { background: rgba(120, 130, 150, .12); }
 
 /* --- Accueil : compteurs cliquables ------------------------------------------------------------- */
 .stat-tile { transition: transform .12s ease, box-shadow .12s ease; }

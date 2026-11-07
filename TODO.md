@@ -51,10 +51,15 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 
 ## 🧩 Autres points en attente (relevés pendant le développement)
 
-- ⏰ Saisie de l'**heure** d'échéance dans l'éditeur (le modèle la gère déjà).
-- 💻 **Appareils connectés** : de nouveau visibles dans les réglages (étape 5) — déconnecter un appareil.
-- 📁 **Création des projets** depuis l'interface (réglages, étape 5) ; aujourd'hui seuls les tags se créent
-  depuis l'éditeur.
-- 📋 **Dupliquer** une tâche (menu ⋯ des cartes).
+- 📋 **Vue compacte** de la liste (une ligne par tâche, comme les résultats de Ctrl+K).
+- 🧭 Recherche Ctrl+K : naviguer dans les résultats avec les flèches du clavier.
 - 🐍 Faire tourner les tests sous **Python 3.11** (version du Pi) — jamais exécutés dans cette version.
 - 🔔 Notifications système des rappels sur le client bureau (étape 7).
+- 🗄️ Outil de **migration du schéma** de la base (ajout de colonnes) le jour où ce sera nécessaire.
+- ⚙️ Le décalage de rappel par défaut modifié dans les réglages ne s'applique aux nouvelles tâches de la
+  page ouverte qu'après rechargement.
+
+### ✅ Faits récemment
+
+- ⏰ Heure d'échéance dans l'éditeur · 💻 appareils connectés et 📁 projets dans les réglages ·
+  📋 dupliquer une tâche (étape 5).

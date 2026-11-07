@@ -11,7 +11,7 @@ un titre (sortie du champ, Entrée, ou fermeture de l'éditeur). Sans titre, rie
 from __future__ import annotations
 
 import io
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from nicegui import events, ui
 
@@ -22,7 +22,8 @@ from organizer.core.schemas import LinkIn, TagIn, TaskCreate, TaskOut, TaskPatch
 from organizer.ui import format as fmt
 from organizer.ui.components.level_slider import LevelSlider
 from organizer.ui.components.markdown_editor import MarkdownEditor
-from organizer.ui.components.task_card import confirm_delete
+from organizer.ui.components.tag_chips import color_tag_select
+from organizer.ui.components.task_card import confirm_delete, duplicate
 from organizer.ui.context import UiContext
 
 NO_PROJECT = 0
@@ -151,7 +152,7 @@ class TaskEditor:
             importance=d.get("importance", Importance.NORMAL),
             urgency=d.get("urgency", Urgency.SOON),
             due_date=d.get("due_date"),
-            due_time=None,
+            due_time=d.get("due_time"),
             status=d.get("status", Status.NOT_STARTED),
             kind=kind,
             reminder_offset_days=offset,
@@ -291,6 +292,15 @@ class TaskEditor:
                     .classes("w-48")
                 )
                 due.on_value_change(lambda e: self._due_changed(e.value))
+                due_time = (
+                    ui.input("🕐 Heure", value=task.due_time.strftime("%H:%M") if task.due_time else "")
+                    .props("outlined dense type=time clearable")
+                    .classes("w-32")
+                    .mark("editor-due-time")
+                    .tooltip("Heure facultative")
+                )
+                due_time.set_enabled(task.due_date is not None)
+                due_time.on_value_change(lambda e: self._time_changed(e.value))
                 for label, target in (
                     ("Aujourd'hui", today),
                     ("Demain", today + timedelta(days=1)),
@@ -308,6 +318,11 @@ class TaskEditor:
                 ui.label("⚠️ Cette échéance dépasse celle de la tâche parente.").classes(
                     "text-xs text-amber-700"
                 )
+
+    def _time_changed(self, value: str | None) -> None:
+        new_time = _parse_time(value)
+        if new_time != self.task.due_time:
+            self._save(due_time=new_time)
 
     def _due_changed(self, value: str | None) -> None:
         new_due = _parse_date(value)
@@ -368,7 +383,8 @@ class TaskEditor:
         projects.update({p.id: f"{p.emoji} {p.name}" for p in self.ds.projects.list()})
         if task.project is not None and task.project.id not in projects:  # projet archivé
             projects[task.project.id] = f"{task.project.emoji} {task.project.name} (archivé)"
-        tags = {t.id: t.name for t in self.ds.tags.list()}
+        all_tags = self.ds.tags.list()
+        tags = {t.id: t.name for t in all_tags}
         with ui.element("div").classes("grid grid-cols-1 sm:grid-cols-2 gap-3 w-full"):
             ui.select(
                 projects,
@@ -389,11 +405,14 @@ class TaskEditor:
                 .props("outlined dense use-chips options-dense")
                 .mark("editor-tags")
             )
+            color_tag_select(self.tags_select, {t.name: t.color for t in all_tags})
 
     def _tags_changed(self, values: list) -> None:
         existing = {t.name.casefold(): t.id for t in self.ds.tags.list()}
         ids: list[int] = []
         created = False
+        colors = {t.id: t.color for t in self.ds.tags.list()}
+        avoid = [colors[v] for v in values or [] if isinstance(v, int) and v in colors]
         for value in values or []:
             if isinstance(value, int):
                 ids.append(value)
@@ -404,9 +423,11 @@ class TaskEditor:
             if name.casefold() in existing:
                 ids.append(existing[name.casefold()])
             else:
-                tag = self.ctx.call(self.ds.tags.create, TagIn(name=name))
+                # Couleur choisie loin de celles des tags déjà sur cette tâche (et des autres tags).
+                tag = self.ctx.call(self.ds.tags.create, TagIn(name=name, avoid_colors=avoid))
                 if tag is not None:
                     ids.append(tag.id)
+                    avoid.append(tag.color)
                     created = True
         if sorted(ids) != sorted(t.id for t in self.task.tags) or created:
             self._save(rebuild=created, tag_ids=ids)
@@ -642,6 +663,9 @@ class TaskEditor:
                     )
                     ui.label(f"👤 Appartient à {owner}")
             ui.space()
+            ui.button("📋 Dupliquer", on_click=lambda: duplicate(self.task, self.ctx)).props(
+                "flat no-caps"
+            ).tooltip("Créer une copie de cette tâche (et de ses sous-tâches)")
             ui.button("➕ Nouvelle tâche", on_click=self.open_new).props("flat no-caps").tooltip(
                 "Créer une autre tâche (N)"
             )
@@ -673,6 +697,15 @@ def open_link(kind: LinkKind, target: str, ds) -> None:
     else:
         ui.clipboard.write(target)
         ui.notify("📋 Chemin copié dans le presse-papiers", position="top")
+
+
+def _parse_time(value: str | None) -> time | None:
+    if not value:
+        return None
+    try:
+        return time.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _parse_date(value: str | None) -> date | None:

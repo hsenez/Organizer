@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 
@@ -54,6 +54,13 @@ def test_patch_only_touches_given_fields(alice):
     assert updated.due_date == TODAY and updated.notes == "abc"
     cleared = alice.tasks.update(task.id, TaskPatch(due_date=None))
     assert cleared.due_date is None
+
+
+def test_clearing_due_date_clears_time(alice):
+    task = alice.tasks.create(TaskCreate(title="RDV", due_date=TODAY, due_time=time(14, 30)))
+    assert alice.tasks.get(task.id).due_time == time(14, 30)
+    cleared = alice.tasks.update(task.id, TaskPatch(due_date=None))
+    assert cleared.due_time is None
 
 
 def test_required_fields_cannot_be_nulled(alice):
@@ -364,3 +371,44 @@ def test_links_of_invisible_task_are_protected(alice, bob):
 def test_unknown_date_is_kept_as_date(alice):
     task = alice.tasks.create(TaskCreate(title="T", due_date=date(2027, 1, 31)))
     assert alice.tasks.get(task.id).due_date == date(2027, 1, 31)
+
+
+# --- duplication ------------------------------------------------------------------------------------------
+
+
+def test_duplicate_copies_content_and_subtasks(alice):
+    tag = alice.tags.create(TagIn(name="maison"))
+    source = alice.tasks.create(
+        TaskCreate(
+            title="Repeindre",
+            importance=Importance.CRITICAL,
+            due_date=TODAY,
+            notes="- [ ] acheter",
+            tag_ids=[tag.id],
+            status=Status.IN_PROGRESS,
+        )
+    )
+    alice.tasks.add_link(source.id, LinkIn(kind=LinkKind.URL, target="https://example.org"))
+    alice.tasks.create(TaskCreate(title="Poncer", parent_id=source.id, status=Status.DONE))
+    copy = alice.tasks.duplicate(source.id)
+    assert copy.title == "Repeindre (copie)"
+    assert copy.id != source.id
+    assert (copy.importance, copy.due_date, copy.notes) == (Importance.CRITICAL, TODAY, "- [ ] acheter")
+    assert copy.status is Status.NOT_STARTED
+    assert [t.name for t in copy.tags] == ["maison"]
+    assert [link.target for link in copy.links] == ["https://example.org"]
+    subs = alice.tasks.subtasks(copy.id)
+    assert [(s.title, s.status) for s in subs] == [("Poncer", Status.NOT_STARTED)]
+    alice.undo.undo()  # une seule action annule tout
+    assert titles(alice.tasks.list(TaskFilter(include_subtasks=True))) == ["Repeindre", "Poncer"]
+
+
+def test_duplicate_shared_task_belongs_to_me_without_private_labels(alice, bob):
+    secret = alice.tags.create(TagIn(name="secret"))
+    task = alice.tasks.create(TaskCreate(title="Commun", tag_ids=[secret.id]))
+    alice.tasks.set_shares(task.id, [bob.actor.id])
+    copy = bob.tasks.duplicate(task.id)
+    assert copy.owner_id == bob.actor.id
+    assert copy.tags == []
+    with pytest.raises(NotFound):
+        alice.tasks.get(copy.id)

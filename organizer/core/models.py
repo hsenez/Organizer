@@ -152,6 +152,17 @@ class Attachment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class UserPref(SQLModel, table=True):
+    """Préférence d'affichage d'un utilisateur (filtres, tri, regroupement d'une vue…), valeur JSON."""
+
+    __tablename__ = "user_pref"
+
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    key: str = Field(primary_key=True)
+    value: str = Field(sa_type=Text)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class UndoEntry(SQLModel, table=True):
     """Une action de l'historique annuler / rétablir d'un utilisateur."""
 

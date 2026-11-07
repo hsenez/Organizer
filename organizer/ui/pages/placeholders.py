@@ -16,8 +16,6 @@ _UPCOMING = {
         "Boards par statut, échéance, type et projet, boards personnalisés, glisser-déposer.",
     ),
     "/matrix": ("🎯", "Matrice", 6, "Matrice d'Eisenhower 2×2 et 4×4, glisser-déposer entre quadrants."),
-    "/search": ("🔍", "Recherche", 5, "Recherche globale (Ctrl+K) et barre de filtres."),
-    "/settings": ("⚙️", "Réglages", 5, "Profil, thème, projets, tags, appareils connectés, utilisateurs."),
 }
 
 

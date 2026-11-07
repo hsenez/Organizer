@@ -179,3 +179,35 @@ def test_suggest_parent_completion():
     assert not rules.should_suggest_parent_completion(FakeParent(Status.IN_PROGRESS, 2, 1))
     assert not rules.should_suggest_parent_completion(FakeParent(Status.DONE, 2, 2))
     assert not rules.should_suggest_parent_completion(FakeParent(Status.IN_PROGRESS, 0, 0))
+
+
+def test_tag_palette_is_varied():
+    assert len(set(rules.TAG_PALETTE)) == 24
+    assert all(c.startswith("#") and len(c) == 7 for c in rules.TAG_PALETTE)
+
+
+def test_color_distance():
+    assert rules.color_distance("#ff0000", "#ff0000") == 0
+    assert rules.color_distance("#ff0000", "#fe0000") < 2
+    assert rules.color_distance("#ff0000", "#0000ff") > 100
+
+
+def test_pick_distinct_color_avoids_task_colors_first():
+    import random
+
+    red, green = "#d92626", "#26d926"
+    for seed in range(20):
+        color = rules.pick_distinct_color([red, green], priority=[red], rng=random.Random(seed))
+        assert rules.color_distance(color, red) > 40
+        assert rules.color_distance(color, green) > 25
+
+
+def test_pick_distinct_color_spreads_over_palette():
+    import random
+
+    rng = random.Random(1)
+    chosen: list[str] = []
+    for _ in range(8):
+        chosen.append(rules.pick_distinct_color(chosen, rng=rng))
+    closest = min(rules.color_distance(a, b) for i, a in enumerate(chosen) for b in chosen[i + 1 :])
+    assert len(set(chosen)) == 8 and closest > 15

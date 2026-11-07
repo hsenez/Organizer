@@ -11,7 +11,7 @@ from nicegui import app, ui
 from nicegui.testing import User
 
 from organizer.core.enums import Importance, Status
-from organizer.core.schemas import TaskCreate, TaskFilter
+from organizer.core.schemas import ProjectIn, TaskCreate, TaskFilter
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +83,7 @@ async def test_login_wrong_then_right_password(user: User):
     await user.should_see("Identifiant ou mot de passe incorrect")
     fill(user, "Mot de passe", "motdepasse")
     user.find("Se connecter").click()
-    await user.should_see("Tâches ouvertes")  # redirigé vers la page demandée au départ
+    await user.should_see(marker="list-sort")  # redirigé vers la page demandée au départ (/tasks)
 
 
 async def test_logout(user: User):
@@ -277,3 +277,103 @@ async def test_card_menu_changes_status(user: User):
     assert sv.tasks.get(task.id).status is Status.DONE
     await user.should_see("Terminées et annulées (1)")
     assert sv.tasks.list(TaskFilter(status=[Status.DONE]))[0].title == "Lessive"
+
+
+# --- étape 5 : filtres, tri, recherche, réglages ----------------------------------------------------------
+
+
+def select_value(user: User, marker: str, value) -> None:
+    """Choisit une valeur dans un ui.select (comme un clic sur une option)."""
+    with user.client:
+        next(iter(user.find(marker=marker).elements)).set_value(value)
+
+
+async def test_filters_are_applied_and_remembered(user: User):
+    sv = await login(user)
+    hot = sv.tasks.create(TaskCreate(title="Urgent", importance=4))
+    calm = sv.tasks.create(TaskCreate(title="Calme", importance=1))
+    await user.open("/tasks")
+    await user.should_see(marker=f"task-card-{calm.id}")
+    user.find(marker="filter-toggle").click()  # déplie le panneau des filtres
+    select_value(user, "filter-Importance", [4])
+    await user.should_not_see(marker=f"task-card-{calm.id}")
+    await user.should_see(marker=f"task-card-{hot.id}")
+    await user.should_see("🎛️ Filtres (1)")
+    await user.open("/tasks")  # rechargement : le filtre est mémorisé
+    await user.should_not_see(marker=f"task-card-{calm.id}")
+    user.find(marker="filter-reset").click()
+    await user.should_see(marker=f"task-card-{calm.id}")
+
+
+async def test_grouping_by_project(user: User):
+    sv = await login(user)
+    project = sv.projects.create(ProjectIn(name="Jardin", emoji="🌱"))
+    sv.tasks.create(TaskCreate(title="Tondre", project_id=project.id))
+    sv.tasks.create(TaskCreate(title="Lire"))
+    await user.open("/tasks")
+    select_value(user, "list-group", "project")
+    await user.should_see("Sans projet")
+    await user.should_see("Jardin")
+
+
+async def test_quick_search_opens_editor(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Réparer le vélo"))
+    sv.tasks.create(TaskCreate(title="Autre chose"))
+    await user.open("/")
+    user.find(marker="search-button").click()
+    user.find(marker="search-input").type("velo").trigger("keydown.enter")  # sans accent
+    await user.should_see(marker="task-editor")
+    await user.should_see("Réparer le vélo")
+    assert task.id
+
+
+async def test_search_page_includes_closed_tasks(user: User):
+    sv = await login(user)
+    done = sv.tasks.create(TaskCreate(title="Pain acheté", status=Status.DONE))
+    other = sv.tasks.create(TaskCreate(title="Fromage"))
+    await user.open("/search?q=pain")
+    await user.should_see(marker=f"task-card-{done.id}")
+    await user.should_not_see(marker=f"task-card-{other.id}")
+
+
+async def test_duplicate_from_card_menu(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Modèle"))
+    await user.open("/tasks")
+    open_menu(user, f"card-menu-{task.id}")
+    user.find(marker=f"card-duplicate-{task.id}").click()
+    await user.should_see("Modèle (copie)")
+    assert sorted(t.title for t in sv.tasks.list()) == ["Modèle", "Modèle (copie)"]
+
+
+async def test_settings_create_project_and_tag(user: User):
+    sv = await login(user)
+    await user.open("/settings?tab=projects")
+    user.find(marker="new-project").click()
+    with user.scope(marker="project-dialog"):
+        fill(user, "Nom", "Vacances")
+    user.find(marker="project-save").click()
+    assert [p.name for p in sv.projects.list()] == ["Vacances"]
+    await user.open("/settings?tab=tags")
+    user.find(marker="new-tag").click()
+    with user.scope(marker="tag-dialog"):
+        fill(user, "Nom", "urgent")
+    user.find(marker="tag-save").click()
+    assert [t.name for t in sv.tags.list()] == ["urgent"]
+
+
+async def test_settings_theme_devices_and_users(user: User):
+    await login(user)
+    await user.open("/settings?tab=appearance")
+    select_value(user, "theme-toggle", "dark")
+    assert state().users.get(1).theme == "dark"
+    await user.open("/settings?tab=devices")
+    await user.should_see("Cet appareil")
+    await user.open("/settings?tab=users")
+    user.find(marker="new-user").click()
+    with user.scope(marker="user-dialog"):
+        fill(user, "Identifiant de connexion", "bob")
+        fill(user, "Mot de passe", "motdepasse")
+    user.find(marker="user-save").click()
+    assert sorted(u.username for u in state().users.list()) == ["alice", "bob"]

@@ -11,6 +11,7 @@ from nicegui import app, ui
 
 from organizer.core.datasource import LocalDataSource
 from organizer.core.errors import OrganizerError
+from organizer.core.services.account import AccountService
 from organizer.server.api.auth import check_credentials
 from organizer.server.security import client_ip, describe_user_agent, request_auth
 from organizer.server.state import AppState
@@ -150,8 +151,12 @@ def server_context(request: Request) -> UiContext | RedirectResponse:
     if redirect is not None:
         return redirect
     auth = request_auth(request)
-    services = _state().services_for(auth.user)
-    return UiContext(LocalDataSource(services, auth.user), logout=lambda: ui.navigate.to("/auth/logout"))
+    state = _state()
+    services = state.services_for(auth.user)
+    account = AccountService(state.users, state.auth, auth.user.id, auth.session.id)
+    return UiContext(
+        LocalDataSource(services, auth.user, account), logout=lambda: ui.navigate.to("/auth/logout")
+    )
 
 
 def register_pages() -> None:

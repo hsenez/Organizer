@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from nicegui import ui
 
 from organizer.ui.context import UiContext
-from organizer.ui.pages import home, placeholders, tasks
+from organizer.ui.pages import home, placeholders, settings, tasks
 
 ContextFactory = Callable[[Request], "UiContext | Response"]
 
@@ -19,5 +19,7 @@ def register_app_pages(make_context: ContextFactory) -> None:
     common = {"favicon": "📋", "dark": None}
     ui.page("/", title="Accueil · Organizer", **common)(home.page(make_context))
     ui.page("/tasks", title="Toutes les tâches · Organizer", **common)(tasks.page(make_context))
+    ui.page("/search", title="Recherche · Organizer", **common)(tasks.search_page(make_context))
+    ui.page("/settings", title="Réglages · Organizer", **common)(settings.page(make_context))
     for path, builder in placeholders.PAGES.items():
         ui.page(path, **common)(builder(make_context))

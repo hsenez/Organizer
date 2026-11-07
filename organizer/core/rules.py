@@ -6,8 +6,11 @@ services les réappliquent côté serveur pour garantir la cohérence.
 
 from __future__ import annotations
 
+import colorsys
+import random
 import re
 import unicodedata
+from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Protocol
 
@@ -199,6 +202,72 @@ def should_suggest_parent_completion(parent: _ParentLike) -> bool:
         and parent.subtask_done == parent.subtask_total
         and not Status(parent.status).is_closed
     )
+
+
+# --- Couleurs (tags) ---------------------------------------------------------------------------------
+
+
+def _hsl_to_hex(hue: float, saturation: float, lightness: float) -> str:
+    r, g, b = colorsys.hls_to_rgb(hue / 360, lightness, saturation)
+    return "#{:02x}{:02x}{:02x}".format(*(round(v * 255) for v in (r, g, b)))
+
+
+# 24 teintes réparties sur le cercle chromatique, assez saturées pour être lisibles en pastille et en texte.
+TAG_PALETTE: tuple[str, ...] = tuple(_hsl_to_hex(hue, 0.68, 0.50) for hue in range(0, 360, 15))
+
+
+def _hex_to_lab(color: str) -> tuple[float, float, float]:
+    """Couleur ``#rrggbb`` → CIELAB (D65), où la distance euclidienne suit à peu près la perception."""
+    h = color.strip().lstrip("#")
+    if len(h) == 3:
+        h = "".join(ch * 2 for ch in h)
+    try:
+        rgb = [int(h[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    except ValueError:
+        rgb = [0.5, 0.5, 0.5]
+    linear = [((c + 0.055) / 1.055) ** 2.4 if c > 0.04045 else c / 12.92 for c in rgb]
+    x = (0.4124 * linear[0] + 0.3576 * linear[1] + 0.1805 * linear[2]) / 0.95047
+    y = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    z = (0.0193 * linear[0] + 0.1192 * linear[1] + 0.9505 * linear[2]) / 1.08883
+
+    def f(t: float) -> float:
+        return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+
+    fx, fy, fz = f(x), f(y), f(z)
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def color_distance(a: str, b: str) -> float:
+    """Écart perçu entre deux couleurs (ΔE CIE76 : ~2 à peine visible, > 30 nettement différent)."""
+    la, lb = _hex_to_lab(a), _hex_to_lab(b)
+    return sum((x - y) ** 2 for x, y in zip(la, lb, strict=True)) ** 0.5
+
+
+# Bonus accordé à l'écart avec les tags « ailleurs » : les couleurs de la tâche en cours comptent davantage.
+_PRIORITY_BONUS = 15.0
+_TOLERANCE = 6.0  # on tire au hasard parmi les couleurs presque aussi bonnes que la meilleure
+
+
+def pick_distinct_color(
+    taken: Iterable[str], priority: Iterable[str] = (), rng: random.Random | None = None
+) -> str:
+    """Couleur de la palette la plus éloignée des couleurs déjà utilisées.
+
+    ``priority`` : couleurs dont il faut s'éloigner en premier (tags de la tâche en cours d'édition) ;
+    ``taken`` : toutes les autres couleurs de tags. Un peu de hasard évite de toujours tirer la même suite.
+    """
+    rng = rng or random.Random()
+    taken = [c for c in taken if c]
+    priority = [c for c in priority if c]
+
+    def score(candidate: str) -> float:
+        near_priority = min((color_distance(candidate, c) for c in priority), default=1000.0)
+        near_any = min((color_distance(candidate, c) for c in taken), default=1000.0)
+        return min(near_priority, near_any + _PRIORITY_BONUS)
+
+    scored = [(score(c), c) for c in TAG_PALETTE]
+    best = max(value for value, _ in scored)
+    return rng.choice([c for value, c in scored if value >= best - _TOLERANCE])
 
 
 # --- Tri --------------------------------------------------------------------------------------------------

@@ -6,13 +6,16 @@ elles prennent directement le moteur de base de données.
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from sqlalchemy import Engine, func
 from sqlmodel import Session, select
 
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
-from organizer.core.models import User
+from organizer.core.models import User, UserPref, utcnow
 from organizer.core.schemas import AdminUserPatch, PasswordChange, ProfilePatch, UserOut, UserPublic
 from organizer.core.services.base import Actor
 
@@ -96,6 +99,21 @@ class UserService:
     def actor_for(self, user_id: int) -> Actor:
         user = self.get(user_id)
         return Actor(id=user.id, is_admin=user.is_admin, reminder_offset_days=user.reminder_offset_days)
+
+    # --- préférences d'affichage ---
+
+    def get_pref(self, user_id: int, key: str, default: Any = None) -> Any:
+        with Session(self.engine) as s:
+            row = s.get(UserPref, (user_id, key))
+            return json.loads(row.value) if row is not None else default
+
+    def set_pref(self, user_id: int, key: str, value: Any) -> None:
+        with Session(self.engine) as s:
+            row = s.get(UserPref, (user_id, key)) or UserPref(user_id=user_id, key=key, value="null")
+            row.value = json.dumps(value, ensure_ascii=False)
+            row.updated_at = utcnow()
+            s.add(row)
+            s.commit()
 
     def list_public(self) -> list[UserPublic]:
         """Comptes actifs, pour choisir avec qui partager."""

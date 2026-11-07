@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
+from organizer.core import rules
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
 from organizer.core.models import Project, Tag, Task, TaskTag
 from organizer.core.schemas import ProjectIn, ProjectOut, ProjectPatch, TagIn, TagOut, TagPatch
@@ -83,7 +84,7 @@ class _LabelService(BaseService):
         with self.uow(label=f"Créer {self.noun} {quoted(name)}") as w:
             self._check_unique(w.session, name)
             obj = self.model(
-                **data.model_dump(exclude={"name"}),
+                **data.model_dump(exclude={"name", "avoid_colors"}),
                 name=name,
                 owner_id=self.actor.id,
                 position=self._next_position(w.session),
@@ -162,7 +163,15 @@ class TagService(_LabelService):
         return self._list()
 
     def create(self, data: TagIn) -> TagOut:
+        if data.color is None:
+            data = data.model_copy(update={"color": self.suggest_color(data.avoid_colors)})
         return self._create(data)
+
+    def suggest_color(self, avoid: list[str] | None = None) -> str:
+        """Couleur bien distincte des tags visibles, et surtout de ``avoid`` (tags de la tâche éditée)."""
+        with self.uow() as w:
+            taken = w.session.exec(select(Tag.color).where(self._visible_clause())).all()
+        return rules.pick_distinct_color(taken, avoid or [])
 
     def update(self, obj_id: int, patch: TagPatch) -> TagOut:
         return super().update(obj_id, patch)

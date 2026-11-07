@@ -58,8 +58,11 @@ class ProjectOut(_Schema):
 
 class TagIn(_Schema):
     name: str = Field(min_length=1, max_length=40)
-    color: str = "#868e96"
+    # Sans couleur, une couleur bien distincte des tags existants est choisie automatiquement.
+    color: str | None = None
     is_public: bool = False
+    # Couleurs dont s'éloigner en priorité (tags de la tâche en cours d'édition) ; non enregistré.
+    avoid_colors: list[str] = Field(default_factory=list)
 
 
 class TagPatch(_Schema):

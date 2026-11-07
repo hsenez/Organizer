@@ -6,6 +6,7 @@ from fastapi import HTTPException, Request
 
 from organizer.core.schemas import UserOut
 from organizer.core.services import Services
+from organizer.core.services.account import AccountService
 from organizer.core.services.auth import ResolvedSession
 from organizer.server.security import request_auth
 from organizer.server.state import AppState
@@ -35,3 +36,9 @@ def get_admin(request: Request) -> UserOut:
 
 def get_services(request: Request) -> Services:
     return get_state(request).services_for(get_user(request))
+
+
+def get_account(request: Request) -> AccountService:
+    auth = get_auth(request)
+    state = get_state(request)
+    return AccountService(state.users, state.auth, auth.user.id, auth.session.id)

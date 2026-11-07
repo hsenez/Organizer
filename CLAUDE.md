@@ -121,6 +121,31 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - ⚠️ Tout script de débogage lancé avec la fixture `user` doit importer la fixture `data_dir` de
   `tests/test_pages.py`, sinon il écrit dans le vrai dossier `data/`.
 
+## Étape 5 : liste, recherche, réglages
+
+- **`AccountService`** (`core/services/account.py`) : profil, mot de passe, appareils, comptes (admin),
+  préférences. Utilisé par l'API (`get_account`) **et** par l'interface (`ds.account`) : une seule logique.
+- **Préférences d'affichage** : table `user_pref` (clé, valeur JSON) — ex. `view:tasks`, `view:search`
+  (`{"filter", "sort", "group"}`). Lire avec tolérance (`_validate` dans `task_list.py`) : une préférence
+  enregistrée par une ancienne version ne doit jamais casser la page.
+- **Schéma de la base** : `create_all` crée les **nouvelles tables** dans une base existante, mais n'ajoute
+  pas de **colonne** à une table existante → préférer une nouvelle table ; sinon prévoir une migration
+  (aucun outil de migration en place pour l'instant).
+- `FilterBar` (`components/filter_bar.py`) et `TaskListView` (`components/task_list.py`) sont réutilisables
+  (kanbans / matrice à l'étape 6).
+- Ctrl+K : `preventDefault` posé par un petit script (`app_frame`) car Firefox l'utilise pour sa barre de
+  recherche ; `ui.keyboard` ne peut pas empêcher l'action du navigateur.
+- Thème : `ctx.dark` (`ui.dark_mode`) créé par `app_frame` d'après `user.theme` ; les réglages le changent
+  à chaud. Après une mise à jour du profil, remplacer `ctx.ds.user`.
+- Couleur d'un nouveau tag : `TagIn.color = None` → `TagService.suggest_color(avoid)` /
+  `rules.pick_distinct_color` (palette de 24 teintes, distance CIELAB, couleurs de la tâche éditée en
+  priorité via `TagIn.avoid_colors`, qui n'est pas enregistré).
+- Affichage des tags : `components/tag_chips.py` (`tag_chip` pour les cartes, `color_tag_select` pour un
+  `ui.select` : slots Quasar `selected-item` et `option`, couleurs retrouvées par le **libellé** de
+  l'option, car NiceGUI envoie `{value: index, label}` au navigateur).
+- Tests d'UI : un panneau replié (filtres) rend ses éléments invisibles pour le simulateur → le déplier ;
+  pour un `ui.select`, `set_value` dans `with user.client:` (helper `select_value`).
+
 ## Tests
 
 - `tests/test_*.py` : services (base SQLite temporaire, date du jour figée au mercredi 4/11/2026).
@@ -150,9 +175,10 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 130 tests au total.
+- 168 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
-- ⏭️ Étape 5 : accueil, liste avec filtres et tris, recherche (Ctrl+K), réglages (projets, tags, appareils…).
+- ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
+- ⏭️ Étape 6 : kanbans (prédéfinis + personnalisés), matrice d'Eisenhower, glisser-déposer, Ctrl+drop.
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.

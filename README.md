@@ -11,9 +11,9 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — étapes 1 à 4 sur 8 : cœur métier, serveur, API, interface
-> (accueil, liste, cartes, éditeur) et notes markdown façon Obsidian. À venir : filtres, recherche, réglages,
-> kanbans, matrice, client bureau.
+> 🚧 **Projet en cours de construction** — étapes 1 à 5 sur 8 : cœur métier, serveur, API, interface
+> (accueil, liste filtrable, recherche, réglages, éditeur) et notes markdown façon Obsidian. À venir : kanbans,
+> matrice, glisser-déposer, client bureau.
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -59,7 +59,10 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 - Ensuite : page de connexion, avec « 🍪 Se souvenir de moi » (30 jours).
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs`.
 - Depuis un téléphone : même adresse dans le navigateur (interface adaptée, menu ☰).
-- Raccourcis : **N** nouvelle tâche, **Ctrl+Z** annuler, **Ctrl+Maj+Z** / **Ctrl+Y** rétablir.
+- Raccourcis : **N** nouvelle tâche, **Ctrl+K** rechercher, **Ctrl+Z** annuler, **Ctrl+Maj+Z** / **Ctrl+Y**
+  rétablir.
+- Réglages (projets, tags, thème, appareils connectés, comptes des utilisateurs…) : menu du compte →
+  ⚙️ Réglages, ou `http://<ip>:2603/settings`.
 - Lien direct vers une tâche : `http://<ip>:2603/tasks?task=<numéro>` (`?task=new` : nouvelle tâche).
 
 Sujets en cours de réflexion (liens vers les fichiers…) : voir [`TODO.md`](TODO.md).
