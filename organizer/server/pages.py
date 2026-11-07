@@ -1,7 +1,5 @@
-"""Pages web de l'étape 2 : connexion, création du premier compte, accueil provisoire.
-
-Les vraies pages de l'application (accueil, liste, kanbans…) arrivent à l'étape 3 dans ``organizer/ui``.
-"""
+"""Pages propres au serveur web : connexion et création du premier compte ; branchement des pages de
+l'application (``organizer/ui``) sur la source de données locale."""
 
 from __future__ import annotations
 
@@ -11,13 +9,14 @@ from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 from nicegui import app, ui
 
-from organizer.core.enums import DueBucket
+from organizer.core.datasource import LocalDataSource
 from organizer.core.errors import OrganizerError
-from organizer.core.schemas import TaskFilter
 from organizer.server.api.auth import check_credentials
 from organizer.server.security import client_ip, describe_user_agent, request_auth
 from organizer.server.state import AppState
 from organizer.server.web_auth import safe_next
+from organizer.ui.context import UiContext
+from organizer.ui.pages import register_app_pages
 
 PRIMARY = "#5c7cfa"
 
@@ -145,56 +144,14 @@ def setup_page(request: Request):
     return None
 
 
-def home_page(request: Request):
+def server_context(request: Request) -> UiContext | RedirectResponse:
+    """Fabrique de contexte des pages de l'application, côté serveur : cookie → LocalDataSource."""
     redirect = guard(request)
     if redirect is not None:
         return redirect
     auth = request_auth(request)
-    user = auth.user
-    sv = _state().services_for(user)
-    ui.colors(primary=PRIMARY)
-
-    with ui.header().classes(
-        "items-center justify-between bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-100 shadow-sm"
-    ):
-        ui.label("📋 Organizer").classes("text-xl font-bold")
-        with ui.row().classes("items-center gap-2"):
-            ui.label(f"{'👑 ' if user.is_admin else ''}{user.display_name}").classes("text-sm")
-            ui.button("Déconnexion", icon="logout", on_click=lambda: ui.navigate.to("/auth/logout")).props(
-                "flat dense no-caps"
-            )
-
-    open_tasks = [t for t in sv.tasks.list(TaskFilter(include_subtasks=True)) if not t.status.is_closed]
-    overdue = sv.tasks.list(TaskFilter(due=[DueBucket.OVERDUE], include_subtasks=True))
-    reminders = sv.tasks.reminders_due()
-
-    with ui.column().classes("w-full max-w-3xl mx-auto p-4 gap-4"):
-        ui.label(f"Bonjour {user.display_name} 👋").classes("text-2xl font-semibold")
-        with ui.row().classes("w-full gap-4"):
-            for emoji, label, value, tip in (
-                ("📌", "Tâches ouvertes", len(open_tasks), "Tâches ni finies ni annulées"),
-                ("⚠️", "En retard", len([t for t in overdue if not t.status.is_closed]), "Échéance dépassée"),
-                ("🔔", "Rappels", len(reminders), "Suivis dont la date de rappel est atteinte"),
-            ):
-                with ui.card().classes("flex-1 min-w-[140px] items-center rounded-xl").tooltip(tip):
-                    ui.label(emoji).classes("text-3xl")
-                    ui.label(str(value)).classes("text-3xl font-bold")
-                    ui.label(label).classes("text-sm text-gray-500")
-        with ui.card().classes("w-full rounded-xl bg-amber-50 dark:bg-amber-950"):
-            ui.label("🚧 Interface en construction").classes("text-lg font-semibold")
-            ui.markdown(
-                "Le serveur, la connexion et l'API sont en place (**étape 2**). L'interface complète — "
-                "accueil, liste, kanbans, matrice, éditeur — arrive à l'**étape 3**.\n\n"
-                "En attendant, l'API est documentée et testable ici : [📖 /docs](/docs)."
-            )
-        with ui.expansion("💻 Appareils connectés", icon="devices").classes("w-full"):
-            for session in _state().auth.list_sessions(user.id, current_id=auth.session.id):
-                ui.label(
-                    f"{'🟢 ' if session.current else ''}{session.label or session.kind} — "
-                    f"{'jeton client bureau' if session.kind == 'api' else 'navigateur'}, "
-                    f"vu le {session.last_seen_at:%d/%m à %H:%M} (UTC)"
-                ).classes("text-sm")
-    return None
+    services = _state().services_for(auth.user)
+    return UiContext(LocalDataSource(services, auth.user), logout=lambda: ui.navigate.to("/auth/logout"))
 
 
 def register_pages() -> None:
@@ -202,4 +159,4 @@ def register_pages() -> None:
     common = {"favicon": "📋", "dark": None}
     ui.page("/login", title="Connexion · Organizer", **common)(login_page)
     ui.page("/setup", title="Bienvenue · Organizer", **common)(setup_page)
-    ui.page("/", title="Organizer", **common)(home_page)
+    register_app_pages(server_context)

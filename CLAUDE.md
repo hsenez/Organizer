@@ -13,6 +13,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - **Documentation** : `specifications.md`, `CLAUDE.md` et `README.md` sont **mis à jour à chaque changement**
   (fonctionnalité, architecture, dépendance, commande). Ajouter une ligne dans l'historique de
   `specifications.md`.
+- **`TODO.md`** : sujets ouverts hors feuille de route (demandes de l'utilisateur à approfondir, points
+  relevés en cours de route). Y ajouter ce qui est reporté ; retirer ce qui est fait.
 - **Dépendances** : toujours dans le venv `.venv/`. Annoncer à l'utilisateur toute nouvelle bibliothèque, puis
   l'ajouter avec sa version au bon fichier `requirements*.txt`.
 - **Tout en Python**, sauf le strict nécessaire en JS/CSS pour l'interface (éditeur CodeMirror, glisser-déposer),
@@ -71,6 +73,36 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Routes API en `def` synchrones (FastAPI les exécute dans un thread : SQLite synchrone sans bloquer la boucle).
 - Erreurs métier (`OrganizerError`) → JSON `{"detail": …}` avec le code HTTP de l'exception.
 
+## Architecture de l'interface (étape 3)
+
+- Pages de l'application dans `organizer/ui/pages/`, enregistrées par `register_app_pages(make_context)` :
+  la fabrique reçoit la requête et renvoie un `UiContext` (ou une redirection). Le serveur fournit
+  `server_context` (`server/pages.py`) ; le client bureau fournira la sienne.
+- **Éditeur** (`components/task_editor.py`) : `open(id)` pour une tâche existante, `open_new()` pour une
+  création (mode *brouillon* : `self.draft` contient les champs de `TaskCreate`, `self.task` un `TaskOut`
+  fictif d'id 0 construit par `_draft_out()` ; `_save()` alimente le brouillon tant qu'il n'y a pas de titre,
+  puis crée la tâche). Pas de création « à vide » en base.
+- **`UiContext`** (`ui/context.py`) : `ds` (DataSource), `refresh()` (tous les blocs `ui.refreshable` abonnés
+  via `on_refresh`), `call()` / `attempt()` (erreur métier → toast rouge), `undo()` / `redo()`, `editor`.
+- Appels à la DataSource **synchrones** dans les gestionnaires d'événements (SQLite local rapide ; client
+  bureau mono-utilisateur).
+- Couleurs : `theme.color_name(member)` → nom Quasar (`imp3`, `urg0`, `st2`, `kd1`), déclarés via
+  `ui.colors(**custom)` dans `apply_theme()`. Toute nouvelle couleur de statut / niveau vient de `enums.py`.
+- Pièges NiceGUI rencontrés :
+  - `element.tooltip(...)` **ajoute** une infobulle à chaque appel : pour un texte qui change, créer
+    `ui.tooltip()` une fois et faire `set_text` ;
+  - les classes Tailwind `dark:` ne s'appliquent pas aux fonds Quasar (`q-drawer`…) : passer par le CSS
+    `.body--dark …` dans `theme.py` ;
+  - dans un `ui.dialog` en `position=right`, Quasar ajoute un padding : neutralisé en CSS ;
+  - `ui.upload` est masqué ; un bouton appelle `upload.run_method("pickFiles")`.
+- **Tests d'UI** : le simulateur ne propage pas les clics aux parents et ne voit pas le contenu d'un menu
+  fermé → poser des `.mark(...)` sur les éléments cliquables (cartes `task-card-<id>`, entrées de menu,
+  options des curseurs `slider-importance-4`…) et ouvrir les menus avec `open_menu()` dans les tests.
+- **Vérification visuelle** : Firefox headless piloté en WebDriver BiDi (aiohttp) avec un serveur de démo
+  et un ticket de connexion (scripts de travail hors dépôt) ; à refaire après tout changement visuel notable.
+- ⚠️ Tout script de débogage lancé avec la fixture `user` doit importer la fixture `data_dir` de
+  `tests/test_pages.py`, sinon il écrit dans le vrai dossier `data/`.
+
 ## Tests
 
 - `tests/test_*.py` : services (base SQLite temporaire, date du jour figée au mercredi 4/11/2026).
@@ -99,7 +131,9 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 0 : venv, dépendances, spécification.
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
-  /login, /setup, /, service systemd. 118 tests au total.
-- ⏭️ Étape 3 : interface — thème, layout responsive, cartes, éditeur avec curseurs (`organizer/ui/`).
+  /login, /setup, service systemd.
+- 126 tests au total.
+- ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, ajout rapide, accueil, liste.
+- ⏭️ Étape 4 : éditeur markdown CodeMirror 6 (live preview, listes, cases, liens double-cliquables).
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.

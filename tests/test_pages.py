@@ -1,7 +1,7 @@
-"""Pages web (connexion, création du premier compte, accueil), simulées avec la fixture ``user`` de NiceGUI.
+"""Pages web simulées avec la fixture ``user`` de NiceGUI.
 
-Le simulateur suit les redirections HTTP et garde les cookies : on teste donc le parcours réel
-formulaire → ticket → cookie → page protégée.
+Le simulateur suit les redirections HTTP et garde les cookies : on teste le parcours réel
+formulaire → ticket → cookie → page protégée, puis l'interface (cartes, éditeur, annuler).
 """
 
 from __future__ import annotations
@@ -10,7 +10,8 @@ import pytest
 from nicegui import app, ui
 from nicegui.testing import User
 
-from organizer.core.schemas import TaskCreate
+from organizer.core.enums import Importance, Status
+from organizer.core.schemas import TaskCreate, TaskFilter
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +27,27 @@ def state():
 
 def fill(user: User, label: str, text: str) -> None:
     user.find(kind=ui.input, content=label).type(text)
+
+
+def open_menu(user: User, marker: str) -> None:
+    """Ouvre un menu (comme un clic sur son bouton dans le navigateur)."""
+    with user.client:
+        user.find(marker=marker).elements.pop().open()
+
+
+async def login(user: User, name: str = "alice"):
+    """Crée le compte (le premier est admin), se connecte, renvoie les services de l'utilisateur."""
+    await user.open("/login")  # initialise l'application
+    account = state().users.create_user(name, "motdepasse", name.capitalize())
+    await user.open("/login")
+    fill(user, "Identifiant", name)
+    fill(user, "Mot de passe", "motdepasse")
+    user.find("Se connecter").click()
+    await user.should_see(f"Bonjour {name.capitalize()}")
+    return state().services_for(account)
+
+
+# --- connexion --------------------------------------------------------------------------------------------
 
 
 async def test_first_visit_goes_to_setup_and_creates_admin(user: User):
@@ -51,9 +73,9 @@ async def test_setup_rejects_mismatched_passwords(user: User):
 
 
 async def test_login_wrong_then_right_password(user: User):
-    await user.open("/login")  # NiceGUI initialisé ; on crée le compte directement
+    await user.open("/login")
     state().users.create_user("alice", "motdepasse", "Alice")
-    await user.open("/")
+    await user.open("/tasks")
     await user.should_see("Connectez-vous")
     fill(user, "Identifiant", "alice")
     fill(user, "Mot de passe", "mauvais")
@@ -61,23 +83,158 @@ async def test_login_wrong_then_right_password(user: User):
     await user.should_see("Identifiant ou mot de passe incorrect")
     fill(user, "Mot de passe", "motdepasse")
     user.find("Se connecter").click()
-    await user.should_see("Bonjour Alice")
-    await user.should_see("Appareils connectés")
+    await user.should_see("Tâches ouvertes")  # redirigé vers la page demandée au départ
 
 
-async def test_home_shows_counts_and_logout(user: User):
-    await user.open("/login")
-    alice = state().users.create_user("alice", "motdepasse", "Alice")
-    sv = state().services_for(alice)
-    sv.tasks.create(TaskCreate(title="Une"))
-    sv.tasks.create(TaskCreate(title="Deux"))
-    await user.open("/login")
-    fill(user, "Identifiant", "alice")
-    fill(user, "Mot de passe", "motdepasse")
-    user.find("Se connecter").click()
-    await user.should_see("Tâches ouvertes")
-    await user.should_see("2")
-    user.find("Déconnexion").click()
+async def test_logout(user: User):
+    await login(user)
+    open_menu(user, "account-menu")
+    user.find(marker="logout-item").click()
     await user.should_see("Connectez-vous")
     await user.open("/")
     await user.should_see("Connectez-vous")  # le cookie a bien été révoqué
+
+
+# --- accueil et cartes ------------------------------------------------------------------------------------
+
+
+async def test_home_sections_and_counts(user: User):
+    sv = await login(user)
+    sv.tasks.create(TaskCreate(title="Urgente et importante", importance=4, urgency=4))
+    calm = sv.tasks.create(TaskCreate(title="Tranquille", importance=1, urgency=1))
+    await user.open("/")
+    await user.should_see("À faire maintenant")
+    await user.should_see("Urgente et importante")
+    await user.should_not_see(marker=f"task-card-{calm.id}")  # pas un point chaud
+    await user.open("/tasks")
+    await user.should_see("Tranquille")
+
+
+async def test_placeholder_modules(user: User):
+    await login(user)
+    await user.open("/kanban")
+    await user.should_see("Arrive à l'étape 6")
+
+
+# --- ajout rapide, éditeur, annuler -----------------------------------------------------------------------
+
+
+async def test_new_task_opens_full_editor_and_creates_on_title(user: User):
+    sv = await login(user)
+    await user.open("/tasks")
+    user.find(marker="fab-add").click()
+    await user.should_see("Nouvelle tâche")
+    # Réglages faits avant le titre : gardés dans le brouillon, rien en base.
+    user.find(marker="slider-importance-4").click()
+    user.find(marker="slider-urgency-3").click()
+    assert sv.tasks.list() == []
+    user.find(marker="editor-title").type("Acheter du pain").trigger("blur")
+    tasks = sv.tasks.list()
+    assert [(t.title, t.importance, t.urgency) for t in tasks] == [("Acheter du pain", 4, 3)]
+    # La tâche existe : les réglages suivants sont enregistrés directement.
+    user.find(marker="slider-status-in_progress").click()
+    assert sv.tasks.get(tasks[0].id).status is Status.IN_PROGRESS
+    await user.should_see("Ajouter une sous-tâche")  # sections complètes disponibles
+    # Une seule entrée « Créer » dans l'historique, puis la modification du statut.
+    assert sv.undo.status().undo_label.startswith("Statut de")
+    sv.undo.undo()
+    assert sv.undo.status().undo_label == "Créer « Acheter du pain »"
+
+
+async def test_new_task_without_title_creates_nothing(user: User):
+    sv = await login(user)
+    await user.open("/tasks")
+    user.find(marker="fab-add").click()
+    user.find(marker="slider-importance-1").click()
+    with user.client:
+        ctx_editor = user.find(marker="task-editor").elements.pop()
+        dialog = next(a for a in ctx_editor.ancestors() if isinstance(a, ui.dialog))
+        dialog.close()
+    assert sv.tasks.list() == []
+
+
+async def test_home_tiles_show_task_lists(user: User):
+    sv = await login(user)
+    sv.tasks.create(TaskCreate(title="Tranquille", importance=1, urgency=1))
+    started = sv.tasks.create(
+        TaskCreate(title="Commencée", status=Status.IN_PROGRESS, importance=1, urgency=1)
+    )
+    await user.open("/")
+    await user.should_not_see(marker="tile-panel")
+    user.find(marker="tile-open").click()
+    await user.should_see(marker="tile-panel")
+    with user.scope(marker="tile-panel"):
+        await user.should_see("Tranquille")
+        await user.should_see("Commencée")
+    user.find(marker="tile-in_progress").click()
+    await user.should_not_see("Tranquille")  # attend la reconstruction du panneau
+    with user.scope(marker="tile-panel"):
+        await user.should_see("Commencée")
+    user.find(marker="tile-in_progress").click()  # second clic : replie
+    await user.should_not_see(marker="tile-panel")
+    assert started.status is Status.IN_PROGRESS
+
+
+async def test_editor_slider_click_saves_and_ctrl_z_reverts(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Ranger"))
+    await user.open("/tasks")
+    user.find(marker=f"task-card-{task.id}").click()
+    await user.should_see(marker="task-editor")
+    user.find(marker="slider-importance-4").click()  # clic sur l'emoji 🔴 Critique
+    assert sv.tasks.get(task.id).importance is Importance.CRITICAL
+    user.find(marker="slider-status-in_progress").click()
+    assert sv.tasks.get(task.id).status is Status.IN_PROGRESS
+    user.find(marker="undo-button").click()
+    assert sv.tasks.get(task.id).status is Status.NOT_STARTED
+    user.find(marker="undo-button").click()
+    assert sv.tasks.get(task.id).importance is Importance.NORMAL
+
+
+async def test_editor_adds_subtasks_and_notes(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Déménager"))
+    await user.open("/tasks")
+    user.find(marker=f"task-card-{task.id}").click()
+    user.find(marker="editor-new-subtask").type("Cartons").trigger("keydown.enter")
+    await user.should_see("Cartons")
+    subs = sv.tasks.subtasks(task.id)
+    assert [s.title for s in subs] == ["Cartons"]
+    user.find(marker="editor-notes").type("1. réserver le camion").trigger("blur")
+    assert sv.tasks.get(task.id).notes == "1. réserver le camion"
+
+
+async def test_editor_creates_tag_on_the_fly(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Factures"))
+    await user.open("/tasks")
+    user.find(marker=f"task-card-{task.id}").click()
+    select = user.find(marker="editor-tags").elements.pop()
+    with user.client:
+        select.value = ["papiers"]  # nouvelle valeur tapée dans le champ
+    assert [t.name for t in sv.tasks.get(task.id).tags] == ["papiers"]
+    assert [t.name for t in sv.tags.list()] == ["papiers"]
+
+
+async def test_editor_link_path_is_copied_on_web(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Doc"))
+    await user.open("/tasks")
+    user.find(marker=f"task-card-{task.id}").click()
+    user.find(marker="editor-new-link").type("/home/alice/rapport.pdf").trigger("keydown.enter")
+    await user.should_see("/home/alice/rapport.pdf")
+    link = sv.tasks.get(task.id).links[0]
+    user.find(marker=f"link-{link.id}").click()
+    await user.should_see("Chemin copié")
+    assert [link.kind.value for link in sv.tasks.get(task.id).links] == ["path"]
+
+
+async def test_card_menu_changes_status(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Lessive"))
+    await user.open("/tasks")
+    open_menu(user, f"card-menu-{task.id}")
+    user.find(marker=f"card-status-{task.id}-done").click()
+    assert sv.tasks.get(task.id).status is Status.DONE
+    await user.should_see("Terminées et annulées (1)")
+    assert sv.tasks.list(TaskFilter(status=[Status.DONE]))[0].title == "Lessive"

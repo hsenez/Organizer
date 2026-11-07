@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 0.4 — 2026-11-07
+> Version : 0.6 — 2026-11-07
 
 ---
 
@@ -68,24 +68,26 @@ organizer/
     rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche
     unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
     services/            # users, auth, labels (projets + tags), tasks, attachments, undo ; façade `Services`
-    datasource.py        # interface DataSource + LocalDataSource (à venir)
+    datasource.py        # interface DataSource + LocalDataSource (serveur) ; RemoteDataSource à l'étape 7
   server/                # ✅ étape 2
     app.py               # point d'entrée serveur : build() + ui.run()
     state.py             # état global : base, services, anti force brute, tickets de connexion
     security.py          # middleware d'authentification (cookie / Bearer), cookies
     wiring.py            # assemblage : middleware, erreurs, routes (partagé avec les tests)
     web_auth.py          # /auth/complete (ticket → cookie), /auth/logout
-    pages.py             # pages provisoires : /login, /setup, / (remplacées à l'étape 3)
+    pages.py             # /login, /setup + branchement des pages de l'UI sur LocalDataSource
     api/                 # routes REST /api/v1 (auth, users, labels, tasks, undo) ; WebSocket à venir
   client/
     main.py              # point d'entrée client bureau (fenêtre native)
     remote.py            # RemoteDataSource (httpx)
     system.py            # ouverture de fichiers/liens, notifications
-  ui/
-    theme.py             # couleurs, CSS, thème clair/sombre
-    layout.py            # colonne de gauche, en-tête, mise en page responsive
-    components/          # task_card, task_editor, markdown_editor, level_slider, filter_bar, ...
-    pages/               # login, accueil, liste, kanban, matrice, réglages
+  ui/                    # ✅ étape 3
+    theme.py             # couleurs Quasar dérivées des enums (imp0…, urg0…, st0…), CSS des cartes, sombre
+    context.py           # UiContext : source de données, rafraîchissement, Ctrl+Z, erreurs → toasts
+    format.py            # dates en français (« Aujourd'hui », « lun. 9 nov. », « dans 3 j »)
+    layout.py            # en-tête (☰, ↩️ ↪️, compte), colonne de gauche, raccourcis clavier, bouton ➕
+    components/          # task_card, level_slider, task_editor, quick_add (filter_bar, markdown à venir)
+    pages/               # accueil, toutes les tâches ; kanban / matrice / recherche / réglages à venir
   static/                # css, js, icônes, manifeste PWA, vendor/codemirror
 tests/
 scripts/demo.py          # démo terminal + données d'exemple (base data/demo.db)
@@ -262,7 +264,22 @@ S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
     renumérotation automatique des listes numérotées ;
   - **cases à cocher cliquables** ;
   - **liens double-cliquables** : URL, chemin local, `[texte](url)` — comportement selon le §4.4.
-- **Sauvegarde automatique** (avec indicateur discret « ✔ enregistré »).
+- **Sauvegarde automatique** (avec indicateur discret « ✔ enregistré ») : curseurs et listes immédiatement,
+  titre à la sortie du champ (ou Entrée), notes toutes les 1,5 s pendant la frappe et à la sortie du champ.
+- **Création** : le bouton ➕ (ou **N**) ouvre l'**éditeur complet** sur un *brouillon* : curseurs, échéance,
+  projet, tags et notes se règlent avant même le titre ; la tâche est créée dès qu'elle a un titre (sortie du
+  champ, Entrée ou fermeture de l'éditeur) — une seule entrée « Créer » dans l'historique. Sans titre, rien
+  n'est créé. Sous-tâches, liens et partage sont disponibles une fois la tâche créée. Bouton
+  « ➕ Nouvelle tâche » en bas de l'éditeur pour enchaîner.
+- **Lien direct** : `?task=<id>` dans l'URL d'une page ouvre l'éditeur de cette tâche au chargement ;
+  `?task=new` ouvre l'éditeur sur une nouvelle tâche.
+- **Curseurs** : chaque cran occupe une cellule de même largeur (emoji + libellé + infobulle) ; on glisse,
+  on clique sur la piste ou sur l'emoji. La couleur du curseur suit la valeur.
+- **Échéance** : champ date + raccourcis Aujourd'hui / Demain / +1 semaine / Aucune ; rappel de suivi :
+  « 🔗 Lié à l'échéance » (jours avant) ou « 📌 Date fixe ».
+- **Sous-tâches** dans l'éditeur du parent : case à cocher pour terminer, clic pour ouvrir, ajout rapide.
+  Quand la dernière est cochée : fenêtre « 🎉 Terminer la tâche parente ? ».
+- **Liens** : saisie libre (hyperlien ou chemin détecté automatiquement), bouton « 📎 Joindre un fichier ».
 
 ### 6.1 ↩️ Annuler / rétablir (général)
 
@@ -303,8 +320,9 @@ Repérer l'état d'une tâche d'un coup d'œil :
 | `↳ Parent` | c'est une sous-tâche |
 | 📝 / 🔗 n / 👥 | a des notes / des liens / est partagée |
 
-Chaque élément a une **infobulle**. Clic → éditeur ; menu ⋯ → actions rapides (changer statut, dupliquer,
-rattacher, détacher, supprimer).
+Chaque élément a une **infobulle**. Clic → éditeur ; menu ⋯ → actions rapides (changer statut, détacher,
+supprimer ; dupliquer et rattacher à venir). Supprimer est immédiat (Ctrl+Z annule) ; si la tâche a des
+sous-tâches, on demande s'il faut les supprimer aussi ou les garder.
 
 ---
 
@@ -319,14 +337,21 @@ rattacher, détacher, supprimer).
 5. 🔍 **Recherche** (aussi accessible partout par `Ctrl+K`)
 6. ⚙️ **Réglages**
 
-Bouton flottant **➕ Nouvelle tâche** sur tous les écrans.
+Bouton flottant **➕ Nouvelle tâche** sur tous les écrans (raccourci **N**) : ouvre l'éditeur complet en
+mode création (voir §6).
+
+**En-tête** : ☰ (afficher / masquer la colonne), ↩️ / ↪️ (annuler / rétablir, infobulle = action concernée,
+grisés s'il n'y a rien), menu du compte (réglages, déconnexion).
+
+**Raccourcis** : Ctrl+Z, Ctrl+Maj+Z / Ctrl+Y, N (hors champ texte).
 
 ### 8.1 🏠 Accueil
 
 - Salutation + date du jour.
 - 🔥 **En retard** · 📅 **Aujourd'hui** · 🔔 **Rappels** (suivis dont le rappel est atteint) ·
   🎯 **À faire maintenant** (quadrant « Faire ») · 🚧 **En cours**.
-- Petites statistiques : tâches finies cette semaine, en retard, en cours.
+- Compteurs : ouvertes, en retard, en cours, finies cette semaine. **Cliquer sur un compteur** déplie sous
+  les compteurs un panneau avec les cartes des tâches concernées (re-cliquer ou ✕ pour replier).
 
 ### 8.2 📋 Liste générale
 
@@ -409,7 +434,7 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 |---|---|
 | 1 | ✅ Socle : config, modèles, base SQLite, services tâches / projets / tags / sous-tâches, historique annuler/rétablir + tests |
 | 2 | ✅ Serveur : authentification (cookies, jetons), API REST, premier compte admin, pièces jointes, service systemd |
-| 3 | Interface : thème, layout responsive, cartes, éditeur avec curseurs |
+| 3 | ✅ Interface : thème clair/sombre, layout responsive, cartes, éditeur avec curseurs, ajout rapide, accueil, liste simple |
 | 4 | Éditeur markdown CodeMirror (live preview, listes, cases, liens) |
 | 5 | Modules : accueil, liste, filtres, recherche |
 | 6 | Kanbans (prédéfinis + personnalisés), matrice, glisser-déposer, Ctrl+drop |
@@ -426,3 +451,5 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 | 2026-11-07 | 0.2 | Ctrl+drop sans confirmation ; annuler / rétablir général (Ctrl+Z) ; projets et tags publics ou privés ; rattachement sur téléphone par maintien |
 | 2026-11-07 | 0.3 | **Étape 1 livrée** : modèles, base SQLite, services (utilisateurs, projets, tags, tâches, sous-tâches, liens, partage, filtres, tri, rappels), historique annuler / rétablir, règles pures ; 83 tests ; script de démo terminal |
 | 2026-11-07 | 0.4 | **Étape 2 livrée** : sessions (cookie / jeton, glissantes, empreinte SHA-256), anti force brute, API REST `/api/v1` (34 routes, doc `/docs`), pièces jointes, pages /login, /setup et accueil provisoire, service systemd ; 118 tests |
+| 2026-11-07 | 0.5 | **Étape 3 livrée** : interface NiceGUI (`organizer/ui`) — thème clair/sombre, colonne de gauche / tiroir mobile, cartes, éditeur latéral (curseurs, échéance, rappel, projet, tags créés à la volée, partage, sous-tâches, liens, pièces jointes, notes texte), ajout rapide, accueil « points chauds », liste, Ctrl+Z / N, lien `?task=` ; `DataSource` ; 126 tests |
+| 2026-11-07 | 0.6 | Retours sur l'étape 3 : création dans l'éditeur complet (brouillon), compteurs de l'accueil cliquables (liste des tâches), `?task=new` ; sujet des liens de fichiers consigné dans `TODO.md` ; 128 tests |

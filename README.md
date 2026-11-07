@@ -11,8 +11,9 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — cœur métier, serveur, connexion et API prêts (étapes 1 et 2 sur 8) ;
-> l'interface arrive.
+> 🚧 **Projet en cours de construction** — étapes 1 à 3 sur 8 : cœur métier, serveur, API et première
+> interface (accueil, liste, cartes, éditeur). À venir : éditeur markdown, filtres, kanbans, matrice, réglages,
+> client bureau.
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -57,7 +58,11 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 - **Premier lancement** : ouvrir `http://<ip>:2603` → page de création du compte administrateur.
 - Ensuite : page de connexion, avec « 🍪 Se souvenir de moi » (30 jours).
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs`.
-- Depuis un téléphone : même adresse dans le navigateur.
+- Depuis un téléphone : même adresse dans le navigateur (interface adaptée, menu ☰).
+- Raccourcis : **N** nouvelle tâche, **Ctrl+Z** annuler, **Ctrl+Maj+Z** / **Ctrl+Y** rétablir.
+- Lien direct vers une tâche : `http://<ip>:2603/tasks?task=<numéro>` (`?task=new` : nouvelle tâche).
+
+Sujets en cours de réflexion (liens vers les fichiers…) : voir [`TODO.md`](TODO.md).
 
 Réglages par variables d'environnement : `ORGANIZER_DATA_DIR` (dossier des données, `./data` par défaut),
 `ORGANIZER_PORT` (2603), `ORGANIZER_HOST` (0.0.0.0).
