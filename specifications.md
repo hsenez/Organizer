@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 0.2 — 2026-11-07
+> Version : 0.4 — 2026-11-07
 
 ---
 
@@ -45,12 +45,12 @@ s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry P
 | Interface web/bureau + serveur HTTP | NiceGUI (FastAPI, Uvicorn, Quasar/Vue) | 4.0.0 |
 | ORM + modèles | SQLModel / SQLAlchemy | 0.0.48 / 2.1.8 |
 | Hachage des mots de passe | argon2-cffi | 25.1.0 |
-| Signature des cookies / jetons | itsdangerous | 2.2.0 |
+| Jetons de session | `secrets` + SHA-256 (bibliothèque standard) | — |
 | Client HTTP (client bureau → API) | httpx | 0.28.1 |
 | Fenêtre native du client bureau | pywebview (+ PyGObject sous Linux) | 6.2.1 |
 | Éditeur markdown (JS embarqué) | CodeMirror 6 (fichiers vendorisés dans `static/vendor/`) | 6.x |
 | Notifications système (client bureau) | desktop-notifier *(à installer à l'étape concernée)* | — |
-| Tests / lint | pytest, ruff (`target-version = py311`) | — |
+| Tests / lint | pytest, pytest-asyncio (tests des pages NiceGUI), ruff (`target-version = py311`) | — |
 
 Fichiers : `requirements.txt` (serveur), `requirements-client.txt` (client bureau), `requirements-dev.txt` (dev).
 
@@ -67,12 +67,16 @@ organizer/
     errors.py            # erreurs métier (message français affichable)
     rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche
     unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
-    services/            # users, labels (projets + tags), tasks, undo ; façade `Services`
+    services/            # users, auth, labels (projets + tags), tasks, attachments, undo ; façade `Services`
     datasource.py        # interface DataSource + LocalDataSource (à venir)
-  server/
-    app.py               # point d'entrée serveur (FastAPI + NiceGUI)
-    auth.py              # sessions, cookies, jetons API
-    api/                 # routes REST /api/v1 + WebSocket d'événements
+  server/                # ✅ étape 2
+    app.py               # point d'entrée serveur : build() + ui.run()
+    state.py             # état global : base, services, anti force brute, tickets de connexion
+    security.py          # middleware d'authentification (cookie / Bearer), cookies
+    wiring.py            # assemblage : middleware, erreurs, routes (partagé avec les tests)
+    web_auth.py          # /auth/complete (ticket → cookie), /auth/logout
+    pages.py             # pages provisoires : /login, /setup, / (remplacées à l'étape 3)
+    api/                 # routes REST /api/v1 (auth, users, labels, tasks, undo) ; WebSocket à venir
   client/
     main.py              # point d'entrée client bureau (fenêtre native)
     remote.py            # RemoteDataSource (httpx)
@@ -101,6 +105,19 @@ run_client.py
 - **Connexion client bureau** : adresse du serveur + identifiant + mot de passe → **jeton API** stocké dans le
   dossier de config utilisateur (jamais le mot de passe). Reconnexion automatique au lancement.
 - **Sessions** : visibles et révocables dans les réglages (« appareils connectés »).
+- **Détails techniques** :
+  - jeton aléatoire de 256 bits ; **seule son empreinte SHA-256** est en base (table `auth_session`) ;
+  - sessions **glissantes** : chaque utilisation (au plus toutes les 10 min) repousse l'expiration
+    (web « se souvenir de moi » : 30 j ; web sans : 24 h d'inactivité ; client bureau : 90 j) ;
+  - connexion web en deux temps : la page `/login` vérifie le mot de passe côté serveur et émet un **ticket**
+    à usage unique (60 s) ; le navigateur est redirigé vers `/auth/complete?ticket=…`, dont la réponse HTTP pose
+    le cookie `organizer_session` (HttpOnly, SameSite=Lax). Le mot de passe ne transite jamais par du JS ;
+  - **anti force brute** : 5 échecs en 10 min pour un couple (adresse IP, identifiant) → blocage temporaire ;
+  - changer son mot de passe déconnecte les autres appareils ; désactiver un compte ou réinitialiser son
+    mot de passe (admin) le déconnecte partout ;
+  - les redirections après connexion n'acceptent que des chemins internes (pas de redirection ouverte).
+- **API REST** `/api/v1`, documentée sur **`/docs`** : authentification par `Authorization: Bearer <jeton>`
+  (client bureau) ou par le cookie (navigateur). Erreurs en JSON `{"detail": "message en français"}`.
 - **Visibilité des tâches** :
   - chaque tâche a un **propriétaire** ; elle est privée par défaut ;
   - elle peut être **partagée** avec d'autres utilisateurs (droit d'édition) ;
@@ -162,6 +179,11 @@ Infobulles détaillées également sur les statuts et les types.
 | 🌐 Hyperlien | ouvre un nouvel onglet | ouvre le navigateur par défaut |
 | 📁 Chemin local (`C:\…`, `/home/…`) | **copie le chemin dans le presse-papiers** (+ toast) | ouvre avec l'application par défaut de l'OS |
 | 📎 Pièce jointe (envoyée au serveur) | téléchargement / ouverture | téléchargement puis ouverture |
+
+Pièces jointes : stockées dans `data/uploads/` (50 Mo max par fichier), accessibles au déposant et à quiconque
+voit une tâche qui les référence. Seuls les types sûrs (PDF, images, texte brut, mp3/mp4) s'affichent dans le
+navigateur ; tout le reste (HTML, SVG…) est forcé en téléchargement, avec `Content-Security-Policy: sandbox`.
+Retirer le lien (annulable) conserve le fichier.
 
 ### 4.5 Projets et tags
 
@@ -385,14 +407,14 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 
 | Étape | Contenu |
 |---|---|
-| 1 | Socle : config, modèles, base SQLite, services tâches / projets / tags / sous-tâches, historique annuler/rétablir + tests |
-| 2 | Serveur : authentification (cookies, jetons), API REST, premier compte admin |
+| 1 | ✅ Socle : config, modèles, base SQLite, services tâches / projets / tags / sous-tâches, historique annuler/rétablir + tests |
+| 2 | ✅ Serveur : authentification (cookies, jetons), API REST, premier compte admin, pièces jointes, service systemd |
 | 3 | Interface : thème, layout responsive, cartes, éditeur avec curseurs |
 | 4 | Éditeur markdown CodeMirror (live preview, listes, cases, liens) |
 | 5 | Modules : accueil, liste, filtres, recherche |
 | 6 | Kanbans (prédéfinis + personnalisés), matrice, glisser-déposer, Ctrl+drop |
 | 7 | Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
-| 8 | Temps réel, partage, PWA, service systemd, finitions |
+| 8 | Temps réel, PWA, finitions |
 
 ---
 
@@ -403,3 +425,4 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 | 2026-11-07 | 0.1 | Spécification initiale |
 | 2026-11-07 | 0.2 | Ctrl+drop sans confirmation ; annuler / rétablir général (Ctrl+Z) ; projets et tags publics ou privés ; rattachement sur téléphone par maintien |
 | 2026-11-07 | 0.3 | **Étape 1 livrée** : modèles, base SQLite, services (utilisateurs, projets, tags, tâches, sous-tâches, liens, partage, filtres, tri, rappels), historique annuler / rétablir, règles pures ; 83 tests ; script de démo terminal |
+| 2026-11-07 | 0.4 | **Étape 2 livrée** : sessions (cookie / jeton, glissantes, empreinte SHA-256), anti force brute, API REST `/api/v1` (34 routes, doc `/docs`), pièces jointes, pages /login, /setup et accueil provisoire, service systemd ; 118 tests |

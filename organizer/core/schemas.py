@@ -223,3 +223,80 @@ class UserOut(_Schema):
     theme: str
     reminder_offset_days: int
     desktop_notifications: bool
+
+
+class UserPublic(_Schema):
+    """Ce que tout utilisateur connecté voit des autres (pour le partage)."""
+
+    id: int
+    username: str
+    display_name: str
+
+
+class UserCreateIn(_Schema):
+    username: str = Field(min_length=1, max_length=40)
+    password: str
+    display_name: str = ""
+    is_admin: bool = False
+
+
+class ProfilePatch(_Schema):
+    display_name: str | None = Field(default=None, min_length=1, max_length=60)
+    theme: str | None = Field(default=None, pattern="^(auto|light|dark)$")
+    reminder_offset_days: int | None = Field(default=None, ge=0, le=365)
+    desktop_notifications: bool | None = None
+
+
+class PasswordChange(_Schema):
+    old_password: str
+    new_password: str
+
+
+class AdminUserPatch(_Schema):
+    is_active: bool | None = None
+    is_admin: bool | None = None
+    new_password: str | None = None
+
+
+# --- Authentification -------------------------------------------------------------------------------------
+
+
+class LoginIn(_Schema):
+    username: str
+    password: str
+    device_name: str = ""  # affiché dans « appareils connectés »
+
+
+class SetupIn(_Schema):
+    username: str = Field(min_length=1, max_length=40)
+    password: str
+    display_name: str = ""
+
+
+class SessionOut(_Schema):
+    id: int
+    kind: str  # web | api
+    persistent: bool
+    label: str
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    current: bool = False
+
+
+class LoginOut(_Schema):
+    token: str
+    user: UserOut
+    session: SessionOut
+
+
+# --- Pièces jointes ---------------------------------------------------------------------------------------
+
+
+class AttachmentOut(_Schema):
+    id: str
+    owner_id: int
+    filename: str
+    content_type: str
+    size: int
+    created_at: datetime

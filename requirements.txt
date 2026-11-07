@@ -3,5 +3,4 @@ nicegui==4.0.0
 sqlmodel==0.0.48
 SQLAlchemy==2.1.8
 argon2-cffi==25.1.0
-itsdangerous==2.2.0
 httpx==0.28.1

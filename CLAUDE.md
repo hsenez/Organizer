@@ -55,12 +55,36 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Un projet / tag **privé** d'un autre utilisateur est invisible sur une tâche partagée et **préservé** quand
   quelqu'un d'autre modifie les tags de cette tâche.
 
+## Architecture du serveur (étape 2)
+
+- `organizer/server/app.py` : `build()` installe tout sur l'application NiceGUI (`install()` de `wiring.py`
+  + `register_pages()`), puis `main()` appelle `ui.run()`. Les tests de l'API utilisent `create_api_app()`
+  (FastAPI nue, même `install()`).
+- **Authentification** : `AuthMiddleware` (`security.py`) résout le cookie ou le jeton Bearer une fois par
+  requête → `request.state.auth` (`ResolvedSession` ou None). Dans l'API : dépendances `get_user`,
+  `get_admin`, `get_services` (`api/deps.py`). Dans une page : `guard(request)` renvoie une redirection
+  si besoin.
+- Une page NiceGUI **ne peut pas poser de cookie** : connexion = ticket à usage unique (`TicketStore`) puis
+  redirection vers `/auth/complete`, route HTTP qui pose le cookie.
+- Les pages s'enregistrent via `register_pages()` (pas de `@ui.page` à l'import) : le simulateur de test
+  NiceGUI réinitialise l'application entre deux tests et doit pouvoir les réenregistrer.
+- Routes API en `def` synchrones (FastAPI les exécute dans un thread : SQLite synchrone sans bloquer la boucle).
+- Erreurs métier (`OrganizerError`) → JSON `{"detail": …}` avec le code HTTP de l'exception.
+
+## Tests
+
+- `tests/test_*.py` : services (base SQLite temporaire, date du jour figée au mercredi 4/11/2026).
+- `tests/test_api.py` : API via `fastapi.testclient.TestClient`.
+- `tests/test_pages.py` : pages via la fixture `user` de NiceGUI (`-p nicegui.testing.user_plugin`,
+  `main_file = run_server.py`, pytest-asyncio en mode auto). Les variables `ORGANIZER_DATA_DIR` /
+  `ORGANIZER_PORT` sont fixées par une fixture autouse.
+
 ## Commandes
 
 ```bash
 python3 -m venv .venv                          # création du venv (déjà fait)
 .venv/bin/pip install -r requirements-dev.txt  # dépendances dev (serveur + client + outils)
-.venv/bin/python run_server.py                 # serveur sur http://0.0.0.0:2603   (à venir)
+.venv/bin/python run_server.py                 # serveur sur http://0.0.0.0:2603 (doc API : /docs)
 .venv/bin/python run_client.py                 # client bureau                    (à venir)
 .venv/bin/pytest                               # tests
 .venv/bin/ruff format .                        # mise en forme (110 colonnes)
@@ -73,6 +97,9 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 ## État actuel
 
 - ✅ Étape 0 : venv, dépendances, spécification.
-- ✅ Étape 1 : cœur métier (`organizer/core/`) + 83 tests (`tests/`).
-- ⏭️ Étape 2 : serveur — authentification (cookies, jetons), API REST, premier compte admin.
+- ✅ Étape 1 : cœur métier (`organizer/core/`).
+- ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
+  /login, /setup, /, service systemd. 118 tests au total.
+- ⏭️ Étape 3 : interface — thème, layout responsive, cartes, éditeur avec curseurs (`organizer/ui/`).
+- ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.

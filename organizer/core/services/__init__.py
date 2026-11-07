@@ -8,6 +8,8 @@ from datetime import date, timedelta
 from sqlalchemy import Engine
 
 from organizer.config import Settings
+from organizer.core.services.attachments import AttachmentService
+from organizer.core.services.auth import AuthService
 from organizer.core.services.base import Actor, ServiceContext
 from organizer.core.services.labels import ProjectService, TagService
 from organizer.core.services.tasks import TaskService
@@ -38,10 +40,13 @@ class Services:
         self.tags = TagService(ctx)
         self.tasks = TaskService(ctx, self.projects, self.tags)
         self.undo = UndoService(ctx)
+        self.attachments = AttachmentService(
+            ctx, self.tasks, settings.uploads_dir, max_bytes=settings.max_upload_mb * 1024 * 1024
+        )
 
     @classmethod
     def for_user(cls, engine: Engine, user_id: int, **kwargs) -> Services:
         return cls(engine, UserService(engine).actor_for(user_id), **kwargs)
 
 
-__all__ = ["Actor", "Services", "UserService"]
+__all__ = ["Actor", "AuthService", "Services", "UserService"]

@@ -1,0 +1,21 @@
+# Service systemd du serveur Organizer (Raspberry Pi).
+# Installation : voir README.md, section « Déploiement sur le Raspberry Pi ».
+# Adapter User, WorkingDirectory et les chemins si le projet n'est pas dans /home/pi/organizer.
+
+[Unit]
+Description=Organizer - serveur de taches (port 2603)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/organizer
+Environment=ORGANIZER_DATA_DIR=/home/pi/organizer/data
+Environment=ORGANIZER_PORT=2603
+ExecStart=/home/pi/organizer/.venv/bin/python run_server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

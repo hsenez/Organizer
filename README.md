@@ -11,8 +11,8 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — le cœur métier est prêt et testé (étape 1/8) ; serveur et interface
-> arrivent.
+> 🚧 **Projet en cours de construction** — cœur métier, serveur, connexion et API prêts (étapes 1 et 2 sur 8) ;
+> l'interface arrive.
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -47,16 +47,39 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 .venv/bin/python -i scripts/demo.py   # puis console Python pour jouer soi-même
 ```
 
-## Utilisation *(à venir)*
+## Utilisation
 
 ```bash
 .venv/bin/python run_server.py   # serveur → http://<ip-du-pi>:2603
-.venv/bin/python run_client.py   # client bureau
+.venv/bin/python run_client.py   # client bureau (à venir)
 ```
 
-Au premier lancement du serveur, ouvrir `http://<ip-du-pi>:2603` pour créer le compte administrateur.
+- **Premier lancement** : ouvrir `http://<ip>:2603` → page de création du compte administrateur.
+- Ensuite : page de connexion, avec « 🍪 Se souvenir de moi » (30 jours).
+- **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs`.
+- Depuis un téléphone : même adresse dans le navigateur.
 
-Depuis un téléphone : ouvrir la même adresse dans le navigateur, puis « Ajouter à l'écran d'accueil ».
+Réglages par variables d'environnement : `ORGANIZER_DATA_DIR` (dossier des données, `./data` par défaut),
+`ORGANIZER_PORT` (2603), `ORGANIZER_HOST` (0.0.0.0).
+
+## Déploiement sur le Raspberry Pi
+
+```bash
+# Sur le Pi (Raspberry Pi OS, Python 3.11)
+git clone <dépôt> /home/pi/organizer && cd /home/pi/organizer
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# Service systemd (démarrage automatique) — adapter User / chemins dans le fichier si besoin
+sudo cp deploy/organizer.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now organizer
+systemctl status organizer          # état
+journalctl -u organizer -f          # journaux
+```
+
+Les données (base `organizer.db` et pièces jointes `uploads/`) sont dans `data/` : c'est ce dossier à
+sauvegarder.
 
 ## Développement
 
@@ -68,7 +91,7 @@ Depuis un téléphone : ouvrir la même adresse dans le navigateur, puis « Ajou
 ```
 
 Structure : `organizer/core/` contient le cœur métier (modèles, règles, services, historique annuler /
-rétablir), `tests/` les tests. Voir [`specifications.md`](specifications.md) §2.2 pour l'arborescence complète.
+rétablir), `organizer/server/` le serveur (API, authentification, pages), `tests/` les tests. Voir [`specifications.md`](specifications.md) §2.2 pour l'arborescence complète.
 
 ## Bibliothèques utilisées
 
@@ -77,8 +100,7 @@ rétablir), `tests/` les tests. Voir [`specifications.md`](specifications.md) §
 | NiceGUI | interface web/bureau et serveur HTTP (FastAPI + Uvicorn) |
 | SQLModel / SQLAlchemy | base de données SQLite |
 | argon2-cffi | hachage des mots de passe |
-| itsdangerous | cookies et jetons signés |
 | httpx | client bureau → API du serveur |
 | pywebview (+ PyGObject sous Linux) | fenêtre native du client bureau |
 | CodeMirror 6 (JS, embarqué) | éditeur markdown en direct |
-| pytest, ruff | tests et lint |
+| pytest, pytest-asyncio, ruff | tests (dont pages web simulées) et lint |

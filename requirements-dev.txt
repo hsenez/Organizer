@@ -2,3 +2,4 @@
 -r requirements-client.txt
 pytest==9.2.0
 ruff
+pytest-asyncio==1.4.1.post1

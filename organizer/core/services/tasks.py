@@ -16,7 +16,7 @@ from sqlalchemy.orm import aliased
 from sqlmodel import Session, select
 
 from organizer.core import rules
-from organizer.core.enums import Status, TaskKind
+from organizer.core.enums import LinkKind, Status, TaskKind
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
 from organizer.core.models import Project, Tag, Task, TaskLink, TaskShare, TaskTag, User, utcnow
 from organizer.core.schemas import (
@@ -481,19 +481,24 @@ class TaskService(BaseService):
         task.updated_at = utcnow()
         s.add(task)
 
+    def _next_link_position(self, s: Session, task_id: int) -> float:
+        current = s.exec(select(func.max(TaskLink.position)).where(TaskLink.task_id == task_id)).one()
+        return (current or 0.0) + 1.0
+
     def add_link(self, task_id: int, data: LinkIn) -> LinkOut:
         with self.uow() as probe:
             title = self._get(probe.session, task_id).title
         with self.uow(label=f"Ajouter un lien à {quoted(title)}") as w:
             s = w.session
             task = self._get(s, task_id)
-            current = s.exec(select(func.max(TaskLink.position)).where(TaskLink.task_id == task_id)).one()
+            if data.kind is LinkKind.ATTACHMENT:
+                raise InvalidOperation("Une pièce jointe s'ajoute en envoyant le fichier.")
             link = TaskLink(
                 task_id=task_id,
                 kind=str(data.kind),
                 target=data.target.strip(),
                 label=data.label.strip(),
-                position=(current or 0.0) + 1.0,
+                position=self._next_link_position(s, task_id),
             )
             s.add(link)
             self._touch(s, task)

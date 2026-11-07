@@ -120,6 +120,38 @@ class TaskLink(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class AuthSession(SQLModel, table=True):
+    """Session de connexion (cookie du navigateur ou jeton du client bureau).
+
+    Seule l'empreinte SHA-256 du jeton est stockée : une fuite de la base ne permet pas de se connecter.
+    """
+
+    __tablename__ = "auth_session"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    token_hash: str = Field(index=True, unique=True)
+    kind: str = "web"  # web (cookie) | api (client bureau)
+    persistent: bool = False  # « se souvenir de moi »
+    label: str = ""  # navigateur / nom de l'appareil
+    created_at: datetime = Field(default_factory=utcnow)
+    last_seen_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime
+
+
+class Attachment(SQLModel, table=True):
+    """Fichier envoyé sur le serveur (stocké dans ``data/uploads/<id>``), référencé par un lien de tâche."""
+
+    __tablename__ = "attachment"
+
+    id: str = Field(primary_key=True)  # identifiant aléatoire (hex)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    filename: str
+    content_type: str = "application/octet-stream"
+    size: int = 0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class UndoEntry(SQLModel, table=True):
     """Une action de l'historique annuler / rétablir d'un utilisateur."""
 

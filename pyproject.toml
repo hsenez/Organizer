@@ -11,8 +11,17 @@ line-length = 110
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-p nicegui.testing.user_plugin"
+# Fichier principal chargé par la fixture ``user`` de NiceGUI (tests des pages web).
+main_file = "run_server.py"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "RUF"]
 # RUF001-003 : les guillemets « » et caractères typographiques français sont voulus.
 ignore = ["RUF001", "RUF002", "RUF003", "RUF012"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Idiome FastAPI : ``param = Depends(...)`` / ``File(...)`` en valeur par défaut.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query"]

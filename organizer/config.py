@@ -30,8 +30,17 @@ class Settings:
     undo_history_size: int = 50
     # Délai (secondes) en dessous duquel deux modifications du même champ sont fusionnées dans l'historique.
     undo_merge_window_seconds: float = 5.0
-    # Durée de validité du cookie « se souvenir de moi ».
+    # Durée de validité du cookie « se souvenir de moi » (prolongée à chaque utilisation).
     remember_me_days: int = 30
+    # Session web sans « se souvenir de moi » : expire après cette inactivité ou à la fermeture du navigateur.
+    web_session_hours: int = 24
+    # Jeton du client bureau (prolongé à chaque utilisation).
+    api_token_days: int = 90
+    # Anti force brute : nombre d'échecs de connexion tolérés par (adresse IP, identifiant) et fenêtre.
+    login_max_failures: int = 5
+    login_failure_window_minutes: int = 10
+    # Taille maximale d'une pièce jointe (Mo).
+    max_upload_mb: int = 50
 
     @property
     def db_path(self) -> Path:
