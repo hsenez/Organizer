@@ -1,0 +1,141 @@
+"""Tables de la base de données (SQLModel).
+
+Conventions :
+- les énumérations sont stockées sous forme de valeurs simples (``int`` / ``str``) ; la conversion vers les
+  enums de :mod:`organizer.core.enums` se fait dans les services ;
+- les dates-heures sont en UTC, avec fuseau (exigé par SQLModel) ; les échéances sont des dates calendaires
+  locales ;
+- ``__undoable__ = True`` marque les tables suivies par l'historique annuler / rétablir.
+- Pas de relations ORM « many-to-many » : les tables de liaison sont manipulées explicitement, pour que
+  chaque modification soit visible par l'historique.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime, time
+
+from sqlalchemy import Text
+from sqlmodel import Field, SQLModel
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class User(SQLModel, table=True):
+    __tablename__ = "user"
+
+    id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(index=True, unique=True)
+    display_name: str = ""
+    password_hash: str
+    is_admin: bool = False
+    is_active: bool = True
+    theme: str = "auto"  # auto | light | dark
+    reminder_offset_days: int = 2
+    desktop_notifications: bool = True
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Project(SQLModel, table=True):
+    __tablename__ = "project"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    name: str
+    emoji: str = "📁"
+    color: str = "#5c7cfa"
+    description: str = Field(default="", sa_type=Text)
+    is_public: bool = False
+    archived: bool = False
+    position: float = 0.0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Tag(SQLModel, table=True):
+    __tablename__ = "tag"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    name: str
+    color: str = "#868e96"
+    is_public: bool = False
+    position: float = 0.0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Task(SQLModel, table=True):
+    __tablename__ = "task"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    parent_id: int | None = Field(default=None, foreign_key="task.id", index=True)
+    position: float = 0.0
+    title: str
+    importance: int = 2
+    urgency: int = 2
+    due_date: date | None = None
+    due_time: time | None = None
+    status: str = "not_started"
+    kind: str = "todo"
+    # Rappel (type Suivi) : décalage en jours avant l'échéance, ou date manuelle si le décalage est nul.
+    reminder_offset_days: int | None = None
+    reminder_manual_date: date | None = None
+    notes: str = Field(default="", sa_type=Text)
+    project_id: int | None = Field(default=None, foreign_key="project.id", index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+    completed_at: datetime | None = None
+
+
+class TaskTag(SQLModel, table=True):
+    __tablename__ = "task_tag"
+    __undoable__ = True
+
+    task_id: int = Field(foreign_key="task.id", primary_key=True)
+    tag_id: int = Field(foreign_key="tag.id", primary_key=True)
+
+
+class TaskShare(SQLModel, table=True):
+    __tablename__ = "task_share"
+    __undoable__ = True
+
+    task_id: int = Field(foreign_key="task.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+
+
+class TaskLink(SQLModel, table=True):
+    __tablename__ = "task_link"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    task_id: int = Field(foreign_key="task.id", index=True)
+    kind: str  # url | path | attachment
+    target: str  # URL, chemin local, ou identifiant de pièce jointe
+    label: str = ""
+    position: float = 0.0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class UndoEntry(SQLModel, table=True):
+    """Une action de l'historique annuler / rétablir d'un utilisateur."""
+
+    __tablename__ = "undo_entry"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    label: str
+    group_key: str | None = None
+    changes: str = Field(sa_type=Text)  # JSON : liste de {table, pk, before, after}
+    undone: bool = False
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+UNDOABLE_TABLES: dict[str, type[SQLModel]] = {
+    model.__tablename__: model  # type: ignore[misc]
+    for model in (Project, Tag, Task, TaskTag, TaskShare, TaskLink)
+}

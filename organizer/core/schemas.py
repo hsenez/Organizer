@@ -1,0 +1,225 @@
+"""Objets échangés entre les services, l'API et l'interface (Pydantic).
+
+Ce sont ces objets — et non les tables — qui circulent vers l'UI, que les données viennent de la base locale
+(serveur) ou de l'API REST (client bureau).
+
+Pour les objets « Patch », seuls les champs **explicitement fournis** sont appliqués
+(``model_fields_set``) : passer ``due_date=None`` efface l'échéance, ne pas le passer la laisse intacte.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, time
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from organizer.core.enums import DueBucket, Importance, LinkKind, Status, TaskKind, Urgency
+
+
+class _Schema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Projets ----------------------------------------------------------------------------------------------
+
+
+class ProjectIn(_Schema):
+    name: str = Field(min_length=1, max_length=80)
+    emoji: str = "📁"
+    color: str = "#5c7cfa"
+    description: str = ""
+    is_public: bool = False
+
+
+class ProjectPatch(_Schema):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    emoji: str | None = None
+    color: str | None = None
+    description: str | None = None
+    is_public: bool | None = None
+    archived: bool | None = None
+
+
+class ProjectOut(_Schema):
+    id: int
+    owner_id: int
+    name: str
+    emoji: str
+    color: str
+    description: str
+    is_public: bool
+    archived: bool
+    position: float
+    can_edit: bool = False
+
+
+# --- Tags -------------------------------------------------------------------------------------------------
+
+
+class TagIn(_Schema):
+    name: str = Field(min_length=1, max_length=40)
+    color: str = "#868e96"
+    is_public: bool = False
+
+
+class TagPatch(_Schema):
+    name: str | None = Field(default=None, min_length=1, max_length=40)
+    color: str | None = None
+    is_public: bool | None = None
+
+
+class TagOut(_Schema):
+    id: int
+    owner_id: int
+    name: str
+    color: str
+    is_public: bool
+    position: float
+    can_edit: bool = False
+
+
+# --- Liens ------------------------------------------------------------------------------------------------
+
+
+class LinkIn(_Schema):
+    kind: LinkKind
+    target: str = Field(min_length=1)
+    label: str = ""
+
+
+class LinkPatch(_Schema):
+    target: str | None = Field(default=None, min_length=1)
+    label: str | None = None
+
+
+class LinkOut(_Schema):
+    id: int
+    task_id: int
+    kind: LinkKind
+    target: str
+    label: str
+    position: float
+
+
+# --- Tâches -----------------------------------------------------------------------------------------------
+
+
+class TaskCreate(_Schema):
+    title: str = Field(min_length=1, max_length=300)
+    importance: Importance = Importance.NORMAL
+    urgency: Urgency = Urgency.SOON
+    due_date: date | None = None
+    due_time: time | None = None
+    status: Status = Status.NOT_STARTED
+    kind: TaskKind = TaskKind.TODO
+    # Suivi : sans décalage ni date manuelle, le décalage par défaut de l'utilisateur s'applique.
+    reminder_offset_days: int | None = Field(default=None, ge=0, le=365)
+    reminder_date: date | None = None
+    notes: str = ""
+    project_id: int | None = None
+    tag_ids: list[int] = Field(default_factory=list)
+    parent_id: int | None = None
+
+
+class TaskPatch(_Schema):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    importance: Importance | None = None
+    urgency: Urgency | None = None
+    due_date: date | None = None
+    due_time: time | None = None
+    status: Status | None = None
+    kind: TaskKind | None = None
+    # Fournir ``reminder_date`` (non nul) passe en rappel manuel ; fournir ``reminder_offset_days`` repasse
+    # en rappel corrélé à l'échéance.
+    reminder_offset_days: int | None = Field(default=None, ge=0, le=365)
+    reminder_date: date | None = None
+    notes: str | None = None
+    project_id: int | None = None
+    tag_ids: list[int] | None = None
+
+
+class TaskOut(_Schema):
+    id: int
+    owner_id: int
+    parent_id: int | None
+    parent_title: str | None = None
+    position: float
+    title: str
+    importance: Importance
+    urgency: Urgency
+    due_date: date | None
+    due_time: time | None
+    status: Status
+    kind: TaskKind
+    reminder_offset_days: int | None
+    reminder_date: date | None  # date de rappel effective (calculée), None si pas de rappel
+    notes: str
+    project: ProjectOut | None = None
+    tags: list[TagOut] = Field(default_factory=list)
+    links: list[LinkOut] = Field(default_factory=list)
+    shared_with: list[int] = Field(default_factory=list)
+    subtask_count: int = 0  # toutes les sous-tâches, annulées comprises
+    subtask_total: int = 0  # sous-tâches non annulées (dénominateur de la progression)
+    subtask_done: int = 0
+    due_after_parent: bool = False  # sous-tâche dont l'échéance dépasse celle du parent
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+    can_delete: bool = False
+
+    @property
+    def is_subtask(self) -> bool:
+        return self.parent_id is not None
+
+    @property
+    def has_subtasks(self) -> bool:
+        return self.subtask_count > 0
+
+
+class TaskFilter(_Schema):
+    """Critères de la barre de filtres. Une liste vide = pas de filtre sur ce critère."""
+
+    text: str = ""
+    importance: list[Importance] = Field(default_factory=list)
+    urgency: list[Urgency] = Field(default_factory=list)
+    status: list[Status] = Field(default_factory=list)
+    kind: list[TaskKind] = Field(default_factory=list)
+    project_ids: list[int | None] = Field(default_factory=list)  # None = « sans projet »
+    tag_ids: list[int] = Field(default_factory=list)  # la tâche doit avoir au moins un de ces tags
+    due: list[DueBucket] = Field(default_factory=list)
+    scope: str = "all"  # all | mine | shared (partagées avec moi)
+    include_subtasks: bool = False
+    parent_id: int | None = None  # ne lister que les sous-tâches de ce parent
+
+
+class TaskSort(_Schema):
+    key: str = "due"  # due | importance | urgency | priority | created | updated | title | position
+    descending: bool = False
+
+
+# --- Annuler / rétablir -----------------------------------------------------------------------------------
+
+
+class UndoStatus(_Schema):
+    undo_label: str | None = None  # libellé de l'action qu'annulerait Ctrl+Z
+    redo_label: str | None = None
+
+
+class UndoResult(_Schema):
+    action: str  # undo | redo
+    label: str
+    task_ids: list[int] = Field(default_factory=list)  # tâches touchées (pour rafraîchir l'affichage)
+
+
+# --- Utilisateurs -----------------------------------------------------------------------------------------
+
+
+class UserOut(_Schema):
+    id: int
+    username: str
+    display_name: str
+    is_admin: bool
+    is_active: bool
+    theme: str
+    reminder_offset_days: int
+    desktop_notifications: bool

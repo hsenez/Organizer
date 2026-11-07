@@ -59,15 +59,18 @@ Fichiers : `requirements.txt` (serveur), `requirements-client.txt` (client burea
 ```
 organizer/
   config.py              # chemins, port, paramètres (variables d'environnement)
-  core/
-    enums.py             # Importance, Urgence, Statut, Type : valeur, libellé, emoji, infobulle, couleur
+  core/                  # ✅ étape 1
+    enums.py             # Importance, Urgence, Statut, Type… : valeur, libellé, emoji, infobulle, couleur
     models.py            # tables SQLModel
-    schemas.py           # objets échangés (Pydantic)
-    services/            # logique métier : tâches, sous-tâches, boards, projets, tags, utilisateurs
-    datasource.py        # interface DataSource + LocalDataSource
+    schemas.py           # objets échangés (Pydantic) : *In / *Patch / *Out, filtres, tri
+    db.py                # moteur SQLite (clés étrangères, WAL), création du schéma
+    errors.py            # erreurs métier (message français affichable)
+    rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche
+    unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
+    services/            # users, labels (projets + tags), tasks, undo ; façade `Services`
+    datasource.py        # interface DataSource + LocalDataSource (à venir)
   server/
     app.py               # point d'entrée serveur (FastAPI + NiceGUI)
-    db.py                # moteur SQLite, création / migration du schéma
     auth.py              # sessions, cookies, jetons API
     api/                 # routes REST /api/v1 + WebSocket d'événements
   client/
@@ -81,6 +84,7 @@ organizer/
     pages/               # login, accueil, liste, kanban, matrice, réglages
   static/                # css, js, icônes, manifeste PWA, vendor/codemirror
 tests/
+scripts/demo.py          # démo terminal + données d'exemple (base data/demo.db)
 deploy/organizer.service # service systemd pour le Raspberry Pi
 run_server.py
 run_client.py
@@ -101,7 +105,11 @@ run_client.py
   - chaque tâche a un **propriétaire** ; elle est privée par défaut ;
   - elle peut être **partagée** avec d'autres utilisateurs (droit d'édition) ;
   - **partager un board** donne accès aux tâches posées dessus ;
-  - les **sous-tâches suivent la visibilité de leur parent**.
+  - les **sous-tâches suivent la visibilité de leur parent** (une sous-tâche créée par un invité lui
+    appartient, mais reste visible de tous ceux qui voient le parent) ;
+  - **supprimer** et **partager** sont réservés au propriétaire (pour supprimer : propriétaire de la tâche ou
+    de son parent) ;
+  - être admin ne donne **pas** accès aux tâches privées des autres.
 - **Projets et tags** : chacun est **🌍 public** (visible et utilisable par tous) ou **🔒 privé** (visible
   uniquement par son créateur), au choix. Voir 4.5.
 - Réseau local uniquement, **HTTP simple** en v1 (pas de HTTPS).
@@ -244,8 +252,12 @@ S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
 - **Historique par utilisateur, côté serveur** (50 dernières actions) : il fonctionne de la même façon sur le
   web, le téléphone et le client bureau. Les modifications successives rapides d'un même champ
   (sauvegarde automatique) sont regroupées en une seule action.
-- Chaque action enregistre l'état **avant / après** des lignes touchées. Si une ligne a été modifiée depuis
-  (par quelqu'un d'autre), l'annulation est refusée avec un message explicite plutôt que d'écraser ce travail.
+- Chaque action enregistre l'état **avant / après** des lignes touchées (capture automatique dans
+  `core/unit_of_work.py`, table `undo_entry`). Si une ligne a été modifiée depuis (par quelqu'un d'autre),
+  l'annulation est refusée avec un message explicite plutôt que d'écraser ce travail, et l'action est retirée
+  de l'historique pour que le Ctrl+Z suivant porte sur la précédente.
+- Une nouvelle action vide la pile « rétablir ».
+- Fusion : même tâche + mêmes champs modifiés, à moins de 5 s d'intervalle → une seule entrée.
 - Un petit toast indique ce qui a été annulé (« ↩️ Annulé : déplacement de *X* »).
 - **Téléphone** : boutons ↩️ / ↪️ dans la barre du haut (visibles seulement s'il y a quelque chose à annuler).
 
@@ -390,3 +402,4 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 |---|---|---|
 | 2026-11-07 | 0.1 | Spécification initiale |
 | 2026-11-07 | 0.2 | Ctrl+drop sans confirmation ; annuler / rétablir général (Ctrl+Z) ; projets et tags publics ou privés ; rattachement sur téléphone par maintien |
+| 2026-11-07 | 0.3 | **Étape 1 livrée** : modèles, base SQLite, services (utilisateurs, projets, tags, tâches, sous-tâches, liens, partage, filtres, tri, rappels), historique annuler / rétablir, règles pures ; 83 tests ; script de démo terminal |

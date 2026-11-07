@@ -11,7 +11,8 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — la spécification est prête, le code arrive.
+> 🚧 **Projet en cours de construction** — le cœur métier est prêt et testé (étape 1/8) ; serveur et interface
+> arrivent.
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -36,6 +37,16 @@ python3 -m venv .venv
 
 Sous Windows, remplacer `.venv/bin/` par `.venv\Scripts\`.
 
+## Démo dans le terminal
+
+En attendant l'interface, un scénario de démonstration affiche les vues (liste, kanban, matrice, échéances,
+recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée (`data/demo.db`) :
+
+```bash
+.venv/bin/python scripts/demo.py      # déroule le scénario
+.venv/bin/python -i scripts/demo.py   # puis console Python pour jouer soi-même
+```
+
 ## Utilisation *(à venir)*
 
 ```bash
@@ -52,8 +63,12 @@ Depuis un téléphone : ouvrir la même adresse dans le navigateur, puis « Ajou
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/pytest            # tests
+.venv/bin/ruff format .     # mise en forme du code
 .venv/bin/ruff check .      # lint + compatibilité Python 3.11
 ```
+
+Structure : `organizer/core/` contient le cœur métier (modèles, règles, services, historique annuler /
+rétablir), `tests/` les tests. Voir [`specifications.md`](specifications.md) §2.2 pour l'arborescence complète.
 
 ## Bibliothèques utilisées
 

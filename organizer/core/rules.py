@@ -1,0 +1,173 @@
+"""Règles métier pures (sans accès à la base) : partagées par les services et l'interface.
+
+L'interface les utilise pour réagir instantanément (surbrillance Ctrl+drop, colonnes interdites…) ; les
+services les réappliquent côté serveur pour garantir la cohérence.
+"""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+from datetime import date, timedelta
+from typing import Protocol
+
+from organizer.core.enums import DueBucket, Importance, LinkKind, Quadrant, Status, TaskKind, Urgency
+from organizer.core.errors import InvalidOperation
+
+IMPORTANT_THRESHOLD = 3  # importance >= 3 → « important » dans la matrice
+URGENT_THRESHOLD = 3  # urgence >= 3 → « urgent »
+
+
+# --- Texte ------------------------------------------------------------------------------------------------
+
+
+def normalize_text(text: str) -> str:
+    """Minuscules sans accents, pour une recherche tolérante (« tache » trouve « Tâche »)."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+_URL_RE = re.compile(r"^(?:[a-z][a-z0-9+.-]*://|mailto:|www\.)", re.IGNORECASE)
+
+
+def detect_link_kind(target: str) -> LinkKind:
+    """Devine si un texte saisi est un hyperlien ou un chemin de fichier local."""
+    return LinkKind.URL if _URL_RE.match(target.strip()) else LinkKind.PATH
+
+
+# --- Échéances --------------------------------------------------------------------------------------------
+
+
+def end_of_week(today: date) -> date:
+    """Dimanche de la semaine en cours."""
+    return today + timedelta(days=6 - today.weekday())
+
+
+def due_bucket(due: date | None, today: date) -> DueBucket:
+    if due is None:
+        return DueBucket.NONE
+    if due < today:
+        return DueBucket.OVERDUE
+    if due == today:
+        return DueBucket.TODAY
+    if due == today + timedelta(days=1):
+        return DueBucket.TOMORROW
+    if due <= end_of_week(today):
+        return DueBucket.THIS_WEEK
+    return DueBucket.LATER
+
+
+def bucket_accepts_drop(bucket: DueBucket, today: date) -> bool:
+    """La colonne « En retard » refuse les dépôts ; « Cette semaine » aussi quand il ne reste plus de jour
+    après demain dans la semaine (samedi et dimanche)."""
+    if bucket is DueBucket.OVERDUE:
+        return False
+    if bucket is DueBucket.THIS_WEEK:
+        return end_of_week(today) > today + timedelta(days=1)
+    return True
+
+
+def due_for_bucket_drop(bucket: DueBucket, today: date, current: date | None) -> date | None:
+    """Nouvelle échéance quand on dépose une carte dans une colonne du board « Par échéance »."""
+    if not bucket_accepts_drop(bucket, today):
+        raise InvalidOperation(f"Impossible de déposer une tâche dans « {bucket.meta.label} ».")
+    if due_bucket(current, today) is bucket:
+        return current  # déjà dans la bonne colonne : on ne touche à rien
+    match bucket:
+        case DueBucket.TODAY:
+            return today
+        case DueBucket.TOMORROW:
+            return today + timedelta(days=1)
+        case DueBucket.THIS_WEEK:
+            friday = today + timedelta(days=4 - today.weekday())
+            return friday if friday > today + timedelta(days=1) else end_of_week(today)
+        case DueBucket.LATER:
+            return today + timedelta(days=7)
+        case _:
+            return None
+
+
+# --- Rappels ----------------------------------------------------------------------------------------------
+
+
+def effective_reminder(
+    kind: TaskKind, due: date | None, offset_days: int | None, manual: date | None
+) -> date | None:
+    """Date de rappel effective d'une tâche : seulement pour le type Suivi ; corrélée à l'échéance si un
+    décalage est défini, sinon date manuelle."""
+    if kind is not TaskKind.FOLLOWUP:
+        return None
+    if offset_days is not None:
+        return due - timedelta(days=offset_days) if due is not None else None
+    return manual
+
+
+# --- Matrice d'Eisenhower ---------------------------------------------------------------------------------
+
+
+def quadrant_of(importance: int, urgency: int) -> Quadrant:
+    important = importance >= IMPORTANT_THRESHOLD
+    urgent = urgency >= URGENT_THRESHOLD
+    if important and urgent:
+        return Quadrant.DO
+    if important:
+        return Quadrant.PLAN
+    if urgent:
+        return Quadrant.DELEGATE
+    return Quadrant.ELIMINATE
+
+
+def matrix_drop(importance: int, urgency: int, target: Quadrant) -> tuple[Importance, Urgency]:
+    """Ajuste importance / urgence au minimum nécessaire pour entrer dans le quadrant ``target``."""
+    if (importance >= IMPORTANT_THRESHOLD) != target.important:
+        importance = IMPORTANT_THRESHOLD if target.important else IMPORTANT_THRESHOLD - 1
+    if (urgency >= URGENT_THRESHOLD) != target.urgent:
+        urgency = URGENT_THRESHOLD if target.urgent else URGENT_THRESHOLD - 1
+    return Importance(importance), Urgency(urgency)
+
+
+# --- Sous-tâches ------------------------------------------------------------------------------------------
+
+
+class _TaskLike(Protocol):
+    id: int
+    parent_id: int | None
+
+    @property
+    def has_subtasks(self) -> bool: ...
+
+
+def attach_refusal_reason(child: _TaskLike, parent: _TaskLike) -> str | None:
+    """Raison pour laquelle ``child`` ne peut pas devenir sous-tâche de ``parent`` (None = possible)."""
+    if child.id == parent.id:
+        return "Une tâche ne peut pas être sa propre sous-tâche."
+    if parent.parent_id is not None:
+        return "La cible est déjà une sous-tâche : un seul niveau de sous-tâches est possible."
+    if child.has_subtasks:
+        return "Cette tâche a déjà des sous-tâches : un seul niveau de sous-tâches est possible."
+    if child.parent_id == parent.id:
+        return "C'est déjà une sous-tâche de cette tâche."
+    return None
+
+
+class _ParentLike(Protocol):
+    status: Status
+    subtask_total: int
+    subtask_done: int
+
+
+def should_suggest_parent_completion(parent: _ParentLike) -> bool:
+    """Vrai si toutes les sous-tâches (non annulées) sont finies alors que le parent est encore ouvert."""
+    return (
+        parent.subtask_total > 0
+        and parent.subtask_done == parent.subtask_total
+        and not Status(parent.status).is_closed
+    )
+
+
+# --- Tri --------------------------------------------------------------------------------------------------
+
+
+def priority_score(importance: int, urgency: int) -> int:
+    """Score combiné (2 à 8) ; plus il est haut, plus la tâche est prioritaire."""
+    return importance + urgency

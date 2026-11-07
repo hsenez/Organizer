@@ -1,0 +1,98 @@
+"""Comptes utilisateurs (création, mots de passe, préférences).
+
+Ces opérations ne passent pas par l'historique annuler / rétablir et n'ont pas besoin d'utilisateur courant :
+elles prennent directement le moteur de base de données.
+"""
+
+from __future__ import annotations
+
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
+from sqlalchemy import Engine, func
+from sqlmodel import Session, select
+
+from organizer.core.errors import Forbidden, InvalidOperation, NotFound
+from organizer.core.models import User
+from organizer.core.schemas import UserOut
+from organizer.core.services.base import Actor
+
+_hasher = PasswordHasher()
+
+MIN_PASSWORD_LENGTH = 6
+
+
+def _check_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise InvalidOperation(f"Le mot de passe doit faire au moins {MIN_PASSWORD_LENGTH} caractères.")
+
+
+class UserService:
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def count(self) -> int:
+        with Session(self.engine) as s:
+            return s.exec(select(func.count()).select_from(User)).one()
+
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        display_name: str = "",
+        is_admin: bool = False,
+        *,
+        by: Actor | None = None,
+    ) -> UserOut:
+        """Crée un compte. Le tout premier compte est créé sans ``by`` et devient admin ; ensuite seul un
+        admin peut créer des comptes."""
+        username = username.strip()
+        if not username:
+            raise InvalidOperation("L'identifiant est obligatoire.")
+        _check_password(password)
+        with Session(self.engine) as s:
+            first = s.exec(select(func.count()).select_from(User)).one() == 0
+            if not first and (by is None or not by.is_admin):
+                raise Forbidden("Seul un administrateur peut créer des comptes.")
+            if s.exec(select(User).where(func.lower(User.username) == username.lower())).first():
+                raise InvalidOperation(f"L'identifiant « {username} » est déjà pris.")
+            user = User(
+                username=username,
+                display_name=display_name.strip() or username,
+                password_hash=_hasher.hash(password),
+                is_admin=is_admin or first,
+            )
+            s.add(user)
+            s.commit()
+            s.refresh(user)
+            return UserOut.model_validate(user)
+
+    def authenticate(self, username: str, password: str) -> UserOut | None:
+        with Session(self.engine) as s:
+            user = s.exec(select(User).where(func.lower(User.username) == username.strip().lower())).first()
+            if user is None or not user.is_active:
+                return None
+            try:
+                _hasher.verify(user.password_hash, password)
+            except (VerificationError, InvalidHashError):
+                return None
+            if _hasher.check_needs_rehash(user.password_hash):
+                user.password_hash = _hasher.hash(password)
+                s.add(user)
+                s.commit()
+                s.refresh(user)
+            return UserOut.model_validate(user)
+
+    def get(self, user_id: int) -> UserOut:
+        with Session(self.engine) as s:
+            user = s.get(User, user_id)
+            if user is None:
+                raise NotFound("Utilisateur introuvable.")
+            return UserOut.model_validate(user)
+
+    def list(self) -> list[UserOut]:
+        with Session(self.engine) as s:
+            return [UserOut.model_validate(u) for u in s.exec(select(User).order_by(User.display_name)).all()]
+
+    def actor_for(self, user_id: int) -> Actor:
+        user = self.get(user_id)
+        return Actor(id=user.id, is_admin=user.is_admin, reminder_offset_days=user.reminder_offset_days)
