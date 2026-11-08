@@ -4,6 +4,7 @@
 #   deploy/install.sh                     installe (ou réinstalle) et démarre le service
 #   sudo deploy/install.sh                idem : le service tourne quand même sous VOTRE compte, pas root
 #   deploy/install.sh --port 2603 --data-dir /srv/organizer
+#   deploy/install.sh --host 127.0.0.1    n'écoute que sur le Pi lui-même (accès par un proxy : Cloudflare Tunnel)
 #   deploy/install.sh --ssl-cert certs/organizer.pem --ssl-key certs/organizer-key.pem   (HTTPS)
 #   deploy/install.sh --no-https          revient au HTTP simple
 #   deploy/install.sh --reuse             reprend les options de la dernière installation (mises à jour)
@@ -48,17 +49,18 @@ source "$ORG_ROOT/deploy/common.sh"
 CONF="$ORG_ROOT/deploy/server.conf"
 
 # --help : affiche l'en-tête de ce fichier (lignes de commentaire du début, jusqu'à la vue d'ensemble).
-usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0; }
 
 # --- 0.a Lecture de la ligne de commande -------------------------------------------------------------
 # Les valeurs vides signifient « non précisé » : elles seront complétées plus bas (options retenues ou
 # valeurs par défaut). « action » dit ce que l'on fait : installer, seulement afficher le service, ou
 # désinstaller.
-port="" data_dir="" ssl_cert="" ssl_key="" no_https=0 reuse=0 action="install"
+port="" host="" data_dir="" ssl_cert="" ssl_key="" no_https=0 reuse=0 action="install"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         # ${2:?message} : arrête le script avec ce message si la valeur de l'option est absente.
         --port) port="${2:?--port attend un numéro}"; shift 2 ;;
+        --host) host="${2:?--host attend une adresse}"; shift 2 ;;
         --data-dir) data_dir="${2:?--data-dir attend un dossier}"; shift 2 ;;
         --ssl-cert) ssl_cert="${2:?--ssl-cert attend un fichier}"; shift 2 ;;
         --ssl-key) ssl_key="${2:?--ssl-key attend un fichier}"; shift 2 ;;
@@ -81,13 +83,16 @@ ORG_GROUP="$(id -gn "$ORG_USER")"
 # --- 0.c Options effectives ----------------------------------------------------------------------------
 # Priorité : 1) la ligne de commande, 2) les options retenues (seulement avec --reuse, que passe
 # deploy/update.sh), 3) les valeurs par défaut.
-SAVED_PORT="" SAVED_DATA_DIR="" SAVED_SSL_CERT="" SAVED_SSL_KEY=""
+SAVED_PORT="" SAVED_HOST="" SAVED_DATA_DIR="" SAVED_SSL_CERT="" SAVED_SSL_KEY=""
 if [[ $reuse == 1 && -f "$CONF" ]]; then
     # server.conf contient des lignes SAVED_PORT=… : le « sourcer » définit ces variables.
     # shellcheck disable=SC1090
     source "$CONF"
 fi
 port="${port:-${SAVED_PORT:-2603}}"                       # port d'écoute (2603 par défaut)
+# Adresse d'écoute : 0.0.0.0 = toutes les interfaces (réseau local + Pi lui-même) ; 127.0.0.1 = le Pi
+# seulement (les autres machines passent alors par un proxy installé sur le Pi, ex. Cloudflare Tunnel).
+host="${host:-${SAVED_HOST:-0.0.0.0}}"
 data_dir="${data_dir:-${SAVED_DATA_DIR:-$ORG_ROOT/data}}" # base SQLite + pièces jointes
 if [[ $no_https == 1 ]]; then
     ssl_cert="" ssl_key=""                                # --no-https : on oublie le certificat retenu
@@ -97,6 +102,7 @@ fi
 
 # Contrôles de cohérence avant de toucher à quoi que ce soit.
 [[ "$port" =~ ^[0-9]+$ ]] || fail "Port invalide : $port"
+[[ "$host" =~ ^[0-9A-Za-z.:-]+$ ]] || fail "Adresse d'écoute invalide : $host"
 [[ -z "$ssl_cert" && -z "$ssl_key" ]] || [[ -n "$ssl_cert" && -n "$ssl_key" ]] \
     || fail "HTTPS : donnez à la fois --ssl-cert et --ssl-key."
 
@@ -125,6 +131,7 @@ User=$ORG_USER
 Group=$ORG_GROUP
 WorkingDirectory=$ORG_ROOT
 Environment="ORGANIZER_DATA_DIR=$data_dir"
+Environment="ORGANIZER_HOST=$host"
 Environment="ORGANIZER_PORT=$port"
 UNIT
     if [[ $https == 1 ]]; then
@@ -168,7 +175,7 @@ if [[ $action == "uninstall" ]]; then
 fi
 
 say "📋 Installation du serveur Organizer"
-say "   dossier : $ORG_ROOT · utilisateur : $ORG_USER · données : $data_dir · port : $port$([[ $https == 1 ]] && echo ' · HTTPS')"
+say "   dossier : $ORG_ROOT · utilisateur : $ORG_USER · données : $data_dir · écoute : $host:$port$([[ $https == 1 ]] && echo ' · HTTPS')"
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════
 # 1. VÉRIFICATIONS (avant de modifier quoi que ce soit)
@@ -246,6 +253,7 @@ org_as_root systemctl restart "$ORG_SERVICE"
 org_as_user tee "$CONF" >/dev/null <<CONF
 # Options de deploy/install.sh (reprises par --reuse et deploy/update.sh). Généré automatiquement.
 SAVED_PORT=$(printf '%q' "$port")
+SAVED_HOST=$(printf '%q' "$host")
 SAVED_DATA_DIR=$(printf '%q' "$data_dir")
 SAVED_SSL_CERT=$(printf '%q' "$ssl_cert")
 SAVED_SSL_KEY=$(printf '%q' "$ssl_key")
@@ -255,24 +263,38 @@ CONF
 # 5. VÉRIFICATION FINALE
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════
 
-# org_wait_server interroge http(s)://127.0.0.1:<port>/api/v1/version pendant 40 s au plus : si le
+# Adresse à interroger : le Pi lui-même (127.0.0.1) quand le serveur écoute partout ou seulement en local,
+# sinon l'adresse précise demandée (--host 192.168.1.20).
+case "$host" in
+    0.0.0.0|127.0.0.1|localhost) probe="127.0.0.1" ;;
+    ::|::1) probe="[::1]" ;;
+    *:*) probe="[$host]" ;;
+    *) probe="$host" ;;
+esac
+# org_wait_server interroge http(s)://<adresse>:<port>/api/v1/version pendant 40 s au plus : si le
 # serveur répond, l'installation a réussi et l'on connaît la version qui tourne réellement.
-if version="$(org_wait_server "$port" "$https")"; then
+if version="$(org_wait_server "$port" "$https" "$probe")"; then
     scheme="http"; [[ $https == 1 ]] && scheme="https"
     say ""
     say "✅ Organizer $version tourne (service « $ORG_SERVICE », lancé au démarrage, relancé s'il s'arrête)."
     say "   Adresses :"
-    # Nom réseau du Pi (ex. raspberrypi.local, résolu par mDNS sur le réseau local)…
-    say "     $scheme://$(hostname).local:$port"
-    # … et ses adresses IPv4 : « hostname -I » (Raspberry Pi OS, Debian), sinon « ip » (autres
-    # distributions). Les adresses IPv6 (contenant « : ») sont ignorées.
-    addresses="$(hostname -I 2>/dev/null || true)"
-    if [[ -z "$addresses" ]] && command -v ip >/dev/null; then
-        addresses="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+    if [[ "$host" == "0.0.0.0" || "$host" == "::" ]]; then
+        # Nom réseau du Pi (ex. raspberrypi.local, résolu par mDNS sur le réseau local)…
+        say "     $scheme://$(hostname).local:$port"
+        # … et ses adresses IPv4 : « hostname -I » (Raspberry Pi OS, Debian), sinon « ip » (autres
+        # distributions). Les adresses IPv6 (contenant « : ») sont ignorées.
+        addresses="$(hostname -I 2>/dev/null || true)"
+        if [[ -z "$addresses" ]] && command -v ip >/dev/null; then
+            addresses="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+        fi
+        for ip in $addresses; do
+            [[ "$ip" == *:* ]] || say "     $scheme://$ip:$port"
+        done
+    else
+        say "     $scheme://$probe:$port"
+        [[ "$probe" == "127.0.0.1" || "$probe" == "[::1]" ]] \
+            && say "   (seulement depuis le Pi : les autres appareils passent par le proxy, ex. Cloudflare Tunnel)"
     fi
-    for ip in $addresses; do
-        [[ "$ip" == *:* ]] || say "     $scheme://$ip:$port"
-    done
     say "   Première fois : ouvrez l'une de ces adresses pour créer le compte administrateur."
     say "   État : systemctl status $ORG_SERVICE · journaux : journalctl -u $ORG_SERVICE -f"
 else

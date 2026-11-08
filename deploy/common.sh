@@ -49,15 +49,15 @@ org_as_root() {
 }
 
 # Attend que le serveur réponde sur /api/v1/version (40 essais, un par seconde) et affiche sa version ;
-# échoue s'il ne répond pas. $1 = port, $2 = https (0/1). Écrit en Python (celui du .venv) pour ne pas
-# dépendre de curl ; en HTTPS, le certificat n'est pas vérifié (il est émis pour le nom du Pi, pas pour
-# 127.0.0.1).
+# échoue s'il ne répond pas. $1 = port, $2 = https (0/1), $3 = adresse (127.0.0.1 par défaut). Écrit en
+# Python (celui du .venv) pour ne pas dépendre de curl ; en HTTPS, le certificat n'est pas vérifié (il est
+# émis pour le nom du Pi, pas pour 127.0.0.1).
 org_wait_server() {
-    local port="$1" https="$2" python="$ORG_ROOT/.venv/bin/python"
-    "$python" - "$port" "$https" <<'PY'
+    local port="$1" https="$2" address="${3:-127.0.0.1}" python="$ORG_ROOT/.venv/bin/python"
+    "$python" - "$port" "$https" "$address" <<'PY'
 import json, ssl, sys, time, urllib.request
-port, https = sys.argv[1], sys.argv[2] == "1"
-url = f"{'https' if https else 'http'}://127.0.0.1:{port}/api/v1/version"
+port, https, address = sys.argv[1], sys.argv[2] == "1", sys.argv[3]
+url = f"{'https' if https else 'http'}://{address}:{port}/api/v1/version"
 context = ssl._create_unverified_context() if https else None  # certificat émis pour le nom du Pi
 for _ in range(40):
     try:

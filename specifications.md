@@ -560,8 +560,8 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   `sudo`). Il vérifie Python ≥ 3.11, crée `.venv`, installe `requirements.txt`, puis **génère** le service
   systemd `organizer` (`/etc/systemd/system/organizer.service`) : `User=` = celui qui lance la commande —
   `SUDO_USER` sous sudo, **jamais root** (lancé directement en root, le script refuse) —,
-  `WorkingDirectory` = dossier du projet, `ORGANIZER_DATA_DIR` / `ORGANIZER_PORT` / HTTPS selon les options,
-  `Restart=always`, `WantedBy=multi-user.target` (démarrage avec la machine). Le service est activé et
+  `WorkingDirectory` = dossier du projet, `ORGANIZER_DATA_DIR` / `ORGANIZER_HOST` / `ORGANIZER_PORT` /
+  HTTPS selon les options, `Restart=always`, `WantedBy=multi-user.target` (démarrage avec la machine). Le service est activé et
   (re)démarré, et le script attend la réponse de `/api/v1/version` avant d'afficher les adresses. Options
   retenues dans `deploy/server.conf` (non versionné) ; `--print-service`, `--uninstall`. Les étapes
   utilisateur (venv, pip, git) tournent sous ce compte, seules les étapes système passent par sudo.
@@ -663,7 +663,7 @@ Choix retenu : **Cloudflare Tunnel**. `cloudflared`, installé **sur le Pi** (pa
 connexion sortante vers Cloudflare : aucun port à ouvrir sur la box, pas de certificat à gérer. Cloudflare
 reçoit `https://organizer.blou.top` et transmet en HTTP à `http://localhost:2603`. ⚠️ Cloudflare voit le trafic
 en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès local direct conservé) ; passer
-à `127.0.0.1` restera possible (`ORGANIZER_HOST`).
+à `127.0.0.1` : `deploy/install.sh --reuse --host 127.0.0.1` (variable `ORGANIZER_HOST` du service).
 
 - **Visiteur réel** : uvicorn (`ProxyHeadersMiddleware`, actif par défaut) remplace l'adresse et le protocole
   de la connexion par ceux des en-têtes `X-Forwarded-For` / `X-Forwarded-Proto`, **seulement** si la connexion
@@ -726,3 +726,4 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
 | 2026-11-08 | 1.10 | **Mise en ligne, étape 1** (Cloudflare Tunnel retenu, §10.4) : cookie `Secure` selon le protocole du visiteur (et non plus selon le certificat du serveur), en-têtes de sécurité sur toutes les réponses (HSTS en HTTPS seulement), vraie IP du visiteur derrière un proxy local vérifiée par des tests (`tests/test_proxy.py`), page « Serveur injoignable » de la PWA reformulée ; 264 tests |
 | 2026-11-08 | 1.11 | Mise en ligne, étape 2a : documentation de l'API (`/docs`, `/redoc`, `/openapi.json`) réservée aux utilisateurs connectés ; 270 tests |
 | 2026-11-08 | 1.12 | Mise en ligne, étapes 2b-2c : anti force brute par identifiant toutes adresses confondues (20 échecs / h, `LoginBlock`), journal des connexions (échecs, blocages, refus, réussites) ; journal du serveur enfin configuré (`configure_logging` : messages INFO d'Organizer dans `journalctl -u organizer`) ; 277 tests |
+| 2026-11-08 | 1.13 | Mise en ligne, étape 2d : option `--host` de `deploy/install.sh` (`ORGANIZER_HOST` écrit dans le service, retenue par `--reuse`, vérification finale sur la bonne adresse) ; 277 tests + installation en bac à sable avec `--host 127.0.0.1` |

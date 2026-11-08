@@ -139,6 +139,7 @@ d'afficher les adresses à ouvrir. Première visite : création du compte admini
 | Option | Effet |
 |---|---|
 | `--port 2603` | port d'écoute |
+| `--host 0.0.0.0` | adresse d'écoute : `0.0.0.0` (par défaut) = réseau local et Pi ; `127.0.0.1` = le Pi seulement (accès extérieur par Cloudflare Tunnel) |
 | `--data-dir <dossier>` | dossier des données (par défaut `data/` du projet) |
 | `--ssl-cert <pem> --ssl-key <pem>` / `--no-https` | HTTPS (voir plus bas) / retour au HTTP |
 | `--print-service` | affiche le service qui serait installé, sans rien changer |
