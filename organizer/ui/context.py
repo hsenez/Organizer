@@ -28,6 +28,8 @@ class UiContext:
         self.drop_handler: Callable[[int, str, int | None], None] | None = None
         # Onglets de réglages propres à la plateforme (bureau : 🔌 Connexion) : clé → (libellé, builder).
         self.extra_settings: dict[str, tuple[str, Callable[[UiContext], None]]] = {}
+        # Client bureau : arrêter vraiment l'application (fermer la fenêtre ne fait que la cacher).
+        self.quit: Callable[[], None] | None = None
 
     @property
     def user(self):

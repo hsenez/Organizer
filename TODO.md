@@ -68,10 +68,35 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   fournit le chemin complet : événement `drop` de NiceGUI natif) — rejoint le sujet des liens de fichiers.
 - 🔔 Si l'envoi d'une notification échoue (D-Bus absent…), la tâche est quand même notée « notifiée » pour
   la journée (desktop-notifier ne signale pas l'échec).
-- 🖥️ Client bureau : icône de fenêtre / raccourci de lancement (fichier `.desktop`, raccourci Windows).
+- 🎨 Icône « Post-it en vrac » : l'utiliser aussi comme favicon du site et icône de la PWA (étape 8).
+- 🧺 Client bureau : icône dans la zone de notification (« tray ») avec Ouvrir / Nouvelle tâche / Quitter —
+  demanderait une dépendance (pystray + AppIndicator sous Linux).
+- ⌨️ Raccourcis globaux GNOME (gsettings) écrits mais jamais essayés (poste de dev sous KDE).
+- 🪟 Wayland : le jeton d'activation du lanceur est transmis pour ramener la fenêtre au premier plan ; à
+  confirmer à l'usage (KDE peut se contenter de la faire clignoter dans la barre des tâches).
 - 🗄️ Outil de **migration du schéma** de la base (ajout de colonnes) le jour où ce sera nécessaire.
 - ⚙️ Le décalage de rappel par défaut modifié dans les réglages ne s'applique aux nouvelles tâches de la
   page ouverte qu'après rechargement.
+
+
+### Ajoutés Manuellement
+
+- En plus de taches publiques / privées, il y a des taches partagées avec une ou plusieurs personnes a choisir (parmi les autres comptes existants)
+- Interface sur télégram pour envoyer une tache rapide
+- Mettre une date de début optionnelle d'uen tache
+- Mettre une date de rappel de mise à jour d'une tache obligatoire, par défaut 2 semaines après sa création
+- Taches récurrentes
+
+#### Chantier important: Création d'événements. 
+
+- Ils auront un début et une fin (date et heure) 
+- Ils peuvent contenir des tâches (intéraction des attributs à définir clairement)
+- Ils sont publics, privés ou partagés (comme les tâches)
+- On aura en plus de kanban et compagnie dans le menu de gauche, un calendrier. 
+  - Il affiche les événements, et optionnellement les dates critiques des taches (par défaut désactivé mais facilement ajoutable)
+  - L'interface permet facilement d'éditer le début et la fin d'un événement (tiravec la souris)
+  - Les événements et taches publics ou partagées spécifiquement avec moi sont potentiellement visibles aussi mais on peut filtrer poru ne pas les voir
+
 
 ### ✅ Faits récemment
 
@@ -80,3 +105,4 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - 📊 Kanbans, 🎯 matrice, glisser-déposer souris / tactile et Ctrl+drop (étape 6).
 - 📊 Kanbans pleine page, colonnes repliables / redimensionnables, reclassement = urgence affinée (v1.4).
 - 🖥️ Client bureau : fenêtre native, connexion par jeton, liens et fichiers locaux, 🔔 notifications (étape 7).
+- 🖥️ Client bureau en arrière-plan, raccourcis clavier globaux, installeurs Linux / Windows (v1.6).

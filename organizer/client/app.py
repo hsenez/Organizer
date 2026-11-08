@@ -8,6 +8,9 @@ fenêtre native (pywebview), branchée sur l'API REST du serveur.
   passé dans l'URL de départ puis gardé en cookie) ; un autre programme ou utilisateur du poste ne peut pas
   utiliser la session.
 - 🔔 Notifications système des rappels (``notifications.ReminderNotifier``).
+- **Arrière-plan** : fermer la fenêtre la cache (``window.py``) ; une seule instance par utilisateur, que
+  les lancements suivants (lanceur, raccourcis clavier globaux) pilotent par ``/_organizer/control/<action>``
+  (``instance.py``) : ``show``, ``new-task``, ``quit``.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ import argparse
 import asyncio
 import contextlib
 import logging
+import logging.handlers
 import multiprocessing
 import os
 import platform
@@ -23,15 +27,16 @@ import secrets
 import socket
 import sys
 from collections.abc import Callable
+from pathlib import Path
 
 import httpx
 from fastapi import Request
-from fastapi.responses import PlainTextResponse, RedirectResponse, Response
-from nicegui import app, ui
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
+from nicegui import Client, app, ui
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from organizer.client import system
+from organizer.client import instance, system, window
 from organizer.client.api import ApiClient
 from organizer.client.config import ClientConfig, ConfigStore, normalize_server_url
 from organizer.client.notifications import NotifiedLog, ReminderNotifier, make_sender
@@ -45,8 +50,10 @@ from organizer.ui.pages import register_app_pages
 log = logging.getLogger("organizer.client")
 
 WINDOW_COOKIE = "organizer_window"
-ENV_SECRET = "ORGANIZER_CLIENT_LAUNCH"
-ENV_PORT = "ORGANIZER_CLIENT_PORT"
+ENV_SECRET = instance.ENV_SECRET
+ENV_PORT = instance.ENV_PORT
+ASSETS = Path(__file__).parent / "assets"
+DEFAULT_SHORTCUTS = {"show": "Ctrl+Alt+O", "new_task": "Ctrl+Alt+N"}
 
 
 class _SetupStatus(BaseModel):
@@ -66,11 +73,14 @@ class LaunchGuard(BaseHTTPMiddleware):
         self.secret = secret
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path.startswith("/_nicegui"):  # ressources statiques et WebSocket
+        path = request.url.path
+        # Ressources statiques et WebSocket ; commandes à distance (elles vérifient leur propre secret).
+        if path.startswith("/_nicegui") or path.startswith(instance.CONTROL_PATH):
             return await call_next(request)
         key = request.query_params.get("launch")
         if key and secrets.compare_digest(key, self.secret):
-            response = RedirectResponse(request.url.path or "/", status_code=303)
+            rest = "&".join(f"{k}={v}" for k, v in request.query_params.items() if k != "launch")
+            response = RedirectResponse((path or "/") + (f"?{rest}" if rest else ""), status_code=303)
             response.set_cookie(WINDOW_COOKIE, self.secret, httponly=True, samesite="strict")
             return response
         if secrets.compare_digest(request.cookies.get(WINDOW_COOKIE, ""), self.secret):
@@ -98,6 +108,8 @@ class DesktopClient:
         self.launch_secret = launch_secret
         self.port = port
         self._api: ApiClient | None = None
+        self._pages: list[tuple[Client, UiContext]] = []  # pages ouvertes (la fenêtre n'en montre qu'une)
+        self._hidden_hint_shown = False
 
     # --- connexion ---
 
@@ -163,6 +175,9 @@ class DesktopClient:
             return RedirectResponse("/connect?offline=1", status_code=303)
         ctx = UiContext(RemoteDataSource(api, user), logout=self.logout)
         ctx.extra_settings["connection"] = ("🔌 Connexion", self.connection_settings)
+        ctx.quit = self.quit
+        self._pages = [(c, x) for c, x in self._pages if c.id in Client.instances]
+        self._pages.append((ui.context.client, ctx))
         return ctx
 
     def connect_page(self, request: Request) -> None:
@@ -274,14 +289,79 @@ class DesktopClient:
         return True, RemoteTasks(api).reminders_due()
 
     def _open_task(self, task_id: int) -> None:
-        url = f"http://127.0.0.1:{self.port}/?task={task_id}"
-        window = app.native.main_window
-        if window is not None:
-            window.load_url(url)
-            window.restore()
-            window.show()
+        self.show_window()
+        self._in_page(lambda ctx: ctx.editor.open(task_id), f"/?task={task_id}")
+
+    # --- fenêtre et commandes à distance ---
+
+    def _window_call(self, method: str, *args) -> bool:
+        """Appelle une méthode ajoutée à la fenêtre native par ``window.setup_window`` (file de NiceGUI)."""
+        from nicegui.native import native as native_module
+
+        if app.native.main_window is None or native_module.method_queue is None:
+            return False
+        native_module.method_queue.put((method, args, {}))
+        return True
+
+    def _in_page(self, action: Callable[[UiContext], None], fallback_path: str) -> None:
+        """Exécute ``action`` dans la page affichée par la fenêtre, sinon y ouvre ``fallback_path``."""
+        for client, ctx in reversed(self._pages):
+            if client.id in Client.instances and client.has_socket_connection and ctx.editor is not None:
+                with client:
+                    action(ctx)
+                return
+        url = f"http://127.0.0.1:{self.port}{fallback_path}"
+        if app.native.main_window is not None:
+            app.native.main_window.load_url(url)
         else:
             system.open_url(url)
+
+    def show_window(self, activation_token: str | None = None) -> None:
+        if not self._window_call("organizer_present", activation_token):
+            self._in_page(lambda ctx: ui.run_javascript("window.focus()"), "/")
+
+    def new_task(self, activation_token: str | None = None) -> None:
+        self.show_window(activation_token)
+        self._in_page(lambda ctx: ctx.editor.open_new(), "/?task=new")
+
+    def quit(self) -> None:
+        """Arrête vraiment le client (fenêtre, serveur local, rappels)."""
+        if not self._window_call("organizer_quit"):
+            app.shutdown()
+
+    async def _window_hidden(self) -> None:
+        if self._hidden_hint_shown:
+            return
+        self._hidden_hint_shown = True
+        keys = {**DEFAULT_SHORTCUTS, **self.config.shortcuts}
+        await make_sender()(
+            "📋 Organizer reste ouvert en arrière-plan",
+            f"Rouvrir : {keys['show']} · Nouvelle tâche : {keys['new_task']}\n"
+            "Pour quitter : menu du compte → ⏻ Quitter Organizer.",
+            None,
+        )
+
+    async def control(self, action: str, request: Request) -> Response:
+        """Commandes envoyées par un autre lancement (``instance.forward``) ou par la fenêtre."""
+        secret = request.headers.get(instance.SECRET_HEADER, "")
+        if not self.launch_secret or not secrets.compare_digest(secret, self.launch_secret):
+            return PlainTextResponse("Accès refusé.", status_code=403)
+        try:
+            token = (await request.json()).get("activation_token")
+        except ValueError:
+            token = None
+        log.info("Commande reçue : %s", action)
+        if action == "show":
+            self.show_window(token)
+        elif action == "new-task":
+            self.new_task(token)
+        elif action == "quit":
+            self.quit()
+        elif action == "hidden":
+            await self._window_hidden()
+        elif action != "ping":
+            return PlainTextResponse("Commande inconnue.", status_code=404)
+        return JSONResponse({"ok": True})
 
     def start_notifier(self) -> None:
         notifier = ReminderNotifier(
@@ -294,15 +374,19 @@ class DesktopClient:
 
     # --- installation ---
 
-    def install(self, *, notifications: bool = True) -> None:
+    def install(self, *, notifications: bool = True, single_instance: bool = False) -> None:
         common = {"favicon": "📋", "dark": None}
         ui.page("/connect", title="Connexion · Organizer", **common)(self.connect_page)
         register_app_pages(self.context)
         app.on_page_exception(self.page_error)
+        app.add_api_route(f"{instance.CONTROL_PATH}/{{action}}", self.control, methods=["POST"])
         if self.launch_secret:
             app.add_middleware(LaunchGuard, secret=self.launch_secret)
         if notifications:
             app.on_startup(self.start_notifier)
+        if single_instance and self.launch_secret and self.port:
+            app.on_startup(lambda: instance.write(self.store.directory, self.port, self.launch_secret))
+            app.on_shutdown(lambda: instance.remove(self.store.directory))
 
 
 def _free_port() -> int:
@@ -311,33 +395,65 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Organizer — client bureau")
-    parser.add_argument(
-        "--browser", action="store_true", help="ouvrir dans le navigateur au lieu d'une fenêtre"
+def _setup_logging(directory: Path) -> None:
+    handlers: list[logging.Handler] = []
+    with contextlib.suppress(OSError):
+        directory.mkdir(parents=True, exist_ok=True)
+        handlers.append(
+            logging.handlers.RotatingFileHandler(
+                directory / "client.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8"
+            )
+        )
+    if sys.stderr is not None:  # pythonw (Windows) : pas de console
+        handlers.append(logging.StreamHandler())
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s", handlers=handlers
     )
-    parser.add_argument("--port", type=int, default=None, help="port local (par défaut : un port libre)")
-    args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s : %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)  # pas une ligne par requête
 
-    # La fenêtre native tourne dans un sous-processus qui réimporte ce module : le secret et le port sont
-    # transmis par l'environnement pour être identiques des deux côtés.
-    if multiprocessing.current_process().name == "MainProcess" and ENV_SECRET not in os.environ:
+
+def _icon(ext: str) -> str | None:
+    path = ASSETS / f"organizer.{ext}"
+    return str(path) if path.exists() else None
+
+
+def main(args: argparse.Namespace) -> None:
+    """Démarre le client (voir ``launcher.run``, qui analyse la ligne de commande)."""
+    is_main = multiprocessing.current_process().name == "MainProcess"
+    directory = system.config_dir()
+    if is_main:
+        _setup_logging(directory)
+
+    # La fenêtre native tourne dans un sous-processus qui réimporte ``run_client.py`` : le secret et le port
+    # sont transmis par l'environnement pour être identiques des deux côtés.
+    if is_main and ENV_SECRET not in os.environ:
         os.environ[ENV_SECRET] = secrets.token_urlsafe(24)
         os.environ[ENV_PORT] = str(args.port or _free_port())
     secret, port = os.environ[ENV_SECRET], int(os.environ[ENV_PORT])
-    start_url = f"http://127.0.0.1:{port}/?launch={secret}"
+    start_url = f"http://127.0.0.1:{port}/?launch={secret}" + ("&task=new" if args.new_task else "")
 
-    client = DesktopClient(ConfigStore(system.config_dir()), launch_secret=secret, port=port)
-    client.install()
+    client = DesktopClient(ConfigStore(directory), launch_secret=secret, port=port)
+    client.install(single_instance=True)
     native = not args.browser
     if native:
         app.native.window_args["url"] = start_url
         app.native.window_args["min_size"] = (420, 520)
-        if sys.platform.startswith("linux") and "PYWEBVIEW_GUI" not in os.environ:
-            app.native.start_args["gui"] = "gtk"  # sinon pywebview essaie d'abord Qt (non installé)
-    elif multiprocessing.current_process().name == "MainProcess":
+        app.native.window_args["hidden"] = bool(args.hidden)
+        app.native.start_args["func"] = window.setup_window
+        if sys.platform.startswith("linux"):
+            if "PYWEBVIEW_GUI" not in os.environ:
+                app.native.start_args["gui"] = "gtk"  # sinon pywebview essaie d'abord Qt (non installé)
+            if _icon("png"):
+                app.native.start_args["icon"] = _icon("png")
+            if not is_main:
+                # Identifiant de l'application sous Wayland (= nom du fichier .desktop) : icône et
+                # regroupement corrects dans la barre des tâches.
+                with contextlib.suppress(ImportError, ValueError):
+                    from gi.repository import GLib
+
+                    GLib.set_prgname("organizer")
+                    GLib.set_application_name("Organizer")
+    elif is_main and not args.hidden:
         app.on_startup(lambda: system.open_url(start_url))
         print(f"Organizer (client) : {start_url}", flush=True)
     ui.run(
@@ -346,7 +462,7 @@ def main(argv: list[str] | None = None) -> None:
         native=native,
         window_size=(1400, 900) if native else None,
         title="Organizer",
-        favicon="📋",
+        favicon=(_icon("ico") if sys.platform == "win32" else None) or "📋",
         dark=None,
         language="fr",
         reload=False,

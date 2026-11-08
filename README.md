@@ -92,6 +92,30 @@ Sujets en cours de réflexion (liens vers les fichiers…) : voir [`TODO.md`](TO
 Réglages par variables d'environnement : `ORGANIZER_DATA_DIR` (dossier des données, `./data` par défaut),
 `ORGANIZER_PORT` (2603), `ORGANIZER_HOST` (0.0.0.0).
 
+## 🖥️ Installer le client bureau
+
+**Linux** (sans droits root ; KDE Plasma et GNOME : raccourcis clavier configurés automatiquement) :
+
+```bash
+install/linux/install.sh                  # options : --no-autostart --no-shortcuts --uninstall
+install/linux/install.sh --show-key Meta+O --new-key Meta+N   # autres raccourcis
+```
+
+**Windows** : double-cliquer sur `install\windows\install.bat` (Python ≥ 3.11 depuis python.org requis ;
+désinstallation : `uninstall.bat`).
+
+L'installeur crée l'environnement Python, le lanceur « Organizer » (menu des applications / menu Démarrer),
+le démarrage en arrière-plan à l'ouverture de session et deux **raccourcis clavier globaux** :
+
+| Raccourci | Effet |
+|---|---|
+| **Ctrl+Alt+O** | ouvrir Organizer (le ramener au premier plan) |
+| **Ctrl+Alt+N** | créer une nouvelle tâche (éditeur ouvert sur la page affichée) |
+
+Fermer la fenêtre la cache : Organizer continue en arrière-plan (rappels, raccourcis). Pour l'arrêter :
+menu du compte → **⏻ Quitter Organizer**. En ligne de commande : `run_client.py --new-task`, `--quit`,
+`--hidden` (une commande est transmise au client déjà lancé).
+
 ## Déploiement sur le Raspberry Pi
 
 ```bash

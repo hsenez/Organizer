@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 1.5 — 2026-11-08
+> Version : 1.6 — 2026-11-08
 
 ---
 
@@ -562,6 +562,37 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   dans le navigateur, tester une notification, se déconnecter / changer de serveur.
 - Pas de mode hors ligne ; les modifications faites ailleurs apparaissent au prochain affichage (temps réel :
   étape 8).
+- **Arrière-plan** : fermer la fenêtre la **cache** ; le client continue (rappels, raccourcis). La première
+  fois dans une session, une notification l'explique. Pour l'arrêter : menu du compte → ⏻ Quitter
+  Organizer, action « Quitter » du lanceur, ou `run_client.py --quit`.
+- **Instance unique** : un nouveau lancement transmet sa commande au client déjà lancé (≈ 0,07 s) au lieu
+  d'en démarrer un second (`instance.json` : port local, secret) : `run_client.py` (afficher),
+  `--new-task` (afficher et ouvrir l'éditeur de nouvelle tâche **sur la page affichée**), `--quit`,
+  `--hidden` (démarrer caché, pour l'ouverture de session).
+- **Raccourcis clavier globaux** (par défaut **Ctrl+Alt+O** : ouvrir, **Ctrl+Alt+N** : nouvelle tâche) :
+  déclarés au système par l'installeur, qui lance alors ces commandes. Sous Wayland une application ne peut
+  pas écouter le clavier hors de sa fenêtre : KDE Plasma (kglobalaccel, par D-Bus) et GNOME (gsettings) sont
+  configurés automatiquement, les autres bureaux reçoivent la commande à associer ; sous Windows, ce sont les
+  touches de raccourci des raccourcis du menu Démarrer.
+- **Icône** de l'application (`organizer/client/assets/`, générée depuis un SVG par `scripts/make_icons.sh`) :
+  fenêtre, lanceur, menu Démarrer ; identifiant d'application `organizer` (Wayland) pour que la barre des
+  tâches associe la fenêtre au lanceur.
+
+### 10.2 📦 Installation du client bureau
+
+- **Linux** : `install/linux/install.sh` (sans droits root) — vérifie Python ≥ 3.11 et WebKitGTK (commande
+  d'installation selon la distribution), crée `.venv`, installe `requirements-client.txt`, puis
+  `python -m organizer.client.install` : lanceur `~/.local/share/applications/organizer.desktop` (actions
+  « Nouvelle tâche », « Quitter Organizer »), icônes `hicolor`, démarrage caché à l'ouverture de session
+  (`~/.config/autostart`), raccourcis globaux. Options : `--no-autostart`, `--no-shortcuts`,
+  `--show-key …`, `--new-key …`, `--uninstall`.
+- **Windows** : `install\windows\install.bat` (double-clic ; appelle `install.ps1`, sans droits
+  administrateur) — trouve Python ≥ 3.11 (`py -3` ou `python`), crée `.venv`, installe les dépendances, crée
+  les raccourcis du menu Démarrer (« Organizer » avec Ctrl+Alt+O, « Organizer - Nouvelle tâche » avec
+  Ctrl+Alt+N, « Organizer - Quitter »), du Bureau et du dossier Démarrage (`--hidden`) ; ils lancent
+  `pythonw.exe` (sans console). Options : `-NoAutostart`, `-NoDesktop`, `-ShowKey`, `-NewKey`, `-Uninstall`
+  (`uninstall.bat`).
+- Journal du client : `client.log` dans son dossier de configuration (utile quand il tourne sans console).
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
 
 ---
@@ -600,3 +631,4 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.3 | **Étape 6 livrée** : boards personnalisés (tables `board`, `board_column`, `board_card`, `board_share` ; `BoardService` ; partage = accès aux tâches posées), pages Kanbans (4 boards prédéfinis + personnalisés, filtres et masquage des terminées par board) et Matrice (2×2, 4×4), glisser-déposer maison souris / tactile avec Ctrl+drop et maintien au doigt pour rattacher ; API : routes `/boards` (45 chemins, 63 opérations) ; 182 tests + tests interactifs dans Firefox |
 | 2026-11-08 | 1.4 | Kanbans : pleine largeur et pleine hauteur, colonnes plus étroites, repliables et redimensionnables (mémorisé par board) ; reclassement dans une colonne avec repère d'insertion, qui ajuste l'urgence et un rang manuel (table `task_rank`, `TaskService.move`, API `POST /tasks/{id}/move` : 46 chemins, 64 opérations) ; tri « Urgence » départagé par ce rang ; 190 tests + vérification dans Firefox |
 | 2026-11-08 | 1.5 | **Étape 7 livrée** : client bureau (`organizer/client`, `run_client.py`) — fenêtre native pywebview, connexion par jeton (`/connect`), `RemoteDataSource` (contrat identique aux services, vérifié par les tests), verrou de la fenêtre, ouverture des liens / fichiers locaux / pièces jointes, notifications des rappels (desktop-notifier 6.2.0), onglet de réglages 🔌 Connexion ; 206 tests + parcours vérifié dans Firefox et dans la fenêtre native |
+| 2026-11-08 | 1.6 | Client bureau : fonctionne en **arrière-plan** (fermer = cacher ; ⏻ Quitter dans le menu du compte), **instance unique** pilotée par la ligne de commande (`--new-task`, `--quit`, `--hidden`), **raccourcis clavier globaux** (KDE / GNOME / Windows), **installeurs** Linux (`install/linux/install.sh`) et Windows (`install/windows/install.bat`), icône de l'application « Post-it en vrac » (choisie parmi 5 propositions), journal `client.log` ; 221 tests + essais réels (fenêtre native, KDE) |

@@ -84,6 +84,10 @@ def app_frame(
                 ui.separator()
                 ui.menu_item("⚙️ Réglages", on_click=lambda: ui.navigate.to(SETTINGS.path))
                 ui.menu_item("🚪 Déconnexion", on_click=ctx.logout).mark("logout-item")
+                if (
+                    ctx.quit is not None
+                ):  # client bureau : il tourne en arrière-plan quand on ferme la fenêtre
+                    ui.menu_item("⏻ Quitter Organizer", on_click=ctx.quit).mark("quit-item")
 
     def update_undo_buttons() -> None:
         status = ctx.ds.undo.status()

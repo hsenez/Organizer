@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 DEFAULT_PORT = 2603
@@ -20,6 +20,8 @@ class ClientConfig:
     server: str = ""  # ex. http://192.168.1.20:2603
     username: str = ""
     token: str | None = None
+    # Raccourcis clavier globaux enregistrés par l'installeur (pour les afficher) : show, new_task.
+    shortcuts: dict[str, str] = field(default_factory=dict)
 
 
 def normalize_server_url(text: str) -> str:

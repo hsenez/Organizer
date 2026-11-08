@@ -205,6 +205,25 @@ Référence fonctionnelle complète : **`specifications.md`**.
   fixture autouse **avant** le simulateur).
 - Essais manuels sans rien ouvrir sur le bureau : `PATH=<faux xdg-open>:$PATH BROWSER="<script> %s"`
   `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent ORGANIZER_CLIENT_DIR=<dossier> run_client.py --browser`.
+- **Arrière-plan / instance unique** : `launcher.py` (ligne de commande, **sans importer NiceGUI** avant de
+  savoir s'il faut démarrer : la transmission doit rester ≈ 0,07 s) → `instance.forward` → route
+  `/_organizer/control/<action>` (secret dans l'en-tête, exemptée du `LaunchGuard`) → `DesktopClient.control`.
+  `window.py` tourne **dans le sous-processus de la fenêtre** (`start_args["func"]`) : fermer = cacher
+  (`events.closing` renvoie False), méthodes `organizer_present` / `organizer_quit` ajoutées à la fenêtre et
+  appelées par `nicegui.native.native.method_queue` (elles doivent renvoyer None). `app.shutdown()` passerait
+  par la fermeture annulée : pour quitter, toujours `organizer_quit`.
+- Pages ouvertes mémorisées (`DesktopClient._pages`) : « nouvelle tâche » ouvre l'éditeur dans la page
+  affichée (`_in_page`), sinon charge `/?task=new`.
+- Linux : `GLib.set_prgname("organizer")` dans le sous-processus = identifiant Wayland = nom du `.desktop`.
+- Raccourcis globaux : impossibles à capter soi-même sous Wayland → déclarés au bureau par
+  `organizer/client/install.py` (KDE : `doRegister` + `setForeignShortcutKeys` sur le composant
+  `organizer.desktop`, actions `_launch` et `new-task` ; vérifiable avec `qdbus6 org.kde.kglobalaccel
+  /component/organizer_desktop org.kde.kglobalaccel.Component.invokeShortcut _launch`). Fermer la fenêtre
+  dans un test : script KWin filtré sur le **pid** du sous-processus (`workspace.windowList()`).
+- Installeurs : `install/linux/install.sh`, `install/windows/install.ps1` (UTF-8 **avec BOM** et fins de
+  ligne CRLF, sinon Windows PowerShell 5.1 abîme les accents ; jamais exécuté faute de Windows).
+- Icône : `scripts/make_icons.sh <svg>` régénère `organizer/client/assets/` (rsvg-convert + ImageMagick,
+  outils de développement seulement ; les fichiers produits sont versionnés).
 
 ## Tests
 
@@ -235,7 +254,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 206 tests au total.
+- 221 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
@@ -244,6 +263,8 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
   rang).
 - ✅ Étape 7 : client bureau (fenêtre native, `RemoteDataSource` via l'API, connexion par jeton, ouverture
   des fichiers locaux, notifications des rappels). Vérifié sous Linux (GTK) ; **Windows jamais essayé**.
+  Puis : arrière-plan, instance unique, raccourcis globaux, installeurs, icône « Post-it en vrac »
+  (source : `organizer/client/assets/organizer.svg`).
 - ⏭️ Étape 8 : temps réel (WebSocket), PWA, finitions.
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.
