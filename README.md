@@ -116,6 +116,10 @@ Fermer la fenêtre la cache : Organizer continue en arrière-plan (rappels, racc
 menu du compte → **⏻ Quitter Organizer**. En ligne de commande : `run_client.py --new-task`, `--quit`,
 `--hidden` (une commande est transmise au client déjà lancé).
 
+**🔄 Mettre à jour un poste** : `install/linux/update.sh` (Linux) ou `install\windows\update.bat`
+(Windows). Le script arrête le client, récupère la nouvelle version (`git pull`), réinstalle avec les mêmes
+options et relance le client. Le client affiche un bandeau quand le serveur a une version plus récente.
+
 ## Déploiement sur le Raspberry Pi
 
 ```bash
@@ -134,6 +138,12 @@ journalctl -u organizer -f          # journaux
 
 Les données (base `organizer.db` et pièces jointes `uploads/`) sont dans `data/` : c'est ce dossier à
 sauvegarder.
+
+**Mise à jour du serveur** : `deploy/update.sh` sur le Pi (`git pull`, dépendances, redémarrage du service,
+vérification de la version). Mettre à jour le serveur **avant** les postes.
+
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.7.0** ; 1.0.0 à la fin du développement),
+visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
 
 ## Développement
 

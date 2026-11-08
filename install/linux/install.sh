@@ -13,6 +13,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV="$ROOT/.venv"
+cd "$ROOT"   # python -m organizer… doit trouver le paquet, d'où qu'on lance le script
 PYTHON="${PYTHON:-python3}"
 
 say()  { printf '%s\n' "$*"; }

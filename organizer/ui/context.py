@@ -30,6 +30,8 @@ class UiContext:
         self.extra_settings: dict[str, tuple[str, Callable[[UiContext], None]]] = {}
         # Client bureau : arrêter vraiment l'application (fermer la fenêtre ne fait que la cacher).
         self.quit: Callable[[], None] | None = None
+        # Avertissement en haut des pages (bureau : mise à jour disponible) : (texte, bloquant).
+        self.banner: tuple[str, bool] | None = None
 
     @property
     def user(self):

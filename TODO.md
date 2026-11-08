@@ -69,6 +69,8 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - 🔔 Si l'envoi d'une notification échoue (D-Bus absent…), la tâche est quand même notée « notifiée » pour
   la journée (desktop-notifier ne signale pas l'échec).
 - 🎨 Icône « Post-it en vrac » : l'utiliser aussi comme favicon du site et icône de la PWA (étape 8).
+- 🔄 Scripts de mise à jour Windows (`update.ps1`) jamais exécutés ; `deploy/update.sh` à essayer sur le Pi.
+- 🏷️ Poser l'étiquette `v0.7.0` (et les suivantes) au moment des commits de version.
 - 🧺 Client bureau : icône dans la zone de notification (« tray ») avec Ouvrir / Nouvelle tâche / Quitter —
   demanderait une dépendance (pystray + AppIndicator sous Linux).
 - ⌨️ Raccourcis globaux GNOME (gsettings) écrits mais jamais essayés (poste de dev sous KDE).
@@ -106,3 +108,4 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - 📊 Kanbans pleine page, colonnes repliables / redimensionnables, reclassement = urgence affinée (v1.4).
 - 🖥️ Client bureau : fenêtre native, connexion par jeton, liens et fichiers locaux, 🔔 notifications (étape 7).
 - 🖥️ Client bureau en arrière-plan, raccourcis clavier globaux, installeurs Linux / Windows (v1.6).
+- 🏷️ Versions (0.7.0, API 1), bandeau « mise à jour disponible », scripts de mise à jour (v1.7).

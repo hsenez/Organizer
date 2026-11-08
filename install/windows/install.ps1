@@ -6,6 +6,7 @@ Installation du client bureau Organizer sous Windows (utilisateur courant, sans 
     install.bat -NoDesktop                       sans raccourci sur le Bureau
     install.bat -ShowKey "Ctrl+Alt+O" -NewKey "Ctrl+Alt+N"    autres raccourcis clavier
     install.bat -Uninstall                       retire les raccourcis (garde le dossier et .venv)
+    install.bat -Reuse                           reprend les options de la dernière installation (mise à jour)
 
 Étapes : vérifie Python >= 3.11, crée le venv .venv, installe requirements-client.txt, puis crée les
 raccourcis du menu Démarrer (avec leurs raccourcis clavier globaux), du Bureau et du démarrage de session.
@@ -16,7 +17,8 @@ param(
     [switch]$NoAutostart,
     [switch]$NoDesktop,
     [string]$ShowKey = "Ctrl+Alt+O",
-    [string]$NewKey = "Ctrl+Alt+N"
+    [string]$NewKey = "Ctrl+Alt+N",
+    [switch]$Reuse
 )
 $ErrorActionPreference = "Stop"
 
@@ -37,6 +39,17 @@ $Links = [ordered]@{
 }
 
 function Write-Step($Text) { Write-Host $Text -ForegroundColor Cyan }
+
+# Options retenues d'une installation à l'autre (même dossier que la configuration du client).
+$ConfigDir = if ($env:ORGANIZER_CLIENT_DIR) { $env:ORGANIZER_CLIENT_DIR } else { Join-Path $env:APPDATA "Organizer" }
+$OptionsFile = Join-Path $ConfigDir "install.json"
+if ($Reuse -and (Test-Path $OptionsFile)) {
+    $saved = Get-Content $OptionsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $NoAutostart = [bool]$saved.NoAutostart
+    $NoDesktop = [bool]$saved.NoDesktop
+    if ($saved.ShowKey) { $ShowKey = $saved.ShowKey }
+    if ($saved.NewKey) { $NewKey = $saved.NewKey }
+}
 
 function New-Link($Path, $Arguments, $Description, $Hotkey) {
     $shell = New-Object -ComObject WScript.Shell
@@ -95,6 +108,10 @@ if ($NoDesktop) { if (Test-Path $Links.Desktop) { Remove-Item $Links.Desktop } }
 else { New-Link $Links.Desktop "" "Organiseur de tâches" $null }
 if ($NoAutostart) { if (Test-Path $Links.Startup) { Remove-Item $Links.Startup } }
 else { New-Link $Links.Startup "--hidden" "Démarre Organizer en arrière-plan (rappels, raccourcis)" $null }
+
+New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
+@{ NoAutostart = [bool]$NoAutostart; NoDesktop = [bool]$NoDesktop; ShowKey = $ShowKey; NewKey = $NewKey } |
+    ConvertTo-Json | Set-Content -Path $OptionsFile -Encoding UTF8
 
 # Raccourcis clavier mémorisés pour les afficher dans l'application.
 Push-Location $Root

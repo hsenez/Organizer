@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 1.6 — 2026-11-08
+> Version : 1.7 — 2026-11-08
 
 ---
 
@@ -593,6 +593,30 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   `pythonw.exe` (sans console). Options : `-NoAutostart`, `-NoDesktop`, `-ShowKey`, `-NewKey`, `-Uninstall`
   (`uninstall.bat`).
 - Journal du client : `client.log` dans son dossier de configuration (utile quand il tourne sans console).
+- Les options choisies à l'installation sont retenues (`install.json` du dossier de configuration) ;
+  `--reuse` / `-Reuse` les reprend.
+
+### 10.3 🏷️ Versions et mises à jour
+
+- **Version du logiciel** `MAJEUR.MINEUR.CORRECTIF` (`organizer.__version__`) : `0.<étape>.<correctif>`
+  pendant le développement (0.7.0 = étape 7), **1.0.0** à la fin de l'étape 8 ; ensuite MINEUR pour une
+  nouveauté, CORRECTIF pour une correction, MAJEUR pour un changement qui casse la compatibilité. Une
+  étiquette git `v<version>` marque chaque version publiée.
+- **Version de l'API** (`organizer.API_VERSION`, entier) : augmentée seulement quand un client plus ancien
+  ne peut plus fonctionner avec le serveur.
+- Le serveur l'annonce sans connexion : `GET /api/v1/version` → `{"version": "0.7.0", "api": 1}`.
+- **Client bureau** : compare sa version à celle du serveur (au plus toutes les 30 min) et affiche un bandeau
+  en haut des pages : 🔄 mise à jour disponible (serveur plus récent), ⚠️ en rouge si l'API n'est plus
+  compatible, ℹ️ si c'est le serveur qui est en retard. Les deux versions sont aussi dans Réglages →
+  🔌 Connexion.
+- **Mettre à jour un poste** : `install/linux/update.sh` ou `install\windows\update.bat` — arrête le
+  client, `git pull --ff-only`, relance l'installeur avec les options retenues (dépendances, lanceur,
+  icônes, raccourcis), relance le client en arrière-plan s'il tournait. Un simple `git pull` suffit pour du
+  code seul, à condition de redémarrer le client (⏻ Quitter puis relancer).
+- **Mettre à jour le serveur** (Pi) : `deploy/update.sh` — `git pull`, `requirements.txt`, redémarrage du
+  service systemd, vérification de `/api/v1/version`. Les données (`data/`) ne sont pas touchées ; les
+  nouvelles tables sont créées au démarrage (une nouvelle colonne demanderait une migration).
+- Ordre conseillé : **le serveur d'abord**, puis les postes (le bandeau les y invite).
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
 
 ---
@@ -632,3 +656,4 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.4 | Kanbans : pleine largeur et pleine hauteur, colonnes plus étroites, repliables et redimensionnables (mémorisé par board) ; reclassement dans une colonne avec repère d'insertion, qui ajuste l'urgence et un rang manuel (table `task_rank`, `TaskService.move`, API `POST /tasks/{id}/move` : 46 chemins, 64 opérations) ; tri « Urgence » départagé par ce rang ; 190 tests + vérification dans Firefox |
 | 2026-11-08 | 1.5 | **Étape 7 livrée** : client bureau (`organizer/client`, `run_client.py`) — fenêtre native pywebview, connexion par jeton (`/connect`), `RemoteDataSource` (contrat identique aux services, vérifié par les tests), verrou de la fenêtre, ouverture des liens / fichiers locaux / pièces jointes, notifications des rappels (desktop-notifier 6.2.0), onglet de réglages 🔌 Connexion ; 206 tests + parcours vérifié dans Firefox et dans la fenêtre native |
 | 2026-11-08 | 1.6 | Client bureau : fonctionne en **arrière-plan** (fermer = cacher ; ⏻ Quitter dans le menu du compte), **instance unique** pilotée par la ligne de commande (`--new-task`, `--quit`, `--hidden`), **raccourcis clavier globaux** (KDE / GNOME / Windows), **installeurs** Linux (`install/linux/install.sh`) et Windows (`install/windows/install.bat`), icône de l'application « Post-it en vrac » (choisie parmi 5 propositions), journal `client.log` ; 221 tests + essais réels (fenêtre native, KDE) |
+| 2026-11-08 | 1.7 | **Versions** : `organizer.__version__` = 0.7.0 et `API_VERSION` = 1, route publique `GET /api/v1/version`, bandeau « mise à jour disponible » sur le client bureau ; scripts de mise à jour `install/linux/update.sh`, `install/windows/update.bat`, `deploy/update.sh` (Pi) ; options d'installation retenues (`--reuse`) ; 233 tests + mise à jour complète simulée |

@@ -26,6 +26,7 @@ import platform
 import secrets
 import socket
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -36,12 +37,19 @@ from nicegui import Client, app, ui
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from organizer import versioning
 from organizer.client import instance, system, window
 from organizer.client.api import ApiClient
 from organizer.client.config import ClientConfig, ConfigStore, normalize_server_url
 from organizer.client.notifications import NotifiedLog, ReminderNotifier, make_sender
 from organizer.client.remote import RemoteAccount, RemoteDataSource, RemoteTasks
-from organizer.core.errors import InvalidOperation, NotAuthenticated, OrganizerError, ServerUnreachable
+from organizer.core.errors import (
+    InvalidOperation,
+    NotAuthenticated,
+    NotFound,
+    OrganizerError,
+    ServerUnreachable,
+)
 from organizer.core.schemas import LoginOut, TaskOut, UserOut
 from organizer.ui.auth_shell import auth_shell
 from organizer.ui.context import UiContext
@@ -109,6 +117,7 @@ class DesktopClient:
         self.port = port
         self._api: ApiClient | None = None
         self._pages: list[tuple[Client, UiContext]] = []  # pages ouvertes (la fenêtre n'en montre qu'une)
+        self._version: tuple[float, versioning.VersionCheck | None] = (0.0, None)
         self._hidden_hint_shown = False
 
     # --- connexion ---
@@ -176,6 +185,9 @@ class DesktopClient:
         ctx = UiContext(RemoteDataSource(api, user), logout=self.logout)
         ctx.extra_settings["connection"] = ("🔌 Connexion", self.connection_settings)
         ctx.quit = self.quit
+        result = self.version_check()
+        if result is not None and not result.ok:
+            ctx.banner = (versioning.message(result, sys.platform), result.blocking)
         self._pages = [(c, x) for c, x in self._pages if c.id in Client.instances]
         self._pages.append((ui.context.client, ctx))
         return ctx
@@ -241,6 +253,24 @@ class DesktopClient:
                 "révoquer dans Réglages → 💻 Appareils."
             ).classes("text-xs text-gray-500 text-center w-full")
 
+    def version_check(self, max_age: float = 1800) -> versioning.VersionCheck | None:
+        """Compare ce poste au serveur (résultat gardé ``max_age`` secondes) ; None si on ne sait pas."""
+        checked_at, result = self._version
+        if result is not None and time.monotonic() - checked_at < max_age:
+            return result
+        api = self.api
+        if api is None:
+            return None
+        try:
+            data = api.call("GET", "/version", dict, auth=False)
+            result = versioning.check(str(data["version"]), int(data["api"]))
+        except NotFound:  # serveur antérieur à la route /version
+            result = versioning.check(None, None)
+        except (OrganizerError, KeyError, TypeError, ValueError):
+            return None
+        self._version = (time.monotonic(), result)
+        return result
+
     def connection_settings(self, ctx: UiContext) -> None:
         """Onglet de réglages « 🔌 Connexion » (client bureau)."""
         with ui.card().classes("w-full gap-3"):
@@ -249,6 +279,16 @@ class DesktopClient:
                 ui.label(f"🖧 Serveur : {self.config.server}").mark("connection-server")
                 ui.label(f"👤 Compte : {ctx.user.display_name} ({self.config.username})")
                 ui.label(f"🖥️ Cet appareil : {device_name()}")
+                result = self.version_check()
+                server_version = result.server if result and result.server else "?"
+                ui.label(f"🏷️ Versions : ce poste {versioning.__version__} · serveur {server_version}").mark(
+                    "connection-versions"
+                )
+                if result is not None and not result.ok:
+                    ui.label(versioning.message(result, sys.platform)).classes("text-amber-700")
+                ui.label(f"🔄 Mise à jour de ce poste : {versioning.update_command(sys.platform)}").classes(
+                    "text-gray-500"
+                )
                 ui.label(f"📂 Configuration : {self.store.path}").classes("text-gray-500")
             with ui.row().classes("gap-2"):
                 ui.button(

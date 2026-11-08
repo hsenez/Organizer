@@ -7,6 +7,7 @@ import math
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
+from organizer import API_VERSION, __version__
 from organizer.core.schemas import LoginIn, LoginOut, SessionOut, SetupIn, UserOut
 from organizer.core.services.account import AccountService
 from organizer.core.services.auth import ResolvedSession
@@ -17,8 +18,19 @@ from organizer.server.state import AppState
 router = APIRouter(tags=["Authentification"])
 
 
+class VersionOut(BaseModel):
+    version: str  # version du logiciel (MAJEUR.MINEUR.CORRECTIF)
+    api: int  # compatibilité client / serveur
+
+
 class SetupStatus(BaseModel):
     needs_setup: bool
+
+
+@router.get("/version", response_model=VersionOut)
+def version():
+    """Version du serveur (sans connexion) : le client bureau la compare à la sienne."""
+    return VersionOut(version=__version__, api=API_VERSION)
 
 
 @router.get("/setup", response_model=SetupStatus)

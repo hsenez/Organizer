@@ -1,7 +1,10 @@
 """Intégration du client bureau au bureau **Linux** (appelée par ``install/linux/install.sh``).
 
     python -m organizer.client.install [--uninstall] [--no-autostart] [--no-shortcuts]
-                                       [--show-key Ctrl+Alt+O] [--new-key Ctrl+Alt+N]
+                                       [--show-key Ctrl+Alt+O] [--new-key Ctrl+Alt+N] [--reuse]
+
+Les options choisies sont retenues (``install.json`` dans le dossier de configuration du client) ;
+``--reuse`` les reprend (mise à jour : ``install/linux/update.sh``).
 
 - Lanceur ``~/.local/share/applications/organizer.desktop`` (menu des applications), avec les actions
   « Nouvelle tâche » et « Quitter Organizer » (clic droit sur l'icône) ;
@@ -19,6 +22,7 @@ import argparse
 import ast
 import asyncio
 import contextlib
+import json
 import os
 import shutil
 import subprocess
@@ -38,6 +42,7 @@ DEFAULT_KEYS = {"show": "Ctrl+Alt+O", "new_task": "Ctrl+Alt+N"}
 KDE_ACTIONS = {"show": ("_launch", "Organizer"), "new_task": ("new-task", "Nouvelle tâche")}
 GNOME_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys"
 GNOME_PATH = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/organizer-{name}/"
+OPTIONS_FILE = "install.json"
 
 
 @dataclass
@@ -287,6 +292,26 @@ def gnome_unregister() -> None:
     _gsettings("set", GNOME_SCHEMA, "custom-keybindings", str([p for p in _gnome_list() if p not in mine]))
 
 
+# --- options retenues --------------------------------------------------------------------------------------
+
+
+def save_options(directory: Path, args: argparse.Namespace) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    options = {k: getattr(args, k) for k in ("no_autostart", "no_shortcuts", "show_key", "new_key")}
+    (directory / OPTIONS_FILE).write_text(json.dumps(options, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def reuse_options(directory: Path, args: argparse.Namespace) -> None:
+    """Reprend les options de la dernière installation (celles de la ligne de commande sinon)."""
+    try:
+        saved = json.loads((directory / OPTIONS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    for key in ("no_autostart", "no_shortcuts", "show_key", "new_key"):
+        if key in saved:
+            setattr(args, key, saved[key])
+
+
 # --- programme ---------------------------------------------------------------------------------------------
 
 
@@ -297,6 +322,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-shortcuts", action="store_true", help="ne pas déclarer de raccourcis clavier")
     parser.add_argument("--show-key", default=DEFAULT_KEYS["show"], help="ouvrir Organizer (Ctrl+Alt+O)")
     parser.add_argument("--new-key", default=DEFAULT_KEYS["new_task"], help="nouvelle tâche (Ctrl+Alt+N)")
+    parser.add_argument(
+        "--reuse", action="store_true", help="reprendre les options de la dernière installation"
+    )
     args = parser.parse_args(argv)
     if not sys.platform.startswith("linux"):
         print("Ce module s'occupe de Linux ; sous Windows, utilisez install\\windows\\install.bat.")
@@ -316,11 +344,14 @@ def main(argv: list[str] | None = None) -> int:
         print("🗑️ Lanceur, icônes, démarrage automatique et raccourcis retirés.")
         return 0
 
+    if args.reuse:
+        reuse_options(system.config_dir(), args)
     keys = {"show": args.show_key, "new_task": args.new_key}
     for combo in keys.values():
         qt_keycode(combo)  # erreur claire avant d'écrire quoi que ce soit
     python = sys.executable
     install_files(paths, python, root, autostart=not args.no_autostart)
+    save_options(system.config_dir(), args)
     refresh_caches(paths)
     print(f"✅ Lanceur « Organizer » ajouté au menu des applications ({paths.applications / DESKTOP_FILE})")
     print(

@@ -72,3 +72,15 @@ async def test_connect_use_and_logout(server, user: User):
 async def test_server_without_account(server, user: User):
     await connect(user)
     await user.should_see("aucun compte")
+
+
+async def test_version_banner(server, user: User, monkeypatch):
+    from organizer.server.api import auth as auth_routes
+
+    monkeypatch.setattr(auth_routes, "__version__", "9.0.0")  # le serveur a été mis à jour
+    server.users.create_user("alice", "motdepasse", "Alice")
+    await connect(user)
+    await user.should_see(marker="version-banner")
+    await user.should_see("Une mise à jour d'Organizer est disponible")
+    await user.open("/settings?tab=connection")
+    await user.should_see("serveur 9.0.0")

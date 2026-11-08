@@ -225,6 +225,20 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Icône : `scripts/make_icons.sh <svg>` régénère `organizer/client/assets/` (rsvg-convert + ImageMagick,
   outils de développement seulement ; les fichiers produits sont versionnés).
 
+## Versions et mises à jour
+
+- `organizer/__init__.py` : `__version__` (`0.<étape>.<correctif>` jusqu'à 1.0.0) et `API_VERSION`.
+  **À chaque version livrée** (commit confirmé par l'utilisateur) : augmenter `__version__`, l'indiquer dans
+  l'historique de `specifications.md`, proposer l'étiquette git `v<version>`. Augmenter `API_VERSION`
+  seulement si un client plus ancien ne peut plus fonctionner (route supprimée / modifiée de façon
+  incompatible) — préférer des changements compatibles (champs ajoutés avec valeur par défaut).
+- Comparaison et messages : `organizer/versioning.py` ; route publique `GET /api/v1/version` ; bandeau du
+  client : `DesktopClient.version_check` → `UiContext.banner` → `app_frame`.
+- Scripts : `install/linux/update.sh`, `install/windows/update.ps1` (+ `.bat`), `deploy/update.sh` (Pi). Les
+  scripts bash sont enveloppés dans une fonction `main` (git pull peut les modifier pendant leur exécution).
+  L'installeur retient ses options (`install.json`, `--reuse`).
+- `install.sh` fait `cd "$ROOT"` : `python -m organizer…` doit trouver le paquet d'où qu'on le lance.
+
 ## Tests
 
 - `tests/test_*.py` : services (base SQLite temporaire, date du jour figée au mercredi 4/11/2026).
@@ -254,7 +268,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 221 tests au total.
+- 233 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

@@ -154,6 +154,18 @@ def app_frame(
     else:
         classes = "w-full max-w-6xl mx-auto p-3 sm:p-6 gap-5 pb-24"
     with ui.column().classes(classes) as content:
+        if ctx.banner is not None:
+            text, blocking = ctx.banner
+            with (
+                ui.row()
+                .classes("w-full items-center gap-3 rounded-xl px-4 py-2 no-wrap")
+                .style(f"background: {'rgba(250, 82, 82, .12)' if blocking else 'rgba(92, 124, 250, .12)'}")
+                .mark("version-banner")
+            ):
+                ui.label(text).classes("text-sm flex-1")
+                ui.button("Détails", on_click=lambda: ui.navigate.to("/settings?tab=connection")).props(
+                    "flat dense no-caps"
+                )
         yield content
 
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from organizer import __version__
 from organizer.core.errors import OrganizerError
 from organizer.server import web_auth
 from organizer.server.api import api_router
@@ -27,6 +28,6 @@ def install(app: FastAPI, state: AppState) -> None:
 
 def create_api_app(state: AppState) -> FastAPI:
     """Application FastAPI sans interface (tests de l'API)."""
-    app = FastAPI(title="Organizer API")
+    app = FastAPI(title="Organizer API", version=__version__)
     install(app, state)
     return app
