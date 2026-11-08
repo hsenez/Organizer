@@ -689,8 +689,8 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
 - **Documentation de l'API** (`/docs`, `/redoc`, `/openapi.json`) réservée aux connectés : sinon redirection
   vers `/login?next=/docs` (401 pour le schéma JSON).
 - **Anti force brute par identifiant**, **journal des connexions**, **mots de passe de 12 caractères** : voir §3.
-- **Sauvegarde** : voir §10.5.
-- À venir (`TODO.md`) : restauration (`deploy/restore.sh`), guide Cloudflare (README).
+- **Sauvegarde et restauration** : voir §10.5.
+- À venir (`TODO.md`) : guide Cloudflare (README).
 
 ### 10.5 🗄️ Sauvegarde
 
@@ -724,6 +724,26 @@ et ne stocke que ce qui a changé, puis compresse lui-même. Nom proposé : `org
   retrouve).
 
 Chaque sauvegarde et chaque jeton refusé sont écrits dans le journal (`organizer.backup`).
+
+**Restauration** : `deploy/restore.sh <archive.tar | ->` (`organizer/server/restore.py`), en deux temps
+pour n'arrêter le serveur que quelques secondes :
+
+1. `prepare` (serveur en marche) : lecture de l'archive **en un seul passage** (fichier ou entrée standard,
+   ex. `borg export-tar … -`), extraction dans `<données>/.restauration-<date>/` et vérification : seuls
+   `organizer.db`, `uploads/<id>` et `manifest.json` sont admis (fichiers ordinaires ; tout autre élément,
+   lien ou chemin → refus), manifeste présent et dernier, liste, tailles et SHA-256 conformes, base intègre
+   et contenant les tables d'Organizer, `format_version` connue. Archive d'une version plus récente
+   d'Organizer : refusée sauf `--force` (code de sortie 3). Résumé affiché (date, version, utilisateurs,
+   tâches, projets, tags, pièces jointes), puis confirmation (`--yes` pour s'en passer ; obligatoire sans
+   terminal) ;
+2. arrêt du service, `swap` : base (et `-wal` / `-shm`) et `uploads/` actuels déplacés dans
+   `<données>/avant-restauration-<date>/` (+ `LISEZMOI.txt` : comment revenir en arrière), installation de
+   la sauvegarde (simples renommages) ; redémarrage, vérification de `/api/v1/version`.
+
+`--db-only` : la base seule (les pièces jointes de l'archive sont vérifiées mais pas extraites) ; une archive
+sans pièces jointes garde aussi celles du serveur. `--data-dir`, `--no-service` (serveur hors systemd,
+arrêté à la main). Dossier des données, port, adresse et HTTPS lus dans `deploy/server.conf`.
+Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `compact`) : README.
 
 ---
 
@@ -773,3 +793,4 @@ Chaque sauvegarde et chaque jeton refusé sont écrits dans le journal (`organiz
 | 2026-11-08 | 1.13 | Mise en ligne, étape 2d : option `--host` de `deploy/install.sh` (`ORGANIZER_HOST` écrit dans le service, retenue par `--reuse`, vérification finale sur la bonne adresse) ; 277 tests + installation en bac à sable avec `--host 127.0.0.1` |
 | 2026-11-08 | 1.14 | Mise en ligne, étape 2e : mots de passe de **12 caractères minimum** ; un ancien mot de passe plus court fonctionne toujours mais est repéré à la connexion (`security:weak_password`) → bandeau orange jusqu'au changement ; bandeaux généralisés (`UiContext.banners`, `Banner` : ton, action, cible) ; 282 tests + bandeau vérifié dans Firefox |
 | 2026-11-08 | 1.15 | Mise en ligne, étape 3 : **sauvegarde** (§10.5) — archive `.tar` non compressée produite au fil de l'envoi (image cohérente de la base par l'API de sauvegarde SQLite, pièces jointes, `manifest.json` avec empreintes), `GET /api/v1/admin/backup` (admin ou jeton), **jetons de sauvegarde** (table `api_key` : sans expiration, révocables, export seul, réseau local seulement, routes `/admin/backup-keys`), onglet ⚙️ Réglages → 🗄️ Données (web : téléchargement ; client bureau : dossier Téléchargements) ; 299 tests + téléchargement par `curl` vérifié sur un vrai serveur (30 Mo, réseau local, proxy) |
+| 2026-11-08 | 1.16 | Mise en ligne, étape 4 : **restauration** — `deploy/restore.sh` (vérification complète sans arrêter le serveur, lecture en flux depuis `borg export-tar … -`, confirmation, données actuelles mises de côté, redémarrage vérifié ; `--db-only`, `--force`, `--yes`, `--no-service`), `organizer/server/restore.py` (`prepare` / `swap`) ; `deploy/common.sh` : `org_probe_address`, `org_load_conf`, `ORG_WAIT_TRIES` ; script borg quotidien dans le README ; 318 tests + circuit complet essayé avec borg 1.4 et un vrai serveur (sauvegarde, dédoublonnage, restauration, cas d'échec) |

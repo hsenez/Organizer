@@ -692,6 +692,9 @@ def _data(ctx: UiContext) -> None:
             .props("unelevated no-caps")
             .mark("backup-download")
         )
+        ui.label("Pour restaurer une archive sur le serveur : deploy/restore.sh (voir le README).").classes(
+            "text-xs text-gray-500"
+        )
     _backup_keys(ctx)
 
 

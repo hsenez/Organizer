@@ -263,14 +263,8 @@ CONF
 # 5. VÉRIFICATION FINALE
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════
 
-# Adresse à interroger : le Pi lui-même (127.0.0.1) quand le serveur écoute partout ou seulement en local,
-# sinon l'adresse précise demandée (--host 192.168.1.20).
-case "$host" in
-    0.0.0.0|127.0.0.1|localhost) probe="127.0.0.1" ;;
-    ::|::1) probe="[::1]" ;;
-    *:*) probe="[$host]" ;;
-    *) probe="$host" ;;
-esac
+# Adresse à interroger (voir org_probe_address) : le Pi lui-même, ou l'adresse précise demandée.
+probe="$(org_probe_address "$host")"
 # org_wait_server interroge http(s)://<adresse>:<port>/api/v1/version pendant 40 s au plus : si le
 # serveur répond, l'installation a réussi et l'on connaît la version qui tourne réellement.
 if version="$(org_wait_server "$port" "$https" "$probe")"; then

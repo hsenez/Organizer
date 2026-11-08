@@ -170,7 +170,68 @@ L'archive `.tar` (non compressée, pour qu'un outil comme borg dédoublonne d'un
 copie cohérente de la base, les pièces jointes et un `manifest.json` (date, version, empreintes). Le jeton ne
 sert qu'à cela, n'expire pas, se révoque dans les réglages, et ne fonctionne que depuis le réseau local
 (jamais par Internet). Chaque sauvegarde est notée dans le journal : `journalctl -u organizer | grep
-organizer.backup`. Restauration et exemples borg : à venir (`deploy/restore.sh`).
+organizer.backup`.
+
+#### Sauvegarde quotidienne avec borg
+
+Script à placer sur le Pi (ex. `~/bin/organizer-backup.sh`, rendu exécutable par `chmod +x`). Le dépôt borg
+est créé une fois : `borg init -e repokey /mnt/Donnees/borg/organizer` (ou `-e none` sans chiffrement).
+Testé avec borg 1.4 ; `import-tar`, `--glob-archives` et `compact` existent depuis borg 1.2 (Raspberry Pi
+OS) ; la syntaxe de borg 2 est différente.
+
+```bash
+#!/usr/bin/env bash
+# Sauvegarde quotidienne d'Organizer dans un dépôt borg (sur le Pi, lancée par cron ou un timer systemd).
+set -uo pipefail
+export BORG_REPO="${BORG_REPO:-/mnt/Donnees/borg/organizer}"          # dépôt créé une fois par « borg init »
+# export BORG_PASSCOMMAND="cat $HOME/.config/borg-organizer.pass"      # si le dépôt est chiffré
+TOKEN="$(cat "$HOME/.config/organizer-backup.token")"
+URL="${ORGANIZER_URL:-http://127.0.0.1:2603}/api/v1/admin/backup"
+NAME="organizer-$(date +%Y-%m-%dT%H:%M:%S)"
+
+# L'archive passe directement de curl à borg, sans fichier intermédiaire sur la carte SD.
+curl -fsS -H "Authorization: Bearer $TOKEN" "$URL" | borg import-tar --compression zstd "::$NAME" -
+status=("${PIPESTATUS[@]}")
+if [[ ${status[1]} -ne 0 ]]; then                  # borg a échoué : il n'a rien enregistré
+    echo "❌ Sauvegarde d'Organizer : échec de borg" >&2; exit 1
+fi
+if [[ ${status[0]} -ne 0 ]]; then                  # téléchargement interrompu : archive incomplète
+    borg delete "::$NAME"
+    echo "❌ Sauvegarde d'Organizer : téléchargement échoué (archive incomplète supprimée)" >&2; exit 1
+fi
+# Garder 14 jours, 8 semaines et 12 mois de sauvegardes, puis libérer la place.
+borg prune --glob-archives 'organizer-*' --keep-daily 14 --keep-weekly 8 --keep-monthly 12 && borg compact
+```
+
+Lancement chaque nuit à 3 h 30 : `crontab -e`, puis la ligne
+`30 3 * * * $HOME/bin/organizer-backup.sh >> $HOME/organizer-backup.log 2>&1`.
+Liste des sauvegardes : `borg list /mnt/Donnees/borg/organizer`.
+
+⚠️ L'archive borg n'est supprimée en cas d'échec que si c'est le **téléchargement** qui a échoué (archive
+incomplète) : un simple `borg delete` sur toute erreur effacerait une bonne sauvegarde déjà présente sous le
+même nom.
+
+### ♻️ Restauration
+
+Sur le Pi, depuis le dossier du projet :
+
+```bash
+deploy/restore.sh ~/organizer-20261108-203451.tar           # archive téléchargée (copiée sur le Pi : scp)
+borg export-tar /mnt/Donnees/borg/organizer::organizer-2026-11-08T03:30:00 - | deploy/restore.sh -
+deploy/restore.sh --db-only organizer.tar                   # la base seule (pièces jointes inchangées)
+```
+
+Le script vérifie d'abord l'archive **sans arrêter le serveur** (contenu, empreintes, intégrité de la base,
+version), affiche ce qu'elle contient (date, nombre de tâches…) et demande confirmation. Il arrête ensuite
+le service quelques secondes, met les données actuelles **de côté** dans
+`<données>/avant-restauration-<date>/` (rien n'est effacé ; un `LISEZMOI.txt` explique comment y revenir),
+installe la sauvegarde, redémarre et vérifie que le serveur répond. Une archive abîmée ou incomplète est
+refusée sans rien toucher ; une archive d'une version plus récente d'Organizer aussi (mettre d'abord le
+serveur à jour, ou `--force`).
+
+Après une restauration, tout revient à l'instant de la sauvegarde, y compris les comptes, les mots de passe,
+les appareils connectés et les jetons de sauvegarde : un appareil connecté depuis devra se reconnecter, un
+jeton créé depuis n'existera plus.
 
 **Mise à jour du serveur** : `deploy/update.sh` (`git pull`, puis l'installeur avec les mêmes options :
 dépendances, service régénéré s'il a changé, redémarrage, vérification de la version). Mettre à jour le

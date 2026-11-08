@@ -292,7 +292,17 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `ds.save_backup(uploads, folder)` (client bureau seulement : `ApiClient.save` en flux vers
   `system.downloads_dir()`, appelé par `run.io_bound`). Jetons : `ds.account.backup_keys / create_backup_key
   / revoke_backup_key`.
-- Tests : `tests/test_backup.py` ; simulateur : `await user.download.next()` récupère le téléchargement.
+- Restauration : `organizer/server/restore.py` (`prepare` en un passage `tarfile` mode `r|*` → dossier
+  `.restauration-<date>` vérifié ; `swap` = renommages, anciennes données dans `avant-restauration-<date>/`)
+  piloté par `deploy/restore.sh` (arrêt / redémarrage du service entre les deux). Pas de
+  `tarfile` `filter=` (absent de Python 3.11.2 du Pi) : les noms admis sont vérifiés un par un et chaque
+  fichier est écrit à la main.
+- Tests : `tests/test_backup.py`, `tests/test_restore.py` (script de bout en bout avec faux `systemctl` /
+  `sudo` en tête du `PATH`, `ORG_WAIT_TRIES=1`) ; simulateur : `await user.download.next()` récupère le
+  téléchargement.
+- ⚠️ Faux service pour un essai manuel : enregistrer le PID **du programme python** (`nohup … &` sur sa
+  propre ligne, pas `cd … && nohup … &`, dont `$!` est un sous-shell) ; sinon « stop » ne l'arrête pas et
+  l'ancien serveur continue de servir les fichiers déplacés (faux échec de restauration constaté).
 
 ## Versions et mises à jour
 
@@ -347,7 +357,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 299 tests au total.
+- 318 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
