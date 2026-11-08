@@ -313,7 +313,16 @@ def _fail(message: str, code: int = 1) -> int:
     return code
 
 
+def _utf8_output() -> None:
+    """Affichage en UTF-8 même si la langue du système est en Latin-1 (cas rencontré sur le Pi)."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None, stdin: Callable[[], IO[bytes]] = lambda: sys.stdin.buffer) -> int:
+    _utf8_output()
     parser = argparse.ArgumentParser(
         prog="python -m organizer.server.restore", description=__doc__.split("\n")[0]
     )

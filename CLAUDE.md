@@ -435,7 +435,10 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Mise en ligne (version 0.9.0) : derrière Cloudflare Tunnel (cookie `Secure`, en-têtes, vraie IP),
   durcissement (docs, anti force brute par identifiant, journal, `--host`, mots de passe de 12), sauvegarde
   / restauration (borg), guide dans le README. Pièces jointes : sélecteur réparé, dépôt de fichiers.
-- ⚠️ Toujours jamais exécuté sous **Python 3.11** (le téléchargement d'un interpréteur 3.11 a été refusé
-  par les garde-fous de l'outil) : à valider sur le Pi (`pytest`) ou avec un Python 3.11 local.
-- ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
+- Tests lancés sur le Pi (**Python 3.11.2**) : 345 / 350 au premier passage ; deux causes corrigées :
+  `tarfile` `extract(filter=…)` absent avant 3.11.4 (ne jamais l'utiliser, même dans un test) ; **langue du
+  Pi en Latin-1** → sortie de Python en Latin-1, plantage sur le premier emoji (`deploy/restore.sh`). D'où
+  `PYTHONUTF8=1` dans le service généré et dans `restore.sh` (+ `PYTHONIOENCODING=utf-8`),
+  `restore._utf8_output()`, et les tests du script lancés avec `PYTHONIOENCODING=latin-1`. Tout nouveau
+  programme Python lancé en ligne de commande sur le Pi doit en faire autant.
 - Feuille de route complète : `specifications.md` §11.

@@ -130,6 +130,8 @@ Type=simple
 User=$ORG_USER
 Group=$ORG_GROUP
 WorkingDirectory=$ORG_ROOT
+# Python en UTF-8 quelle que soit la langue du système (journal, messages accentués).
+Environment="PYTHONUTF8=1"
 Environment="ORGANIZER_DATA_DIR=$data_dir"
 Environment="ORGANIZER_HOST=$host"
 Environment="ORGANIZER_PORT=$port"

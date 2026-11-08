@@ -42,6 +42,7 @@ def test_service_runs_as_the_calling_user():
     assert "Restart=always" in text and "WantedBy=multi-user.target" in text
     assert f'Environment="ORGANIZER_DATA_DIR={ROOT}/data"' in text and 'ORGANIZER_PORT=2603"' in text
     assert 'Environment="ORGANIZER_HOST=0.0.0.0"' in text  # écoute sur tout le réseau par défaut
+    assert 'Environment="PYTHONUTF8=1"' in text  # journal en UTF-8 même si le Pi est réglé en Latin-1
     assert "ORGANIZER_SSL" not in text
 
 

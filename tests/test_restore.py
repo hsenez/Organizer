@@ -239,6 +239,8 @@ def fake_systemctl(folder: Path) -> Path:
 
 def run_script(*args: str, stdin: bytes | None = None, path_prefix: Path | None = None, **env: str):
     clean = {k: v for k, v in os.environ.items() if k not in ("SUDO_USER", "ORG_EUID")}
+    # Comme sur le Pi, dont la langue du système est en Latin-1 : sortie de Python en Latin-1 par défaut.
+    clean.update(PYTHONIOENCODING="latin-1", PYTHONUTF8="0")
     if path_prefix is not None:
         clean["PATH"] = f"{path_prefix}:{clean['PATH']}"
     return subprocess.run(
@@ -311,3 +313,15 @@ def test_script_refuses_damaged_archive_without_touching_anything(state, alice, 
     assert not log.exists()  # service jamais arrêté
     assert titles(data_dir) == ["Après", "Avant"]
     assert not list(data_dir.glob(".restauration-*")) and not list(data_dir.glob("avant-restauration-*"))
+
+
+def test_summary_printed_even_with_a_latin1_terminal(archive, tmp_path, monkeypatch):
+    """Langue du système en Latin-1 (cas du Pi) : le résumé et ses emojis s'affichent quand même."""
+    import io
+    import sys
+
+    out = io.TextIOWrapper(io.BytesIO(), encoding="latin-1")
+    monkeypatch.setattr(sys, "stdout", out)
+    assert restore.main(["prepare", "--staging", str(tmp_path / "s"), str(archive)]) == 0
+    out.flush()
+    assert "📅 Sauvegarde du" in out.buffer.getvalue().decode("utf-8")

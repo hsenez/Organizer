@@ -27,6 +27,9 @@
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
+# Sorties de Python en UTF-8, quelle que soit la langue du système (un Pi réglé en Latin-1 faisait planter
+# l'affichage du résumé sur le premier emoji).
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
 
 ORG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=deploy/common.sh

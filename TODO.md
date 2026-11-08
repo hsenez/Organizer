@@ -57,8 +57,9 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - 📊 Boards personnalisés : l'ordre y est libre (il ne touche pas l'urgence) — à confirmer à l'usage.
 
 - 📋 **Vue compacte** de la liste (une ligne par tâche, comme les résultats de Ctrl+K).
-- 🐍 Faire tourner les tests sous **Python 3.11** (version du Pi) — jamais exécutés dans cette version
-  (sur le Pi : `.venv/bin/pip install pytest pytest-asyncio && .venv/bin/pytest`).
+- 🐍 Tests sous **Python 3.11** (version du Pi) : lancés une première fois (5 échecs, corrigés : option
+  `tarfile` absente de 3.11.2, Pi réglé en Latin-1) ; à relancer sur le Pi après la mise à jour
+  (`.venv/bin/pytest`).
 - 📲 PWA jamais essayée sur un vrai téléphone (iPhone en HTTP, Android en HTTPS) : à faire une fois en ligne
   par Cloudflare Tunnel (mkcert devient inutile, sauf pour du HTTPS local).
 - ✏️ Temps réel : si la tâche ouverte dans l'éditeur est modifiée ailleurs, l'éditeur ne se met pas à jour

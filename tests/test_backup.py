@@ -90,7 +90,9 @@ def test_archive_contents_and_manifest(state, alice, tmp_path):
         assert len(content) == entry["size"] and hashlib.sha256(content).hexdigest() == entry["sha256"]
 
     # La base extraite est autonome (un seul fichier, sans -wal) et lisible.
-    tar.extract("organizer.db", tmp_path / "out", filter="data")
+    # (sans ``tar.extract(filter=…)`` : l'option n'existe qu'à partir de Python 3.11.4, le Pi a la 3.11.2)
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "organizer.db").write_bytes(tar.extractfile("organizer.db").read())
     db = sqlite3.connect(tmp_path / "out" / "organizer.db")
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
     assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
