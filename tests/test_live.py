@@ -143,3 +143,18 @@ def test_desktop_listener_receives_changes(live_server):
     finally:
         listener.stop()
         api.close()
+
+
+def test_server_stop_does_not_wait_for_event_streams(monkeypatch, tmp_path):
+    """Un flux temps réel ouvert (client bureau) ne se termine jamais : sans limite, l'arrêt du serveur
+    (systemctl restart) attendait jusqu'à ce que systemd le force, au bout de 90 s."""
+    from types import SimpleNamespace
+
+    from organizer.server import app as server_app
+
+    seen: dict = {}
+    monkeypatch.setattr(server_app, "configure_logging", lambda: None)
+    monkeypatch.setattr(server_app, "build", lambda: SimpleNamespace(settings=Settings(data_dir=tmp_path)))
+    monkeypatch.setattr(server_app.ui, "run", lambda **kwargs: seen.update(kwargs))
+    server_app.main()
+    assert seen["timeout_graceful_shutdown"] == server_app.SHUTDOWN_GRACE_SECONDS <= 5

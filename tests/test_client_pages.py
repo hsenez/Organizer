@@ -116,3 +116,23 @@ async def test_backup_saved_to_downloads_on_desktop(server, user: User, tmp_path
     (archive,) = folder.glob("organizer-*.tar")
     await user.should_see("Sauvegarde enregistrée")
     assert archive.stat().st_size > 0 and not list(folder.glob("*.part"))
+
+
+async def test_dropped_file_paths_are_read_on_desktop(server, user: User, tmp_path):
+    """Client bureau : un fichier déposé connu seulement par son adresse file:// est lu sur le poste."""
+    account = server.users.create_user("alice", "motdepasse-12", "Alice")
+    sv = server.services_for(account)
+    task = sv.tasks.create(TaskCreate(title="Devis"))
+    document = tmp_path / "devis signé.txt"
+    document.write_text("signé")
+    await connect(user)
+    await user.should_see("Bonjour Alice")
+    await user.open("/tasks")
+    await user.should_see(marker=f"task-card-{task.id}")
+    uri = "file://" + str(document).replace(" ", "%20")
+    user.find(marker="file-drop").trigger("paths", {"kind": "card", "task": task.id, "uris": [uri]})
+    await user.should_see("joint(s) à « Devis »")
+    (link,) = sv.tasks.get(task.id).links
+    assert link.label == "devis signé.txt"
+    _, path = sv.attachments.get(link.target)
+    assert path.read_text() == "signé"

@@ -341,7 +341,17 @@ S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
   « 🔗 Lié à l'échéance » (jours avant) ou « 📌 Date fixe ».
 - **Sous-tâches** dans l'éditeur du parent : case à cocher pour terminer, clic pour ouvrir, ajout rapide.
   Quand la dernière est cochée : fenêtre « 🎉 Terminer la tâche parente ? ».
-- **Liens** : saisie libre (hyperlien ou chemin détecté automatiquement), bouton « 📎 Joindre un fichier ».
+- **Liens** : saisie libre (hyperlien ou chemin détecté automatiquement), bouton « 📎 Joindre un fichier »
+  (plusieurs fichiers à la fois), et **dépôt de fichiers** (glissés depuis le système) n'importe où sur
+  l'éditeur, qui s'encadre « 📎 Déposer pour joindre » pendant le survol, ou sur la **carte / ligne d'une
+  tâche** (n'importe quelle page), encadrée pendant le survol, qui joint le fichier à cette tâche. Sur une
+  nouvelle tâche pas encore créée : message « Donnez d'abord un titre ». Ailleurs sur la page, le dépôt est
+  refusé (le navigateur ou la fenêtre du client bureau n'ouvre pas le fichier à la place de l'application).
+  Si le moteur ne transmet que l'adresse `file://` du fichier (sans son contenu), le client bureau lit le
+  fichier sur le poste ; un navigateur affiche un message. Fenêtre du client bureau sous Linux : WebKitGTK
+  ne donne à la page ni le contenu ni l'adresse (adresses `file://` masquées) ; la fenêtre capte les
+  adresses côté GTK (`drag-data-received`, `client/window.py`) et les relaie à la page
+  (`window.organizerNativeDrop`). Dépôts sans cible notés dans le journal.
 
 ### 6.1 ↩️ Annuler / rétablir (général)
 
@@ -794,3 +804,5 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-08 | 1.14 | Mise en ligne, étape 2e : mots de passe de **12 caractères minimum** ; un ancien mot de passe plus court fonctionne toujours mais est repéré à la connexion (`security:weak_password`) → bandeau orange jusqu'au changement ; bandeaux généralisés (`UiContext.banners`, `Banner` : ton, action, cible) ; 282 tests + bandeau vérifié dans Firefox |
 | 2026-11-08 | 1.15 | Mise en ligne, étape 3 : **sauvegarde** (§10.5) — archive `.tar` non compressée produite au fil de l'envoi (image cohérente de la base par l'API de sauvegarde SQLite, pièces jointes, `manifest.json` avec empreintes), `GET /api/v1/admin/backup` (admin ou jeton), **jetons de sauvegarde** (table `api_key` : sans expiration, révocables, export seul, réseau local seulement, routes `/admin/backup-keys`), onglet ⚙️ Réglages → 🗄️ Données (web : téléchargement ; client bureau : dossier Téléchargements) ; 299 tests + téléchargement par `curl` vérifié sur un vrai serveur (30 Mo, réseau local, proxy) |
 | 2026-11-08 | 1.16 | Mise en ligne, étape 4 : **restauration** — `deploy/restore.sh` (vérification complète sans arrêter le serveur, lecture en flux depuis `borg export-tar … -`, confirmation, données actuelles mises de côté, redémarrage vérifié ; `--db-only`, `--force`, `--yes`, `--no-service`), `organizer/server/restore.py` (`prepare` / `swap`) ; `deploy/common.sh` : `org_probe_address`, `org_load_conf`, `ORG_WAIT_TRIES` ; script borg quotidien dans le README ; 318 tests + circuit complet essayé avec borg 1.4 et un vrai serveur (sauvegarde, dédoublonnage, restauration, cas d'échec) |
+| 2026-11-08 | 1.16.1 | Correction : « 📎 Joindre un fichier » n'ouvrait pas le sélecteur dans la fenêtre du client bureau (WebKitGTK ; probablement aussi Safari et Chrome) — l'ordre faisait un aller-retour par le serveur et perdait le geste de l'utilisateur ; ouvert désormais directement dans le navigateur. Ajouts : plusieurs fichiers à la fois, **dépôt de fichiers** sur l'éditeur ou sur la carte d'une tâche (`components/file_drop.*`), repli par adresses `file://` lues par le client bureau, même fichier joignable deux fois ; 324 tests + vérifié dans WebKitGTK (sélecteur, dépôt, repli), Vivaldi (vrai glisser de fichier par CDP) et Firefox |
+| 2026-11-08 | 1.16.2 | Dépôt de fichiers depuis Dolphin dans la fenêtre du client bureau : WebKitGTK masque fichiers et adresses à la page (constaté dans le journal de diagnostic) → adresses captées côté GTK et relayées à la page, fichiers lus sur le poste. **Redémarrage du serveur** : il attendait la fin du flux temps réel des clients bureau (jamais) jusqu'à l'arrêt forcé par systemd après 90 s → attente limitée à 3 s (`timeout_graceful_shutdown`) ; 326 tests |

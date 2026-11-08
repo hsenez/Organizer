@@ -306,6 +306,81 @@ async def test_editor_link_path_is_copied_on_web(user: User):
     assert [link.kind.value for link in sv.tasks.get(task.id).links] == ["path"]
 
 
+def _upload_files(user: User, *files: tuple[str, bytes]):
+    """Simule la fin d'un envoi de fichiers (choisis dans le sélecteur ou déposés sur l'éditeur)."""
+    from nicegui.elements.upload_files import SmallFileUpload
+
+    upload = user.find(marker="editor-upload").elements.pop()
+    return upload.handle_uploads([SmallFileUpload(name, "text/plain", data) for name, data in files])
+
+
+async def test_editor_attachments_button_and_drop_zone(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Facture"))
+    await user.open("/tasks")
+    user.find(marker=f"task-card-{task.id}").click()
+    await user.should_see(marker="editor-attach")
+
+    upload = user.find(marker="editor-upload").elements.pop()
+    # Le bouton ouvre le sélecteur dans le navigateur même, sans passer par le serveur (sinon WebKit — fenêtre
+    # du client bureau —, Safari et Chrome refusent de l'ouvrir : le geste de l'utilisateur est perdu).
+    (button,) = user.find(marker="editor-attach").elements
+    listeners = [lst for lst in button._event_listeners.values() if lst.type == "click"]
+    assert [(lst.handler, lst.js_handler) for lst in listeners] == [
+        (None, f"() => runMethod({upload.id}, 'pickFiles', [])")
+    ]
+    # Les fichiers déposés n'importe où sur l'éditeur vont à ce même composant d'envoi.
+    (card,) = user.find(marker="task-editor").elements
+    assert card.props["data-file-drop"] == str(upload.id)
+    assert user.find(marker="file-drop").elements  # composant de dépôt présent sur la page
+
+    await _upload_files(user, ("devis.txt", b"devis"), ("plan.txt", b"plan"))
+    await user.should_see("plan.txt")
+    links = sv.tasks.get(task.id).links
+    assert sorted(link.label for link in links) == ["devis.txt", "plan.txt"]
+    assert {link.kind.value for link in links} == {"attachment"}
+
+
+async def test_files_dropped_on_a_card_are_attached_to_its_task(user: User):
+    from nicegui.elements.upload_files import SmallFileUpload
+
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Devis"))
+    await user.open("/tasks")
+    await user.should_see(marker=f"task-card-{task.id}")
+    drop = user.find(marker="file-drop")
+    # Le navigateur annonce la carte visée, puis envoie les fichiers par le composant d'envoi de la page.
+    drop.trigger("card-files", {"task": task.id, "names": ["devis.txt"]})
+    upload = user.find(marker="card-upload").elements.pop()
+    await upload.handle_uploads([SmallFileUpload("devis.txt", "text/plain", b"devis")])
+    await user.should_see("joint à « Devis »")
+    assert [link.label for link in sv.tasks.get(task.id).links] == ["devis.txt"]
+
+
+async def test_dropped_file_paths_need_the_desktop_client(user: User):
+    """Moteur qui ne donne que l'adresse file:// d'un fichier déposé : seul le client bureau peut le lire."""
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Devis"))
+    await user.open("/tasks")
+    user.find(marker="file-drop").trigger(
+        "paths", {"kind": "card", "task": task.id, "uris": ["file:///etc/hosts"]}
+    )
+    await user.should_see("n'a pas transmis le contenu")
+    assert sv.tasks.get(task.id).links == []
+    user.find(marker="file-drop").trigger("missed", {"target": "div", "types": ["Files"], "files": 0})
+    await user.should_see("Déposez le fichier sur une tâche")
+
+
+async def test_editor_drop_on_draft_asks_for_a_title(user: User):
+    sv = await login(user)
+    await user.open("/tasks")
+    user.find(marker="fab-add").click()
+    await user.should_see("Nouvelle tâche")
+    await _upload_files(user, ("devis.txt", b"devis"))
+    await user.should_see("Donnez d'abord un titre")
+    assert sv.tasks.list() == []
+
+
 async def test_card_menu_changes_status(user: User):
     sv = await login(user)
     task = sv.tasks.create(TaskCreate(title="Lessive"))
@@ -648,3 +723,12 @@ async def test_matrix_default_filter_is_not_counted(user: User):
     await user.open("/matrix")
     await user.should_see("🎛️ Filtres")
     await user.should_not_see("🎛️ Filtres (1)")
+
+
+def test_local_path_from_file_uri():
+    from pathlib import Path
+
+    from organizer.ui.components.file_drop import local_path
+
+    assert local_path("file:///home/alice/devis%20sign%C3%A9.pdf") == Path("/home/alice/devis signé.pdf")
+    assert local_path("file:///C:/Users/Alice/a.txt") == Path("C:/Users/Alice/a.txt")

@@ -79,6 +79,10 @@ ouvrent directement l'application. Par rapport au site :
 - Réglages (projets, tags, thème, appareils connectés, comptes des utilisateurs…) : menu du compte →
   ⚙️ Réglages, ou `http://<ip>:2603/settings`.
 - Lien direct vers une tâche : `http://<ip>:2603/tasks?task=<numéro>` (`?task=new` : nouvelle tâche).
+- **Pièces jointes** : dans l'éditeur d'une tâche, « 📎 Joindre un fichier » (plusieurs à la fois possible),
+  ou **déposez les fichiers** depuis le gestionnaire de fichiers sur l'éditeur ouvert ou directement sur la
+  **carte** d'une tâche (liste, kanbans, accueil… ; navigateur et client bureau). Le fichier est **copié**
+  sur le serveur (50 Mo max chacun).
 
 **Glisser-déposer** (kanbans, matrice, et partout où il y a des cartes) :
 

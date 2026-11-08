@@ -20,6 +20,12 @@ from organizer.core.enums import Importance, LinkKind, Status, TaskKind, Urgency
 from organizer.core.models import utcnow
 from organizer.core.schemas import LinkIn, TagIn, TaskCreate, TaskOut, TaskPatch
 from organizer.ui import format as fmt
+from organizer.ui.components.file_drop import (
+    attach_local_files,
+    file_drop_zone,
+    open_file_picker,
+    reusable_upload,
+)
 from organizer.ui.components.level_slider import LevelSlider
 from organizer.ui.components.markdown_editor import MarkdownEditor
 from organizer.ui.components.tag_chips import color_tag_select
@@ -36,9 +42,19 @@ class TaskEditor:
         self.draft: dict | None = None  # champs de TaskCreate d'une tâche pas encore créée
         with (
             ui.dialog().props("position=right full-height").mark("task-editor-dialog") as self.dialog,
-            ui.card().classes("w-[660px] max-w-[100vw] h-full rounded-none p-0 gap-0").mark("task-editor"),
+            ui.card()
+            .classes("w-[660px] max-w-[100vw] h-full rounded-none p-0 gap-0")
+            .mark("task-editor") as card,
         ):
             self.body = ui.column().classes("w-full h-full overflow-y-auto p-4 sm:p-6 gap-4 no-wrap")
+            # Envoi de fichiers, invisible et permanent : le bouton « Joindre un fichier » ouvre son
+            # sélecteur, et les fichiers déposés n'importe où sur l'éditeur lui sont confiés.
+            self.upload = reusable_upload(
+                ui.upload(auto_upload=True, multiple=True, on_upload=self._uploaded)
+                .classes("hidden")
+                .mark("editor-upload")
+            )
+        file_drop_zone(card, self.upload)
         self.dialog.on("hide", self._on_hide)
 
     # ==================================================================================================
@@ -593,13 +609,31 @@ class TaskEditor:
                     self._after_links_change()
 
             new.on("keydown.enter", add)
-            # Composant d'envoi invisible : le bouton ouvre directement le sélecteur de fichiers.
-            upload = ui.upload(auto_upload=True, on_upload=self._uploaded).classes("hidden")
-            ui.button("📎 Joindre un fichier", on_click=lambda: upload.run_method("pickFiles")).props(
-                "flat dense no-caps"
-            ).tooltip("Envoyer un fichier sur le serveur (50 Mo max)")
+            open_file_picker(
+                ui.button("📎 Joindre un fichier").props("flat dense no-caps").mark("editor-attach"),
+                self.upload,
+            ).tooltip("Envoyer des fichiers sur le serveur (50 Mo max chacun) — ou déposez-les sur l'éditeur")
+
+    def _can_attach(self) -> bool:
+        if self.task is None or self.is_draft or not self.dialog.value:
+            ui.notify(
+                "Donnez d'abord un titre à la tâche, puis joignez le fichier.", type="warning", position="top"
+            )
+            return False
+        return True
+
+    def attach_local_files(self, paths: list) -> None:
+        """Fichiers du poste déposés sur l'éditeur, connus par leur chemin (client bureau)."""
+        if not self._can_attach():
+            return
+        names = attach_local_files(self.ctx, self.task.id, paths)
+        if names:
+            ui.notify(f"📎 {', '.join(names)} ajouté(s)", position="top")
+            self._after_links_change()
 
     async def _uploaded(self, e: events.UploadEventArguments) -> None:
+        if not self._can_attach():
+            return
         data = await e.file.read()
         link = self.ctx.call(
             self.ds.attachments.upload, self.task.id, e.file.name, io.BytesIO(data), e.file.content_type

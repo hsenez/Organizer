@@ -404,3 +404,14 @@ def test_xdg_downloads_dir(tmp_path, monkeypatch):
     )
     assert system.downloads_dir() == tmp_path / "Téléchargements"
     assert (tmp_path / "Téléchargements").is_dir()
+
+
+def test_dropped_file_uris_from_gtk():
+    from organizer.client.window import file_uris
+
+    assert file_uris(["file:///home/a/x.txt", "https://exemple.org"]) == ["file:///home/a/x.txt"]
+    assert file_uris(None, "file:///home/a/x.txt\r\nfile:///home/a/y%20z.txt\n") == [
+        "file:///home/a/x.txt",
+        "file:///home/a/y%20z.txt",
+    ]
+    assert file_uris([], None) == []

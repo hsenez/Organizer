@@ -10,7 +10,7 @@
 
 | Type | Ce qui est stocké | Web / téléphone | Client bureau (étape 7) |
 |---|---|---|---|
-| 📎 **Pièce jointe** (« Joindre un fichier ») | une **copie** du fichier, sur le Pi (`data/uploads/`) | ouvre / télécharge la copie | idem |
+| 📎 **Pièce jointe** (« Joindre un fichier », ou fichier déposé sur l'éditeur) | une **copie** du fichier, sur le Pi (`data/uploads/`) | ouvre / télécharge la copie | idem |
 | 📁 **Chemin local** (collé dans le champ des liens) | seulement le **chemin** (`/home/…`, `C:\…`) | **copie le chemin** dans le presse-papiers | ouvrira le fichier d'origine |
 
 Limites constatées :

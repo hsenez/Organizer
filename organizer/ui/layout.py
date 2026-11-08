@@ -13,6 +13,7 @@ from nicegui import events, ui
 
 from organizer.core.services.users import MIN_PASSWORD_LENGTH, WEAK_PASSWORD_PREF
 from organizer.ui.components.dnd import DragDrop
+from organizer.ui.components.file_drop import FileDrop
 from organizer.ui.components.search_dialog import SearchDialog
 from organizer.ui.components.task_editor import TaskEditor
 from organizer.ui.context import Banner, UiContext
@@ -57,6 +58,7 @@ def app_frame(
     ctx.editor = TaskEditor(ctx)
     search = SearchDialog(ctx)
     DragDrop(on_drop=ctx.handle_drop, on_attach=ctx.attach, on_state=ctx.set_dragging).mark("dnd")
+    FileDrop(ctx).mark("file-drop")  # fichiers du système déposés sur la page (pièces jointes)
     # Ctrl+K est réservé par certains navigateurs (barre de recherche de Firefox) : on le garde pour nous.
     ui.add_body_html(
         "<script>document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && "

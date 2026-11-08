@@ -40,6 +40,9 @@ def configure_logging() -> None:
     logger.propagate = False
 
 
+SHUTDOWN_GRACE_SECONDS = 3
+
+
 def main() -> None:
     configure_logging()
     state = build()
@@ -54,6 +57,10 @@ def main() -> None:
         show=False,
         fastapi_docs=True,  # documentation de l'API sur /docs
         show_welcome_message=True,
+        # À l'arrêt (systemctl restart…), uvicorn attend la fin des connexions en cours ; le flux temps réel
+        # d'un client bureau ne se termine jamais de lui-même : sans limite, systemd devait forcer l'arrêt
+        # au bout de 90 s. Le client se reconnecte tout seul.
+        timeout_graceful_shutdown=SHUTDOWN_GRACE_SECONDS,
         **(
             {"ssl_certfile": state.settings.ssl_cert, "ssl_keyfile": state.settings.ssl_key}
             if state.settings.https

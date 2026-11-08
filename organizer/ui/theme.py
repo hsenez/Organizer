@@ -100,6 +100,14 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .dnd-attach-no { outline: 3px solid #fa5252 !important; box-shadow: 0 0 0 6px rgba(250, 82, 82, .22) !important; }
 .dnd-zone-over { background: rgba(92, 124, 250, .10) !important; outline: 2px dashed #5c7cfa; outline-offset: -2px; }
 .dnd-zone-denied { background: rgba(250, 82, 82, .08) !important; outline: 2px dashed #fa5252; outline-offset: -2px; }
+/* Fichiers du système survolant une zone de dépôt (file_drop.js) : cadre et invitation. */
+.file-drop-over { position: relative; outline: 3px dashed #5c7cfa !important; outline-offset: -6px; }
+.file-drop-over::after { content: attr(data-file-drop-label); position: absolute; inset: 0; z-index: 3000;
+  display: flex; align-items: center; justify-content: center; pointer-events: none; font-size: 1.25rem;
+  font-weight: 600; color: #364fc7; background: rgba(237, 242, 255, .82); }
+.body--dark .file-drop-over::after { color: #dbe4ff; background: rgba(25, 32, 60, .82); }
+.file-drop-card { outline: 3px dashed #5c7cfa !important; outline-offset: 2px;
+  background: rgba(92, 124, 250, .10) !important; }
 
 /* --- Kanbans ------------------------------------------------------------------------------------- */
 .dnd-insert { position: fixed; z-index: 10000; pointer-events: none; height: 4px; border-radius: 2px;

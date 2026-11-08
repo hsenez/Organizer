@@ -112,7 +112,35 @@ Référence fonctionnelle complète : **`specifications.md`**.
   - les classes Tailwind `dark:` ne s'appliquent pas aux fonds Quasar (`q-drawer`…) : passer par le CSS
     `.body--dark …` dans `theme.py` ;
   - dans un `ui.dialog` en `position=right`, Quasar ajoute un padding : neutralisé en CSS ;
-  - `ui.upload` est masqué ; un bouton appelle `upload.run_method("pickFiles")`.
+  - `ui.upload` est masqué ; le bouton ouvre son sélecteur par `open_file_picker` (`components/file_drop.py`,
+    **`js_handler`**). ⚠️ Jamais `upload.run_method("pickFiles")` depuis un gestionnaire Python : l'aller-retour
+    par le serveur perd le geste de l'utilisateur, et WebKitGTK (fenêtre du client bureau), Safari, Chrome
+    refusent alors d'ouvrir le sélecteur, en silence (seul Firefox laisse passer : bug rencontré).
+  - Dépôt de fichiers du système : `FileDrop(ctx)` (`file_drop.js`, un par page, créé par `app_frame`, marqué
+    `file-drop` ; gabarit avec `<slot>` : il contient son propre `ui.upload`, marqué `card-upload`).
+    Cibles : `file_drop_zone(element, upload)` (`data-file-drop` = id du `ui.upload`, qui reçoit les fichiers
+    par `addFiles`) ; sinon une carte `data-dnd-task` → événement `card-files` (tâche visée), le serveur
+    répond `flush` et les fichiers partent par `card-upload`. Fichiers connus seulement par `file://`
+    (`text/uri-list` sans `files`) → événement `paths`, lus sur le poste si `ds.is_desktop`. Hors cible,
+    `dropEffect = "none"` (Chromium n'émet alors pas `drop` ; rien ne s'ouvre). `reusable_upload` : `reset` à
+    l'événement `finish`, sinon QUploader refuse en silence un fichier déjà envoyé. Éditeur : `self.upload`
+    permanent (hors de `self.body`), zone = la carte de l'éditeur.
+  - Fenêtre du client bureau (WebKitGTK) : un fichier glissé depuis Dolphin arrive à la page avec les types
+    `text/uri-list`, `text/html`, **0 fichier** et une adresse vide (WebKit masque les `file://`). Les
+    adresses sont captées dans le sous-processus de la fenêtre (`client/window.py`, signal GTK
+    `drag-data-received` de `BrowserView.instances[uid].webview`) et relayées par
+    `window.organizerNativeDrop(uris)` ; `file_drop.js` les attend 0,8 s au plus au moment du dépôt (prop
+    `web` : pas d'attente dans un navigateur).
+  - Vrai glisser de fichier dans Chromium (Vivaldi installé) : `vivaldi --headless=new
+    --remote-debugging-port=…`, CDP `Input.dispatchDragEvent` (`dragEnter` / `dragOver` / `drop`, `data.files`
+    = chemins). Un glisser natif depuis Dolphin vers la fenêtre GTK ne se simule pas ici.
+  - ⚠️ Arrêter ses serveurs de test **par PID** : la fenêtre du client bureau de l'utilisateur est un
+    sous-processus dont la ligne de commande contient aussi `run_client.py` ; la tuer ferme son client.
+  - Vérifier un changement de ce genre dans **WebKitGTK** hors écran : `Gtk.OffscreenWindow` + `WebKit2.WebView`
+    (variables `WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1`), signal
+    `run-file-chooser` → `request.select_files([...])` ; dépôt simulé par `DragEvent` + `DataTransfer`. Le client
+    en `--browser` sur un port fixe (`ORGANIZER_CLIENT_LAUNCH`, `ORGANIZER_CLIENT_PORT`, `client.json` avec
+    jeton) se charge alors à `http://127.0.0.1:<port>/?launch=<secret>`.
 - **Tests d'UI** : le simulateur ne propage pas les clics aux parents et ne voit pas le contenu d'un menu
   fermé → poser des `.mark(...)` sur les éléments cliquables (cartes `task-card-<id>`, entrées de menu,
   options des curseurs `slider-importance-4`…) et ouvrir les menus avec `open_menu()` dans les tests.
@@ -268,6 +296,9 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Anti force brute (`LoginThrottle`) : niveau (IP, identifiant) remis à zéro par une réussite, niveau
   identifiant seul (toutes IP) **jamais** remis à zéro par une réussite. `check_credentials`
   (`server/api/auth.py`, partagé par l'API et la page /login) écrit chaque tentative dans le journal.
+- Arrêt du serveur : `ui.run(timeout_graceful_shutdown=SHUTDOWN_GRACE_SECONDS)` (3 s) — sinon uvicorn attend
+  la fin des flux SSE des clients bureau, qui ne finissent jamais, et `systemctl restart` durait 90 s (arrêt
+  forcé par systemd). Mesure : serveur + `curl -N …/api/v1/events`, puis SIGTERM.
 - Journal du serveur : `configure_logging()` (dans `main()` seulement, pas dans `build()` : les tests
   utilisent `caplog`) ; loggers `organizer.*`.
 - Mots de passe : `MIN_PASSWORD_LENGTH = 12` (`core/services/users.py`). `authenticate` pose / retire la
@@ -357,7 +388,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 318 tests au total.
+- 326 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
