@@ -85,6 +85,58 @@ body.body--dark { background: #12141a; }
 
 .task-row:hover { background: rgba(120, 130, 150, .12); }
 
+/* --- Glisser-déposer ------------------------------------------------------------------------------- */
+.task-card, .task-row { -webkit-touch-callout: none; user-select: none; }
+body.dnd-active, body.dnd-active * { cursor: grabbing !important; user-select: none !important; }
+.dnd-ghost { position: fixed !important; z-index: 9999; pointer-events: none; opacity: .92; margin: 0 !important;
+    transform: rotate(2deg) scale(1.02); box-shadow: 0 14px 30px rgba(20, 30, 60, .30) !important; }
+.dnd-source { opacity: .35; }
+.dnd-badge { position: fixed; z-index: 10001; pointer-events: none; padding: 4px 10px; border-radius: 8px;
+    background: rgba(30, 34, 45, .92); color: white; font-size: 13px; white-space: nowrap; display: none; }
+.dnd-attach-ok { outline: 3px solid #40c057 !important; box-shadow: 0 0 0 6px rgba(64, 192, 87, .25) !important; }
+.dnd-attach-no { outline: 3px solid #fa5252 !important; box-shadow: 0 0 0 6px rgba(250, 82, 82, .22) !important; }
+.dnd-zone-over { background: rgba(92, 124, 250, .10) !important; outline: 2px dashed #5c7cfa; outline-offset: -2px; }
+.dnd-zone-denied { background: rgba(250, 82, 82, .08) !important; outline: 2px dashed #fa5252; outline-offset: -2px; }
+
+/* --- Kanbans ------------------------------------------------------------------------------------- */
+.dnd-insert { position: fixed; z-index: 10000; pointer-events: none; height: 4px; border-radius: 2px;
+    background: #5c7cfa; box-shadow: 0 0 0 3px rgba(92, 124, 250, .25); display: none; }
+
+/* --- Pages pleine largeur / pleine hauteur (kanbans) --------------------------------------------- */
+.q-page:has(> .page-fill) { display: flex; flex-direction: column; }
+.page-fill { flex: 1 1 auto; padding: 0 !important; }
+.page-fill-column { flex: 1 1 auto; }
+.page-fill-grow { flex: 1 1 auto; min-height: 320px; }
+
+/* --- Kanbans ------------------------------------------------------------------------------------- */
+.kanban { scroll-padding-left: 4px; align-items: stretch !important; }
+.kanban-col { position: relative; width: 264px; max-width: 86vw; min-height: 140px;
+    background: rgba(120, 130, 150, .08); }
+.body--dark .kanban-col { background: rgba(255, 255, 255, .04); }
+.kanban-col-collapsed { width: 46px !important; min-width: 46px; align-items: center !important; cursor: pointer;
+    padding: 6px 2px !important; }
+.kanban-col-collapsed:hover { background: rgba(92, 124, 250, .10); }
+.kanban-vtitle { writing-mode: vertical-rl; white-space: nowrap; font-weight: 600; font-size: 14px; }
+.kanban-col .task-card { width: 100%; }
+.resize-handle { position: absolute; top: 0; right: -7px; width: 12px; height: 100%; cursor: col-resize;
+    touch-action: none; z-index: 2; }
+.resize-handle::after { content: ""; position: absolute; top: 10px; bottom: 10px; left: 5px; width: 2px;
+    border-radius: 1px; background: transparent; transition: background .12s; }
+.resize-handle:hover::after, body.resizing .resize-handle::after { background: #5c7cfa; }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
+
+/* --- Matrice ------------------------------------------------------------------------------------- */
+.matrix-2x2 { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 12px; align-items: stretch; }
+.matrix-4x4 { display: grid; grid-template-columns: 28px repeat(4, minmax(150px, 1fr)); gap: 6px; }
+.matrix-cell { min-height: 180px; min-width: 0; }
+.matrix-cell-small { min-height: 96px; }
+.matrix-axis { font-size: 13px; font-weight: 600; color: #868e96; align-self: center; }
+.matrix-axis-v { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; justify-self: center; }
+@media (max-width: 767px) {
+    .matrix-2x2 { grid-template-columns: 1fr; }
+    .matrix-2x2 > .matrix-axis, .matrix-2x2 > div:first-child { display: none; }
+}
+
 /* --- Accueil : compteurs cliquables ------------------------------------------------------------- */
 .stat-tile { transition: transform .12s ease, box-shadow .12s ease; }
 .stat-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(20, 30, 60, .14); }

@@ -15,12 +15,15 @@ from organizer.core import rules
 from organizer.core.enums import DueBucket, LinkKind, Status, Urgency
 from organizer.core.schemas import TaskOut, TaskPatch
 from organizer.ui import format as fmt
+from organizer.ui.components.dnd import draggable
 from organizer.ui.components.tag_chips import tag_chip
 from organizer.ui.context import UiContext
 from organizer.ui.theme import IMPORTANCE_BORDER_PX
 
 
-def task_card(task: TaskOut, ctx: UiContext, *, show_parent: bool = True) -> ui.card:
+def task_card(task: TaskOut, ctx: UiContext, *, show_parent: bool = True, menu_extra=None) -> ui.card:
+    """``menu_extra`` : fonction appelée dans le menu ⋯ pour y ajouter des entrées (ex. « Retirer du
+    board »)."""
     importance, urgency, status = task.importance, task.urgency, task.status
     card = (
         ui.card()
@@ -29,6 +32,7 @@ def task_card(task: TaskOut, ctx: UiContext, *, show_parent: bool = True) -> ui.
         .mark(f"task-card-{task.id}")
         .on("click", lambda: ctx.editor.open(task.id))
     )
+    draggable(card, task)
     with card:
         # Ligne 1 : importance, titre, urgence, menu
         with ui.row().classes("w-full items-start gap-2 no-wrap"):
@@ -43,7 +47,7 @@ def task_card(task: TaskOut, ctx: UiContext, *, show_parent: bool = True) -> ui.
             )
             if urgency is Urgency.IMMEDIATE and not status.is_closed:
                 urgency_label.classes("pulse")
-            _card_menu(task, ctx)
+            _card_menu(task, ctx, menu_extra)
 
         # Ligne 2 : pastilles
         with ui.row().classes("w-full items-center gap-1.5"):
@@ -113,7 +117,7 @@ def _due_chip(task: TaskOut, ctx: UiContext) -> None:
     )
 
 
-def _card_menu(task: TaskOut, ctx: UiContext) -> None:
+def _card_menu(task: TaskOut, ctx: UiContext, menu_extra=None) -> None:
     def set_status(status: Status) -> None:
         if ctx.call(ctx.ds.tasks.update, task.id, TaskPatch(status=status)) is not None:
             ctx.refresh()
@@ -140,6 +144,8 @@ def _card_menu(task: TaskOut, ctx: UiContext) -> None:
             ui.menu_item("📋 Dupliquer", on_click=lambda: duplicate(task, ctx)).mark(
                 f"card-duplicate-{task.id}"
             )
+            if menu_extra is not None:
+                menu_extra()
             if task.parent_id is not None:
                 ui.menu_item("🌳 Détacher du parent", on_click=detach)
             if task.can_delete:
@@ -186,7 +192,7 @@ def confirm_delete(task: TaskOut, ctx: UiContext, after=None) -> None:
     dialog.open()
 
 
-def task_row(task: TaskOut, ctx: UiContext, on_click) -> ui.row:
+def task_row(task: TaskOut, ctx: UiContext, on_click, *, draggable_row: bool = False) -> ui.row:
     """Version compacte sur une ligne (résultats de recherche) : statut, importance, titre, projet,
     échéance."""
     row = (
@@ -195,6 +201,8 @@ def task_row(task: TaskOut, ctx: UiContext, on_click) -> ui.row:
         .on("click", on_click)
         .mark(f"task-row-{task.id}")
     )
+    if draggable_row:
+        draggable(row, task)
     with row:
         ui.label(task.status.meta.emoji).tooltip(task.status.meta.label)
         ui.label(task.importance.meta.emoji).tooltip(f"Importance : {task.importance.meta.label}")

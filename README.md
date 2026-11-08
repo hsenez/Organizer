@@ -11,9 +11,9 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — étapes 1 à 5 sur 8 : cœur métier, serveur, API, interface
-> (accueil, liste filtrable, recherche, réglages, éditeur) et notes markdown façon Obsidian. À venir : kanbans,
-> matrice, glisser-déposer, client bureau.
+> 🚧 **Projet en cours de construction** — étapes 1 à 6 sur 8 : cœur métier, serveur, API, interface (accueil,
+> liste filtrable, recherche, réglages, éditeur, notes markdown façon Obsidian), kanbans, matrice d'Eisenhower
+> et glisser-déposer. À venir : client bureau (étape 7), temps réel et finitions (étape 8).
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -64,6 +64,16 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 - Réglages (projets, tags, thème, appareils connectés, comptes des utilisateurs…) : menu du compte →
   ⚙️ Réglages, ou `http://<ip>:2603/settings`.
 - Lien direct vers une tâche : `http://<ip>:2603/tasks?task=<numéro>` (`?task=new` : nouvelle tâche).
+
+**Glisser-déposer** (kanbans, matrice, et partout où il y a des cartes) :
+
+- dans un kanban prédéfini, **reclasser** une carte dans sa colonne (un trait bleu montre où elle va) : sa
+  position règle finement son **urgence** (elle prend au besoin l'urgence de ses voisines) ;
+- colonnes : ⇤ pour les **replier**, tirer leur bord droit pour les **élargir** (double-clic : largeur par
+  défaut) — mémorisé par board ;
+- souris : glisser une carte vers une colonne / un quadrant ; **Ctrl** (⌘ sur Mac) en la lâchant sur une
+  autre carte → elle devient sa **sous-tâche** (vert = possible, rouge = impossible) ; Échap annule ;
+- téléphone : **appui long** pour saisir la carte, puis glisser ; rester ~1 s sur une autre carte → sous-tâche.
 
 Sujets en cours de réflexion (liens vers les fichiers…) : voir [`TODO.md`](TODO.md).
 

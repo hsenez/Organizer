@@ -11,6 +11,7 @@ from organizer.config import Settings
 from organizer.core.services.attachments import AttachmentService
 from organizer.core.services.auth import AuthService
 from organizer.core.services.base import Actor, ServiceContext
+from organizer.core.services.boards import BoardService
 from organizer.core.services.labels import ProjectService, TagService
 from organizer.core.services.tasks import TaskService
 from organizer.core.services.undo import UndoService
@@ -40,6 +41,7 @@ class Services:
         self.tags = TagService(ctx)
         self.tasks = TaskService(ctx, self.projects, self.tags)
         self.undo = UndoService(ctx)
+        self.boards = BoardService(ctx, self.tasks)
         self.attachments = AttachmentService(
             ctx, self.tasks, settings.uploads_dir, max_bytes=settings.max_upload_mb * 1024 * 1024
         )

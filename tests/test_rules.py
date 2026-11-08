@@ -211,3 +211,27 @@ def test_pick_distinct_color_spreads_over_palette():
         chosen.append(rules.pick_distinct_color(chosen, rng=rng))
     closest = min(rules.color_distance(a, b) for i, a in enumerate(chosen) for b in chosen[i + 1 :])
     assert len(set(chosen)) == 8 and closest > 15
+
+
+# --- reclassement dans une colonne (urgence + rang) ---
+
+
+def test_rank_drop_keeps_place_and_clamps_urgency():
+    # Colonne : A(4) B(3) C(2) ; on dépose X (urgence 1) entre A et B → urgence remontée à 3, avant B.
+    urgency, ranks = rules.rank_drop([(1, 4, 0.0), (9, 1, 0.0), (2, 3, 0.0), (3, 2, 0.0)], 9)
+    assert urgency == 3 and ranks == {9: -1.0}
+    # En bas d'une colonne : urgence abaissée à celle de la dernière.
+    urgency, ranks = rules.rank_drop([(1, 4, 0.0), (2, 2, 5.0), (9, 4, 0.0)], 9)
+    assert urgency == 2 and ranks == {9: 6.0}
+    # Entre deux urgences différentes : l'urgence actuelle convient, rien ne bouge.
+    assert rules.rank_drop([(1, 4, 0.0), (9, 3, 0.0), (2, 2, 0.0)], 9) == (3, {})
+
+
+def test_rank_drop_inside_a_group():
+    # Rangs distincts : milieu.
+    assert rules.rank_drop([(1, 3, 1.0), (9, 3, 7.0), (2, 3, 2.0)], 9) == (3, {9: 1.5})
+    # Rangs égaux (jamais reclassés) : le groupe est renuméroté dans l'ordre affiché.
+    urgency, ranks = rules.rank_drop([(1, 3, 0.0), (9, 3, 0.0), (2, 3, 0.0)], 9)
+    assert urgency == 3 and ranks == {9: 1.0, 2: 2.0}
+    # Seule dans la colonne : rien à faire.
+    assert rules.rank_drop([(9, 2, 0.0)], 9) == (2, {})

@@ -18,7 +18,19 @@ from sqlmodel import Session, select
 from organizer.core import rules
 from organizer.core.enums import LinkKind, Status, TaskKind
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
-from organizer.core.models import Project, Tag, Task, TaskLink, TaskShare, TaskTag, User, utcnow
+from organizer.core.models import (
+    BoardCard,
+    BoardShare,
+    Project,
+    Tag,
+    Task,
+    TaskLink,
+    TaskRank,
+    TaskShare,
+    TaskTag,
+    User,
+    utcnow,
+)
 from organizer.core.schemas import (
     LinkIn,
     LinkOut,
@@ -50,9 +62,20 @@ class TaskService(BaseService):
     def _visible_clause(self):
         me = self.actor.id
         shared_ids = select(TaskShare.task_id).where(TaskShare.user_id == me)
+        # Tâches posées sur un board partagé avec moi.
+        on_shared_boards = select(BoardCard.task_id).where(
+            BoardCard.board_id.in_(select(BoardShare.board_id).where(BoardShare.user_id == me))
+        )
         parent = aliased(Task)
-        visible_parents = select(parent.id).where(or_(parent.owner_id == me, parent.id.in_(shared_ids)))
-        return or_(Task.owner_id == me, Task.id.in_(shared_ids), Task.parent_id.in_(visible_parents))
+        visible_parents = select(parent.id).where(
+            or_(parent.owner_id == me, parent.id.in_(shared_ids), parent.id.in_(on_shared_boards))
+        )
+        return or_(
+            Task.owner_id == me,
+            Task.id.in_(shared_ids),
+            Task.id.in_(on_shared_boards),
+            Task.parent_id.in_(visible_parents),
+        )
 
     def _get(self, s: Session, task_id: int) -> Task:
         task = s.exec(select(Task).where(Task.id == task_id, self._visible_clause())).first()
@@ -97,6 +120,8 @@ class TaskService(BaseService):
         ).all():
             links_by_task[link.task_id].append(LinkOut.model_validate(link))
 
+        ranks = {r.task_id: r.rank for r in s.exec(select(TaskRank).where(TaskRank.task_id.in_(ids))).all()}
+
         shares_by_task: dict[int, list[int]] = defaultdict(list)
         for share in s.exec(select(TaskShare).where(TaskShare.task_id.in_(ids))).all():
             shares_by_task[share.task_id].append(share.user_id)
@@ -137,6 +162,7 @@ class TaskService(BaseService):
                     parent_id=t.parent_id,
                     parent_title=parent.title if parent else None,
                     position=t.position,
+                    rank=ranks.get(t.id, 0.0),
                     title=t.title,
                     importance=t.importance,
                     urgency=t.urgency,
@@ -357,43 +383,100 @@ class TaskService(BaseService):
         with self.uow(label=label, group_key=group_key) as w:
             s = w.session
             task = self._get(s, task_id)
-            if "title" in fields:
-                title = fields["title"].strip()
-                if not title:
-                    raise InvalidOperation("Le titre est obligatoire.")
-                task.title = title
-            for key in ("importance", "urgency"):
-                if key in fields:
-                    setattr(task, key, int(fields[key]))
-            for key in ("due_date", "due_time", "notes"):
-                if key in fields:
-                    setattr(task, key, fields[key])
-            if "due_date" in fields and fields["due_date"] is None:
-                task.due_time = None  # pas d'heure sans date
-            if "kind" in fields:
-                task.kind = str(fields["kind"])
-            if "reminder_date" in fields:
-                task.reminder_manual_date = fields["reminder_date"]
-                if fields["reminder_date"] is not None or "reminder_offset_days" not in fields:
-                    task.reminder_offset_days = None
-            if "reminder_offset_days" in fields:
-                task.reminder_offset_days = fields["reminder_offset_days"]
-            if "kind" in fields and "reminder_date" not in fields:
-                self._ensure_followup_reminder(task)
-            if "project_id" in fields:
-                self._check_project(s, fields["project_id"])
-                task.project_id = fields["project_id"]
-            if "tag_ids" in fields:
-                self._set_tags(s, task, fields["tag_ids"] or [])
-            if "status" in fields:
-                self._set_status(s, task, fields["status"])
-            task.updated_at = utcnow()
+            self._apply(s, task, fields)
             s.add(task)
             s.flush()
             return self._out(s, task)
 
+    def move(self, task_id: int, patch: TaskPatch | None = None, order: list[int] | None = None) -> TaskOut:
+        """Glisser-déposer dans un kanban : applique ``patch`` (changement de colonne) puis, si ``order`` est
+        fourni (identifiants de la colonne d'arrivée, dans l'ordre affiché, carte déplacée comprise), reclasse
+        la carte : son urgence est ajustée à celles de ses voisines et son rang manuel fixé
+        (``rules.rank_drop``). Une seule entrée d'historique."""
+        fields = {k: getattr(patch, k) for k in patch.model_fields_set} if patch else {}
+        for key in _REQUIRED_FIELDS & fields.keys():
+            if fields[key] is None:
+                raise InvalidOperation(f"Le champ « {key} » ne peut pas être vide.")
+        if order is not None and task_id not in order:
+            raise InvalidOperation("La tâche déplacée doit figurer dans l'ordre de la colonne.")
+        with self.uow() as probe:
+            title = self._get(probe.session, task_id).title
+        label = _update_label(title, fields) if fields else f"Reclasser {quoted(title)}"
+        with self.uow(label=label) as w:
+            s = w.session
+            task = self._get(s, task_id)
+            if fields:
+                self._apply(s, task, fields)
+            if order:
+                others = {
+                    t.id: t for t in s.exec(select(Task).where(Task.id.in_(order), self._visible_clause()))
+                }
+                if others.keys() != set(order):
+                    raise NotFound("Tâche introuvable.")
+                ranks = {r.task_id: r for r in s.exec(select(TaskRank).where(TaskRank.task_id.in_(order)))}
+                rows = [
+                    (
+                        tid,
+                        task.urgency if tid == task_id else others[tid].urgency,
+                        ranks[tid].rank if tid in ranks else 0.0,
+                    )
+                    for tid in order
+                ]
+                urgency, changes = rules.rank_drop(rows, task_id)
+                if int(urgency) != task.urgency:
+                    if label.startswith("Reclasser"):
+                        label = (
+                            f"Reclasser {quoted(title)} (urgence : {urgency.meta.emoji} {urgency.meta.label})"
+                        )
+                        w.label = label
+                    task.urgency = int(urgency)
+                    fields["urgency"] = urgency
+                for tid, rank in changes.items():
+                    row = ranks.get(tid) or TaskRank(task_id=tid)
+                    row.rank = rank
+                    s.add(row)
+            if fields:
+                task.updated_at = utcnow()
+                s.add(task)
+            s.flush()
+            return self._out(s, task)
+
+    def _apply(self, s: Session, task: Task, fields: dict) -> None:
+        """Applique des champs de ``TaskPatch`` à ``task`` (sans enregistrer)."""
+        if "title" in fields:
+            title = fields["title"].strip()
+            if not title:
+                raise InvalidOperation("Le titre est obligatoire.")
+            task.title = title
+        for key in ("importance", "urgency"):
+            if key in fields:
+                setattr(task, key, int(fields[key]))
+        for key in ("due_date", "due_time", "notes"):
+            if key in fields:
+                setattr(task, key, fields[key])
+        if "due_date" in fields and fields["due_date"] is None:
+            task.due_time = None  # pas d'heure sans date
+        if "kind" in fields:
+            task.kind = str(fields["kind"])
+        if "reminder_date" in fields:
+            task.reminder_manual_date = fields["reminder_date"]
+            if fields["reminder_date"] is not None or "reminder_offset_days" not in fields:
+                task.reminder_offset_days = None
+        if "reminder_offset_days" in fields:
+            task.reminder_offset_days = fields["reminder_offset_days"]
+        if "kind" in fields and "reminder_date" not in fields:
+            self._ensure_followup_reminder(task)
+        if "project_id" in fields:
+            self._check_project(s, fields["project_id"])
+            task.project_id = fields["project_id"]
+        if "tag_ids" in fields:
+            self._set_tags(s, task, fields["tag_ids"] or [])
+        if "status" in fields:
+            self._set_status(s, task, fields["status"])
+        task.updated_at = utcnow()
+
     def _delete_row(self, s: Session, task: Task) -> None:
-        for model in (TaskTag, TaskShare, TaskLink):
+        for model in (TaskTag, TaskShare, TaskLink, TaskRank, BoardCard):
             for row in s.exec(select(model).where(model.task_id == task.id)).all():
                 s.delete(row)
         s.flush()
@@ -669,7 +752,7 @@ def sort_tasks(tasks: list[TaskOut], sort: TaskSort) -> list[TaskOut]:
     keys = {
         "due": lambda t: (t.due_date is None, t.due_date or far, t.due_time or time.max, -priority(t)),
         "importance": lambda t: (-t.importance, -t.urgency, t.due_date or far),
-        "urgency": lambda t: (-t.urgency, -t.importance, t.due_date or far),
+        "urgency": lambda t: (-t.urgency, t.rank, -t.importance, t.due_date or far),
         "priority": lambda t: (-priority(t), -t.importance, t.due_date or far),
         "created": lambda t: (-t.created_at.timestamp(), t.id),
         "updated": lambda t: (-t.updated_at.timestamp(), t.id),

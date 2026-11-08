@@ -51,6 +51,15 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 
 ## 🧩 Autres points en attente (relevés pendant le développement)
 
+- 🌳 Menu des cartes « Rattacher à… » (sélecteur de tâche) : alternative au Ctrl+drop / maintien au doigt.
+- ↕️ Réordonner les sous-tâches par glisser-déposer dans l'éditeur (le service le permet déjà).
+- 📊 Boards personnalisés : réordonner les boards eux-mêmes ; choisir les colonnes de départ à la création.
+- 📱 Glisser-déposer : faire défiler automatiquement le kanban (et une longue colonne) quand on approche du
+  bord de l'écran.
+- 🎯 Matrice : reclasser les cartes dans une case (comme au kanban) ; pleine largeur comme les kanbans ?
+- 📊 Boards personnalisés : l'ordre y est libre (il ne touche pas l'urgence) — à confirmer à l'usage.
+- 🎛️ Matrice : le filtre par défaut (statuts ouverts) compte comme « Filtres (1) » — à rendre plus clair.
+
 - 📋 **Vue compacte** de la liste (une ligne par tâche, comme les résultats de Ctrl+K).
 - 🧭 Recherche Ctrl+K : naviguer dans les résultats avec les flèches du clavier.
 - 🐍 Faire tourner les tests sous **Python 3.11** (version du Pi) — jamais exécutés dans cette version.
@@ -63,3 +72,5 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 
 - ⏰ Heure d'échéance dans l'éditeur · 💻 appareils connectés et 📁 projets dans les réglages ·
   📋 dupliquer une tâche (étape 5).
+- 📊 Kanbans, 🎯 matrice, glisser-déposer souris / tactile et Ctrl+drop (étape 6).
+- 📊 Kanbans pleine page, colonnes repliables / redimensionnables, reclassement = urgence affinée (v1.4).

@@ -146,6 +146,41 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Tests d'UI : un panneau replié (filtres) rend ses éléments invisibles pour le simulateur → le déplier ;
   pour un `ui.select`, `set_value` dans `with user.client:` (helper `select_value`).
 
+## Étape 6 : boards et glisser-déposer
+
+- **Boards** : `BoardService` (`core/services/boards.py`). Le propriétaire gère (nom, colonnes, partage) ;
+  les membres déplacent / ajoutent / retirent des cartes. La visibilité des tâches posées sur un board
+  partagé est dans `TaskService._visible_clause` (et leurs sous-tâches via le parent). Supprimer une tâche
+  supprime ses `BoardCard` (`_delete_row`).
+- **Glisser-déposer** : `components/dnd.js` (un composant `DragDrop` par page, créé par `app_frame`, marqué
+  `dnd`). Les éléments se déclarent par attributs : `draggable(element, task)` (`data-dnd-task`,
+  `-parent`, `-has-subtasks`, `-title`) et `drop_zone(element, clé, accept=…, denied=…)`. Une page
+  enregistre `ctx.drop_handler(task_id, zone, index)` ; le rattachement (événement `attach`) est géré par
+  `UiContext.attach` partout.
+  - Clés de zone : `status:<valeur>`, `due:<tranche>`, `kind:<valeur>`, `project:<id|0>`, `col:<id>`,
+    `q:<quadrant>`, `cell:<importance>:<urgence>`.
+  - Doigt : événements `touch` (qui permettent de bloquer le défilement) ; à défaut, `pointer`. ⚠️
+    `'ontouchstart' in window` peut être faux alors que les événements `touch` arrivent (Firefox de bureau) :
+    les deux chemins doivent rester idempotents.
+  - Après un glisser, le clic qui suit est absorbé (sinon la carte lâchée ouvrirait l'éditeur).
+  - Les règles de rattachement sont dupliquées en JS (`refusal`) pour la surbrillance : les garder alignées
+    avec `rules.attach_refusal_reason`.
+- **Kanbans (v1.4)** : `app_frame(..., wide=True)` → contenu pleine largeur / pleine hauteur (CSS
+  `page-fill*` ; le dernier enfant porte `page-fill-grow`). Colonnes repliables (`collapsed`) et
+  redimensionnables (`components/resizer.py` + `resize.js` : `data-resize-key` / `data-resize-handle`,
+  événement `resize {key, width}`), mémorisées dans `board:<clé>` avec `filter` et `hide_done`.
+- **Reclassement** : boards prédéfinis triés par `TaskSort(key="urgency")` = urgence, puis `TaskOut.rank`
+  (table `task_rank`, annulable, absente = 0). `drop_zone(..., ordered=True)` affiche un repère
+  d'insertion ; `KanbanView._dropped` envoie l'ordre de la colonne (`self.order`) à `ds.tasks.move(id, patch,
+  order)` qui applique le patch puis `rules.rank_drop` (urgence bornée par les voisines, rang au milieu, ou
+  renumérotation du groupe si rangs égaux), en **une** entrée d'historique. Dans sa propre colonne : pas de
+  patch, juste le reclassement (même dans une colonne qui refuse les dépôts venus d'ailleurs).
+- `refreshable.refresh()` (NiceGUI 4) s'exécute **en tâche de fond** : dans un test, attendre (`settle()`,
+  `should_see`) avant une action qui dépend de la page reconstruite.
+- Tests : le simulateur ne sait pas glisser → `user.find(marker="dnd").trigger("drop", {...})` ou
+  `trigger("attach", {...})`. Le geste réel se vérifie dans Firefox (BiDi, `input.performActions` souris et
+  `pointerType: "touch"`) ; ne pas faire défiler la page entre la mesure des positions et le geste.
+
 ## Tests
 
 - `tests/test_*.py` : services (base SQLite temporaire, date du jour figée au mercredi 4/11/2026).
@@ -175,10 +210,14 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 168 tests au total.
+- 190 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
-- ⏭️ Étape 6 : kanbans (prédéfinis + personnalisés), matrice d'Eisenhower, glisser-déposer, Ctrl+drop.
+- ✅ Étape 6 : boards personnalisés, pages `/kanban` et `/matrix`, glisser-déposer souris / tactile,
+  Ctrl+drop ; puis kanbans pleine page, colonnes repliables / redimensionnables, reclassement (urgence +
+  rang).
+- ⏭️ Étape 7 : client bureau (fenêtre native, `RemoteDataSource` via l'API, ouverture des fichiers locaux,
+  notifications des rappels).
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.

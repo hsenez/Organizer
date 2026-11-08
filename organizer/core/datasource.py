@@ -18,6 +18,7 @@ from organizer.core.schemas import UserOut, UserPublic
 from organizer.core.services import Services
 from organizer.core.services.account import AccountService
 from organizer.core.services.attachments import AttachmentService
+from organizer.core.services.boards import BoardService
 from organizer.core.services.labels import ProjectService, TagService
 from organizer.core.services.tasks import TaskService
 from organizer.core.services.undo import UndoService
@@ -31,6 +32,7 @@ class DataSource(Protocol):
     tags: TagService
     undo: UndoService
     attachments: AttachmentService
+    boards: BoardService
     account: AccountService  # profil, mot de passe, appareils, comptes (admin)
 
     def users_public(self) -> list[UserPublic]: ...
@@ -52,6 +54,7 @@ class LocalDataSource:
         self.tags = services.tags
         self.undo = services.undo
         self.attachments = services.attachments
+        self.boards = services.boards
 
     def users_public(self) -> list[UserPublic]:
         return self._services.users.list_public()

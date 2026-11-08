@@ -24,6 +24,8 @@ class UiContext:
         self._refreshers: list[Callable[[], Any]] = []
         self.editor: Any = None  # TaskEditor de la page (créé par le layout)
         self.dark: Any = None  # ui.dark_mode de la page (créé par le layout)
+        # Dépôt d'une carte dans une zone de la page : fonction (task_id, zone, index) fournie par la page.
+        self.drop_handler: Callable[[int, str, int | None], None] | None = None
 
     @property
     def user(self):
@@ -59,6 +61,22 @@ class UiContext:
         except OrganizerError as exc:
             ui.notify(exc.message, type="negative", position="top")
             return False
+
+    # --- glisser-déposer ---
+
+    def handle_drop(self, args: dict) -> None:
+        if self.drop_handler is not None:
+            self.drop_handler(int(args["task"]), str(args["zone"]), args.get("index"))
+
+    def attach(self, args: dict) -> None:
+        """Ctrl + dépôt sur une carte (ou maintien au doigt) : rattache la tâche comme sous-tâche."""
+        task = self.call(self.ds.tasks.attach, int(args["task"]), int(args["parent"]))
+        if task is not None:
+            ui.notify(
+                f"🌳 « {task.title} » → sous-tâche de « {task.parent_title} » (Ctrl+Z pour annuler)",
+                position="top",
+            )
+            self.refresh()
 
     # --- annuler / rétablir ---
 

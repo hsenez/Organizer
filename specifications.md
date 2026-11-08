@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 1.2 — 2026-11-08
+> Version : 1.4 — 2026-11-08
 
 ---
 
@@ -67,7 +67,8 @@ organizer/
     errors.py            # erreurs métier (message français affichable)
     rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche
     unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
-    services/            # users, auth, labels (projets + tags), tasks, attachments, undo ; façade `Services`
+    services/            # users, auth, account, labels (projets + tags), tasks, boards, attachments, undo ;
+                         # façade `Services`
     datasource.py        # interface DataSource + LocalDataSource (serveur) ; RemoteDataSource à l'étape 7
   server/                # ✅ étape 2
     app.py               # point d'entrée serveur : build() + ui.run()
@@ -86,8 +87,10 @@ organizer/
     context.py           # UiContext : source de données, rafraîchissement, Ctrl+Z, erreurs → toasts
     format.py            # dates en français (« Aujourd'hui », « lun. 9 nov. », « dans 3 j »)
     layout.py            # en-tête (☰, ↩️ ↪️, compte), colonne de gauche, raccourcis clavier, bouton ➕
-    components/          # task_card, level_slider, task_editor, markdown_editor (.py + .js) ; filter_bar à venir
-    pages/               # accueil, toutes les tâches ; kanban / matrice / recherche / réglages à venir
+    components/          # task_card, level_slider, task_editor, markdown_editor, filter_bar, task_list,
+                         # search_dialog, tag_chips, dnd (.py + .js : glisser-déposer),
+                         # resizer (.py + resize.js : largeur des colonnes)
+    pages/               # home, tasks (+ recherche), kanban, matrix, settings
   static/                # icônes, manifeste PWA (à venir)
 tests/
 scripts/demo.py          # démo terminal + données d'exemple (base data/demo.db)
@@ -123,7 +126,7 @@ run_client.py
 - **Visibilité des tâches** :
   - chaque tâche a un **propriétaire** ; elle est privée par défaut ;
   - elle peut être **partagée** avec d'autres utilisateurs (droit d'édition) ;
-  - **partager un board** donne accès aux tâches posées dessus ;
+  - **partager un board** donne accès aux tâches posées dessus (et à leurs sous-tâches) ;
   - les **sous-tâches suivent la visibilité de leur parent** (une sous-tâche créée par un invité lui
     appartient, mais reste visible de tous ceux qui voient le parent) ;
   - **supprimer** et **partager** sont réservés au propriétaire (pour supprimer : propriétaire de la tâche ou
@@ -236,22 +239,32 @@ Retirer le lien (annulable) conserve le fichier.
 - **Affichage** : masquées par défaut dans kanbans / matrice / liste (filtre « inclure les sous-tâches ») ;
   remontent quand même sur l'accueil si en retard ou urgentes.
 
-### 5.1 Rattacher par glisser-déposer (Ctrl + drop)
+### 5.1 Rattacher par glisser-déposer (Ctrl + drop) — ✅ étape 6
 
-Partout où des tâches apparaissent en cartes (liste, kanbans, matrice, accueil) :
+Partout où des tâches apparaissent en cartes (liste, kanbans, matrice, accueil, recherche) :
 
-- **Glisser-déposer** normal : déplace la carte (change colonne / quadrant / ordre).
+- **Glisser-déposer** normal : déplace la carte (change colonne / quadrant / ordre). À la souris, la carte se
+  saisit après quelques pixels de mouvement ; un « fantôme » suit le pointeur, la carte d'origine s'estompe, la
+  zone survolée se surligne (bleu ; rouge si le dépôt y est interdit, avec la raison dans une bulle) ;
+  Échap annule. Un clic simple ouvre toujours l'éditeur.
 - **Glisser avec Ctrl enfoncé au-dessus d'une autre carte** : la carte cible se met en **surbrillance** ;
   au relâchement, la tâche déposée **devient une sous-tâche de la cible**.
   - 🟢 Surbrillance verte : rattachement possible.
-  - 🔴 Surbrillance rouge + infobulle : impossible, et rien ne se passe. Cas :
+  - 🔴 Surbrillance rouge + bulle explicative : impossible, et rien ne se passe. Cas :
     la cible est elle-même une sous-tâche · la tâche déposée a déjà des sous-tâches · cible = elle-même.
   - Si la tâche déposée était déjà sous-tâche d'un autre parent, elle change de parent.
-  - **Pas de confirmation** : l'action est immédiate et s'annule avec **Ctrl+Z** (voir §6.1).
+  - **Pas de confirmation** : l'action est immédiate (petit message « 🌳 … → sous-tâche de … ») et s'annule
+    avec **Ctrl+Z** (voir §6.1).
+  - Une bulle rappelle l'astuce quand on survole une carte : « Ctrl : en faire une sous-tâche ».
 - **Détacher** : bouton « Détacher du parent » dans l'éditeur et dans le menu de la carte.
-- **Sur téléphone** (pas de touche Ctrl) : on glisse la carte (appui long) et on la **maintient ~1 s au-dessus
-  d'une autre carte** : la cible se met en surbrillance (même code couleur), et le relâchement rattache.
-  Alternative toujours disponible : menu de la carte → « 🌳 Rattacher à… » (sélecteur de tâche avec recherche).
+- **Sur téléphone** (pas de touche Ctrl) : **appui long** (~0,35 s, petite vibration) pour saisir la carte, puis
+  on la glisse ; le défilement est bloqué tant qu'on porte la carte (un doigt qui bouge tout de suite fait
+  défiler normalement). La **maintenir ~1 s au-dessus d'une autre carte** passe en mode rattachement (même
+  code couleur), et le relâchement rattache. *À venir : menu de la carte → « 🌳 Rattacher à… » (sélecteur
+  de tâche avec recherche).*
+- Implémentation : un seul composant par page (`ui/components/dnd.js`), qui gère souris, événements tactiles
+  et, à défaut, événements « pointer » ; les règles de rattachement sont dupliquées côté navigateur pour la
+  surbrillance instantanée et revérifiées par le serveur.
 
 ---
 
@@ -407,11 +420,50 @@ Boards **prédéfinis** (déplacer une carte modifie l'attribut correspondant) :
 | 🗂️ Par type | 📌 À faire · 👁️ Suivi | change le type |
 | 📁 Par projet | un projet par colonne + « Sans projet » | change le projet |
 
-Boards **personnalisés** : colonnes libres (nom, emoji, couleur), cartes rangées à la main par glisser-déposer,
-une tâche peut figurer sur plusieurs boards, partageables.
+Les colonnes des boards prédéfinis sont triées par **urgence**, puis par un **rang manuel** (table
+`task_rank`, puis importance et échéance à égalité). **Reclasser** une carte dans une colonne (ou la déposer à
+un endroit précis d'une autre colonne) affine ainsi son urgence :
 
-- Option : masquer les tâches finies depuis plus de N jours.
-- Barre de filtres sur tous les boards (voir 8.5) ; filtres mémorisés par board.
+- un trait bleu montre où la carte va s'insérer ;
+- son urgence est ramenée au minimum nécessaire pour rester entre ses voisines (ex. : déposée au-dessus
+  d'une carte 🔥, elle devient 🔥 ; déposée sous une carte 🕐 en bas de colonne, elle devient 🕐) ;
+- son rang fixe sa place parmi les cartes de même urgence (rang partagé par tous les boards prédéfinis et
+  par le tri « Urgence » de la liste) ;
+- changement de colonne + reclassement = **une seule** action annulable (`TaskService.move`, API
+  `POST /tasks/{id}/move`).
+
+La colonne « En retard » refuse les dépôts venus d'ailleurs, de même que « Cette semaine » le samedi et le
+dimanche (il ne reste plus de jour après demain) ; on peut toujours y reclasser ses propres cartes.
+
+Boards **personnalisés** (✅ étape 6) : colonnes libres (nom, emoji, couleur), cartes rangées à la main par
+glisser-déposer (l'ordre dans la colonne est conservé), une tâche peut figurer sur plusieurs boards.
+
+- Création : « ➕ Nouveau board » (nom + emoji ; colonnes de départ 📥 À faire · 🚧 En cours · ✅ Fait).
+- « ➕ Ajouter des tâches » : sélecteur avec recherche, choix de la colonne d'arrivée.
+- Menu de colonne : modifier (nom, emoji, couleur), déplacer à gauche / à droite, supprimer (ses cartes
+  passent dans la première colonne restante).
+- Menu ⋯ des cartes : « ➖ Retirer du board » (la tâche n'est pas supprimée).
+- « ⚙️ Board » (propriétaire) : renommer, 👥 partager, supprimer. Les **membres** d'un board partagé voient
+  les tâches posées dessus (et leurs sous-tâches) et peuvent déplacer / ajouter / retirer des cartes, mais
+  pas gérer le board. Retirer une tâche du board retire cet accès.
+- Toutes les opérations sont annulables (Ctrl+Z).
+
+Pour tous les boards :
+
+- Sélecteur de board en haut de page ; board courant dans l'URL (`/kanban?board=status|due|kind|project|<id>`)
+  et mémorisé (dernier board ouvert).
+- Option « 🙈 Masquer les terminées depuis plus de 1 / 3 / 7 / 30 jours », « toutes » ou « aucune » (7 jours
+  par défaut).
+- Page en **pleine largeur**, colonnes **jusqu'en bas de la fenêtre** (toute la hauteur est une zone de
+  dépôt) ; colonnes de 264 px par défaut.
+- Bouton ⇤ dans l'en-tête d'une colonne : la **replier** en bande étroite (titre vertical, compteur), qui
+  reste une zone de dépôt (la carte va alors en fin de colonne, sans reclassement) ; clic sur la bande pour
+  la déplier.
+- **Redimensionner** une colonne en tirant son bord droit (souris ou doigt, 200 à 720 px) ; double-clic sur
+  le bord : largeur par défaut.
+- Barre de filtres (voir 8.5) ; filtres, option, colonnes repliées et largeurs mémorisés **par board**
+  (préférence `board:<clé>`).
+- Téléphone : colonnes d'au plus ~86 % de l'écran qui défilent horizontalement, une par une.
 
 ### 8.4 🎯 Matrice d'Eisenhower
 
@@ -422,8 +474,13 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
   🤝 **Déléguer** (urgent, pas important) · 🗑️ **Éliminer** (ni l'un ni l'autre).
 - Déposer une carte dans un autre quadrant ajuste importance / urgence au **minimum nécessaire** pour
   entrer dans ce quadrant (ex. importance 2 → 3 ; une valeur déjà compatible n'est pas modifiée).
-- **Vue détaillée 4×4** (bascule) : une case par combinaison exacte ; le dépôt fixe les deux valeurs.
-- Mêmes filtres que les kanbans ; les tâches finies / annulées sont masquées par défaut.
+- **Vue détaillée 4×4** (bascule) : une case par combinaison exacte ; le dépôt fixe les deux valeurs. Les
+  tâches y sont affichées en lignes compactes (elles aussi déplaçables), chaque case teintée de la couleur
+  de son quadrant.
+- Disposition classique : urgent à gauche, important en haut (axes affichés).
+- Mêmes filtres que les kanbans ; par défaut, filtre « statut ouvert » (les tâches finies / annulées sont
+  masquées) ; vue et filtres mémorisés (préférence `view:matrix`).
+- Téléphone : les quatre quadrants sont empilés.
 
 ### 8.5 Barre de filtres
 
@@ -461,7 +518,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 ## 9. Responsive / téléphone
 
 - La colonne de gauche devient un tiroir (☰).
-- Kanbans : colonnes en défilement horizontal au doigt ; matrice 2×2 empilée.
+- Kanbans : colonnes en défilement horizontal au doigt (repliables, redimensionnables) ; matrice 2×2 empilée.
 - Éditeur en plein écran ; curseurs utilisables au doigt.
 - Glisser-déposer tactile (appui long pour saisir une carte).
 - Manifeste **PWA** : ajout à l'écran d'accueil, icône, plein écran.
@@ -487,7 +544,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 3 | ✅ Interface : thème clair/sombre, layout responsive, cartes, éditeur avec curseurs, ajout rapide, accueil, liste simple |
 | 4 | ✅ Éditeur markdown CodeMirror (live preview, listes, cases, liens cliquables) |
 | 5 | ✅ Modules : liste (filtres, tri, regroupement mémorisés), recherche Ctrl+K, réglages, dupliquer, heure d'échéance |
-| 6 | Kanbans (prédéfinis + personnalisés), matrice, glisser-déposer, Ctrl+drop |
+| 6 | ✅ Kanbans (prédéfinis + personnalisés, partage), matrice 2×2 / 4×4, glisser-déposer souris et tactile, Ctrl+drop |
 | 7 | Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
 | 8 | Temps réel, PWA, finitions |
 
@@ -509,3 +566,5 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.0 | **Étape 5 livrée** : liste filtrable / triable / regroupable (préférences en base `user_pref`), barre de filtres réutilisable, recherche Ctrl+K + page `/search`, réglages complets (profil, mot de passe, thème, rappels, projets, tags, appareils, utilisateurs), dupliquer une tâche, heure d'échéance ; `AccountService` commun API / interface ; API : préférences et duplication (36 chemins, 49 opérations) ; 163 tests |
 | 2026-11-08 | 1.1 | Couleur des nouveaux tags choisie automatiquement, distincte des autres tags (et surtout de ceux de la tâche éditée) ; API `GET /tags/suggest-color` ; 168 tests |
 | 2026-11-08 | 1.2 | Tags affichés dans leur couleur partout (pastille + fond teinté) : cartes, sélecteur de l'éditeur et filtre « Tags » (puces et liste déroulante), puces légèrement espacées du libellé du champ |
+| 2026-11-08 | 1.3 | **Étape 6 livrée** : boards personnalisés (tables `board`, `board_column`, `board_card`, `board_share` ; `BoardService` ; partage = accès aux tâches posées), pages Kanbans (4 boards prédéfinis + personnalisés, filtres et masquage des terminées par board) et Matrice (2×2, 4×4), glisser-déposer maison souris / tactile avec Ctrl+drop et maintien au doigt pour rattacher ; API : routes `/boards` (45 chemins, 63 opérations) ; 182 tests + tests interactifs dans Firefox |
+| 2026-11-08 | 1.4 | Kanbans : pleine largeur et pleine hauteur, colonnes plus étroites, repliables et redimensionnables (mémorisé par board) ; reclassement dans une colonne avec repère d'insertion, qui ajuste l'urgence et un rang manuel (table `task_rank`, `TaskService.move`, API `POST /tasks/{id}/move` : 46 chemins, 64 opérations) ; tri « Urgence » départagé par ce rang ; 190 tests + vérification dans Firefox |

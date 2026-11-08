@@ -120,6 +120,65 @@ class TaskLink(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class Board(SQLModel, table=True):
+    """Board kanban personnalisé (les boards prédéfinis — statut, échéance… — ne sont pas stockés)."""
+
+    __tablename__ = "board"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    name: str
+    emoji: str = "📊"
+    position: float = 0.0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class BoardColumn(SQLModel, table=True):
+    __tablename__ = "board_column"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    board_id: int = Field(foreign_key="board.id", index=True)
+    name: str
+    emoji: str = ""
+    color: str = "#868e96"
+    position: float = 0.0
+
+
+class BoardCard(SQLModel, table=True):
+    """Placement d'une tâche sur un board personnalisé (une tâche peut être sur plusieurs boards)."""
+
+    __tablename__ = "board_card"
+    __undoable__ = True
+
+    board_id: int = Field(foreign_key="board.id", primary_key=True)
+    task_id: int = Field(foreign_key="task.id", primary_key=True)
+    column_id: int = Field(foreign_key="board_column.id", index=True)
+    position: float = 0.0
+
+
+class TaskRank(SQLModel, table=True):
+    """Rang manuel d'une tâche parmi celles de même urgence (reclassement dans une colonne de kanban) :
+    affine l'urgence au-delà de ses 4 niveaux. Rang absent = 0."""
+
+    __tablename__ = "task_rank"
+    __undoable__ = True
+
+    task_id: int = Field(foreign_key="task.id", primary_key=True)
+    rank: float = 0.0
+
+
+class BoardShare(SQLModel, table=True):
+    """Partage d'un board : ses membres voient (et peuvent modifier) les tâches posées dessus."""
+
+    __tablename__ = "board_share"
+    __undoable__ = True
+
+    board_id: int = Field(foreign_key="board.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+
+
 class AuthSession(SQLModel, table=True):
     """Session de connexion (cookie du navigateur ou jeton du client bureau).
 
@@ -180,5 +239,17 @@ class UndoEntry(SQLModel, table=True):
 
 UNDOABLE_TABLES: dict[str, type[SQLModel]] = {
     model.__tablename__: model  # type: ignore[misc]
-    for model in (Project, Tag, Task, TaskTag, TaskShare, TaskLink)
+    for model in (
+        Project,
+        Tag,
+        Task,
+        TaskTag,
+        TaskShare,
+        TaskLink,
+        TaskRank,
+        Board,
+        BoardColumn,
+        BoardCard,
+        BoardShare,
+    )
 }

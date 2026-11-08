@@ -6,12 +6,14 @@ formulaire → ticket → cookie → page protégée, puis l'interface (cartes, 
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from nicegui import app, ui
 from nicegui.testing import User
 
-from organizer.core.enums import Importance, Status
-from organizer.core.schemas import ProjectIn, TaskCreate, TaskFilter
+from organizer.core.enums import Importance, Status, Urgency
+from organizer.core.schemas import ProjectIn, TaskCreate, TaskFilter, TaskPatch
 
 
 @pytest.fixture(autouse=True)
@@ -113,7 +115,9 @@ async def test_home_sections_and_counts(user: User):
 async def test_placeholder_modules(user: User):
     await login(user)
     await user.open("/kanban")
-    await user.should_see("Arrive à l'étape 6")
+    await user.should_see(marker="zone-status:in_progress")
+    await user.open("/matrix")
+    await user.should_see(marker="zone-q:do")
 
 
 # --- ajout rapide, éditeur, annuler -----------------------------------------------------------------------
@@ -377,3 +381,128 @@ async def test_settings_theme_devices_and_users(user: User):
         fill(user, "Mot de passe", "motdepasse")
     user.find(marker="user-save").click()
     assert sorted(u.username for u in state().users.list()) == ["alice", "bob"]
+
+
+# --- étape 6 : kanbans, matrice, glisser-déposer ----------------------------------------------------------
+# Le geste lui-même (souris, doigt, Ctrl) est testé dans un vrai navigateur ; ici on simule les événements que
+# le composant de glisser-déposer envoie au serveur.
+
+
+def drop(user: User, task_id: int, zone: str, index: int | None = None) -> None:
+    user.find(marker="dnd").trigger("drop", {"task": task_id, "zone": zone, "index": index})
+
+
+async def settle() -> None:
+    """Laisse passer le rafraîchissement de la page (``refresh()`` s'exécute en tâche de fond)."""
+    await asyncio.sleep(0.05)
+
+
+async def test_status_board_drop_changes_status(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="À ranger"))
+    await user.open("/kanban?board=status")
+    await user.should_see(marker="zone-status:in_progress")
+    drop(user, task.id, "status:done")
+    assert sv.tasks.get(task.id).status is Status.DONE
+    sv.undo.undo()
+    assert sv.tasks.get(task.id).status is Status.NOT_STARTED
+
+
+async def test_reorder_in_column_tunes_urgency(user: User):
+    sv = await login(user)
+    top = sv.tasks.create(TaskCreate(title="Urgent", urgency=Urgency(4)))
+    low = sv.tasks.create(TaskCreate(title="Tranquille", urgency=Urgency(1)))
+    await user.open("/kanban?board=status")
+    await user.should_see(marker="zone-status:not_started")
+    drop(user, low.id, "status:not_started", 0)  # remontée en tête de sa colonne
+    assert sv.tasks.get(low.id).urgency == 4 and sv.tasks.get(low.id).status is Status.NOT_STARTED
+    # Vers une autre colonne, à une position : statut ET urgence en une seule action.
+    sv.tasks.update(top.id, TaskPatch(status=Status.IN_PROGRESS, urgency=Urgency(2)))
+    await user.open("/kanban?board=status")
+    drop(user, low.id, "status:in_progress", 1)  # sous « Urgent » (urgence 2)
+    moved = sv.tasks.get(low.id)
+    assert moved.status is Status.IN_PROGRESS and moved.urgency == 2
+    sv.undo.undo()
+    back = sv.tasks.get(low.id)
+    assert back.status is Status.NOT_STARTED and back.urgency == 4
+
+
+async def test_collapse_and_resize_columns(user: User):
+    sv = await login(user)
+    sv.tasks.create(TaskCreate(title="Carte"))
+    await user.open("/kanban?board=status")
+    user.find(marker="collapse-status:done").click()
+    await user.should_see(marker="expand-status:done")
+    assert sv.users.get_pref(sv.actor.id, "board:status")["collapsed"] == ["status:done"]
+    user.find(marker="resizer").trigger("resize", {"key": "status:not_started", "width": 400})
+    assert sv.users.get_pref(sv.actor.id, "board:status")["widths"] == {"status:not_started": 400}
+    await user.open("/kanban?board=status")  # mémorisé
+    await user.should_see(marker="expand-status:done")
+    zone = next(iter(user.find(marker="zone-status:not_started").elements))
+    assert zone._style.get("width") == "400px"
+    user.find(marker="expand-status:done").click()
+    await user.should_see(marker="collapse-status:done")
+    user.find(marker="resizer").trigger("resize", {"key": "status:not_started", "width": None})
+    assert sv.users.get_pref(sv.actor.id, "board:status")["widths"] == {}
+
+
+async def test_due_and_project_boards(user: User):
+    from datetime import date, timedelta
+
+    sv = await login(user)
+    project = sv.projects.create(ProjectIn(name="Jardin"))
+    task = sv.tasks.create(TaskCreate(title="Tondre"))
+    await user.open("/kanban?board=due")
+    drop(user, task.id, "due:tomorrow")
+    assert sv.tasks.get(task.id).due_date == date.today() + timedelta(days=1)
+    await settle()
+    drop(user, task.id, "due:overdue")  # refusé : l'échéance ne change pas
+    assert sv.tasks.get(task.id).due_date == date.today() + timedelta(days=1)
+    await user.open("/kanban?board=project")
+    drop(user, task.id, f"project:{project.id}")
+    assert sv.tasks.get(task.id).project.name == "Jardin"
+    await settle()
+    drop(user, task.id, "project:0")
+    assert sv.tasks.get(task.id).project is None
+
+
+async def test_ctrl_drop_attaches_subtask(user: User):
+    sv = await login(user)
+    parent = sv.tasks.create(TaskCreate(title="Parent"))
+    child = sv.tasks.create(TaskCreate(title="Enfant"))
+    await user.open("/tasks")
+    user.find(marker="dnd").trigger("attach", {"task": child.id, "parent": parent.id})
+    assert sv.tasks.get(child.id).parent_id == parent.id
+    await user.should_see("sous-tâche de")
+
+
+async def test_custom_board_from_ui(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Peindre"))
+    await user.open("/kanban")
+    user.find(marker="new-board").click()
+    with user.scope(marker="board-dialog"):
+        fill(user, "Nom", "Rénovation")
+    user.find(marker="board-save").click()
+    await user.should_see(marker="board-add-tasks")
+    board = sv.boards.list()[0]
+    todo, doing, _ = (c.id for c in board.columns)
+    drop(user, task.id, f"col:{todo}")
+    drop(user, task.id, f"col:{doing}", 0)
+    content = sv.boards.content(board.id)
+    assert [t.title for t in content.columns[doing]] == ["Peindre"]
+
+
+async def test_matrix_drop_quadrant_and_cell(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Classer", importance=1, urgency=1))
+    await user.open("/matrix")
+    await user.should_see(marker="zone-q:do")
+    drop(user, task.id, "q:do")
+    t = sv.tasks.get(task.id)
+    assert (t.importance, t.urgency) == (3, 3)
+    select_value(user, "matrix-mode", "4x4")
+    await user.should_see(marker="zone-cell:4:2")
+    drop(user, task.id, "cell:4:2")
+    t = sv.tasks.get(task.id)
+    assert (t.importance, t.urgency) == (4, 2)

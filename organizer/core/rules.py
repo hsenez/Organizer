@@ -273,6 +273,38 @@ def pick_distinct_color(
 # --- Tri --------------------------------------------------------------------------------------------------
 
 
+def rank_drop(order: list[tuple[int, int, float]], moved: int) -> tuple[Urgency, dict[int, float]]:
+    """Reclassement d'une carte dans une colonne triée par urgence décroissante puis par rang croissant.
+
+    ``order`` : la colonne **après** le dépôt, sous forme de ``(id, urgence, rang)`` (la carte déplacée avec
+    son urgence actuelle). Renvoie la nouvelle urgence de la carte (ramenée au minimum nécessaire entre celles
+    de ses voisines du dessus et du dessous) et les rangs à modifier ``{id: rang}`` pour que l'ordre affiché
+    soit respecté parmi les tâches de même urgence.
+    """
+    ids = [item[0] for item in order]
+    i = ids.index(moved)
+    urgency = order[i][1]
+    high = order[i - 1][1] if i > 0 else max(Urgency)
+    low = order[i + 1][1] if i + 1 < len(order) else min(Urgency)
+    urgency = min(max(urgency, low), max(high, low))
+    group = [(tid, rank) for tid, u, rank in order if (urgency if tid == moved else u) == urgency]
+    j = [tid for tid, _ in group].index(moved)
+    current = group[j][1]
+    before = group[j - 1][1] if j > 0 else None
+    after = group[j + 1][1] if j + 1 < len(group) else None
+    if (before is None or before < current) and (after is None or current < after):
+        return Urgency(urgency), {}  # déjà à sa place
+    if before is None:
+        return Urgency(urgency), {moved: after - 1}
+    if after is None:
+        return Urgency(urgency), {moved: before + 1}
+    if after - before > 1e-6:
+        return Urgency(urgency), {moved: (before + after) / 2}
+    # Rangs égaux (jamais reclassés) : on renumérote le groupe dans l'ordre affiché.
+    changes = {tid: float(k) for k, (tid, rank) in enumerate(group) if rank != float(k) or tid == moved}
+    return Urgency(urgency), changes
+
+
 def priority_score(importance: int, urgency: int) -> int:
     """Score combiné (2 à 8) ; plus il est haut, plus la tâche est prioritaire."""
     return importance + urgency

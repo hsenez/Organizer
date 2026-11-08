@@ -48,6 +48,11 @@ class IdsIn(BaseModel):
     ids: list[int]
 
 
+class MoveIn(BaseModel):
+    patch: TaskPatch | None = None
+    order: list[int] | None = None
+
+
 class SharesIn(BaseModel):
     user_ids: list[int]
 
@@ -104,6 +109,13 @@ def subtasks(task_id: int, sv: Services = Depends(get_services)):
 def attach(task_id: int, data: AttachIn, sv: Services = Depends(get_services)):
     """Fait de cette tâche une sous-tâche de ``parent_id`` (Ctrl + glisser-déposer)."""
     return sv.tasks.attach(task_id, data.parent_id)
+
+
+@router.post("/tasks/{task_id}/move", response_model=TaskOut)
+def move(task_id: int, data: MoveIn, sv: Services = Depends(get_services)):
+    """Glisser-déposer dans un kanban : changement de colonne (``patch``) et reclassement (``order`` :
+    identifiants de la colonne d'arrivée dans l'ordre affiché) ; l'urgence s'ajuste aux voisines."""
+    return sv.tasks.move(task_id, data.patch, data.order)
 
 
 @router.post("/tasks/{task_id}/detach", response_model=TaskOut)

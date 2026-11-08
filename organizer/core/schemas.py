@@ -147,6 +147,7 @@ class TaskOut(_Schema):
     parent_id: int | None
     parent_title: str | None = None
     position: float
+    rank: float = 0.0  # rang manuel parmi les tâches de même urgence (reclassement au kanban)
     title: str
     importance: Importance
     urgency: Urgency
@@ -198,6 +199,66 @@ class TaskFilter(_Schema):
 class TaskSort(_Schema):
     key: str = "due"  # due | importance | urgency | priority | created | updated | title | position
     descending: bool = False
+
+
+# --- Boards personnalisés ---------------------------------------------------------------------------------
+
+
+class ColumnIn(_Schema):
+    name: str = Field(min_length=1, max_length=60)
+    emoji: str = ""
+    color: str = "#868e96"
+
+
+class ColumnPatch(_Schema):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    emoji: str | None = None
+    color: str | None = None
+
+
+class ColumnOut(_Schema):
+    id: int
+    board_id: int
+    name: str
+    emoji: str
+    color: str
+    position: float
+
+
+DEFAULT_COLUMNS = [
+    ColumnIn(name="À faire", emoji="📥", color="#868e96"),
+    ColumnIn(name="En cours", emoji="🚧", color="#339af0"),
+    ColumnIn(name="Fait", emoji="✅", color="#40c057"),
+]
+
+
+class BoardIn(_Schema):
+    name: str = Field(min_length=1, max_length=60)
+    emoji: str = "📊"
+    columns: list[ColumnIn] = Field(default_factory=lambda: [c.model_copy() for c in DEFAULT_COLUMNS])
+
+
+class BoardPatch(_Schema):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    emoji: str | None = None
+
+
+class BoardOut(_Schema):
+    id: int
+    owner_id: int
+    name: str
+    emoji: str
+    position: float
+    columns: list[ColumnOut] = Field(default_factory=list)
+    shared_with: list[int] = Field(default_factory=list)
+    can_manage: bool = False  # propriétaire : colonnes, partage, suppression
+
+
+class BoardContent(_Schema):
+    """Contenu d'un board : tâches visibles par colonne, dans l'ordre."""
+
+    board: BoardOut
+    columns: dict[int, list[TaskOut]] = Field(default_factory=dict)
 
 
 # --- Annuler / rétablir -----------------------------------------------------------------------------------

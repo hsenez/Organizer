@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from nicegui import events, ui
 
+from organizer.ui.components.dnd import DragDrop
 from organizer.ui.components.search_dialog import SearchDialog
 from organizer.ui.components.task_editor import TaskEditor
 from organizer.ui.context import UiContext
@@ -39,17 +40,22 @@ SETTINGS = Module("/settings", "⚙️", "Réglages", "Profil, projets, tags, ap
 
 
 @contextmanager
-def app_frame(ctx: UiContext, active: str, title: str, open_task: str | None = None) -> Iterator[ui.column]:
+def app_frame(
+    ctx: UiContext, active: str, title: str, open_task: str | None = None, *, wide: bool = False
+) -> Iterator[ui.column]:
     """Construit le cadre ; le contenu de la page se place dans la colonne renvoyée.
 
     ``open_task`` : paramètre d'URL ``?task=`` — identifiant d'une tâche dont l'éditeur s'ouvre au chargement,
     ou ``new`` pour ouvrir l'éditeur sur une nouvelle tâche.
+    ``wide`` : contenu sur toute la largeur et toute la hauteur de la fenêtre (kanbans) ; le dernier enfant
+    de la colonne renvoyée peut s'étirer jusqu'en bas avec la classe ``page-fill-grow``.
     """
     apply_theme()
     ctx.dark = ui.dark_mode(THEMES.get(ctx.user.theme))
     ui.page_title(f"{title} · Organizer")
     ctx.editor = TaskEditor(ctx)
     search = SearchDialog(ctx)
+    DragDrop(on_drop=ctx.handle_drop, on_attach=ctx.attach).mark("dnd")
     # Ctrl+K est réservé par certains navigateurs (barre de recherche de Firefox) : on le garde pour nous.
     ui.add_body_html(
         "<script>document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && "
@@ -138,7 +144,12 @@ def app_frame(ctx: UiContext, active: str, title: str, open_task: str | None = N
         ctx.editor.open_new()
     elif open_task and open_task.isdigit():
         ctx.editor.open(int(open_task))
-    with ui.column().classes("w-full max-w-6xl mx-auto p-3 sm:p-6 gap-5 pb-24") as content:
+    if wide:
+        ui.query(".nicegui-content").classes("page-fill")
+        classes = "page-fill-column w-full p-3 sm:px-5 sm:py-4 gap-4"
+    else:
+        classes = "w-full max-w-6xl mx-auto p-3 sm:p-6 gap-5 pb-24"
+    with ui.column().classes(classes) as content:
         yield content
 
 

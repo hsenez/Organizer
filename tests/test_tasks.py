@@ -412,3 +412,42 @@ def test_duplicate_shared_task_belongs_to_me_without_private_labels(alice, bob):
     assert copy.tags == []
     with pytest.raises(NotFound):
         alice.tasks.get(copy.id)
+
+
+def test_move_reorders_and_tunes_urgency(alice):
+    a = alice.tasks.create(TaskCreate(title="A", urgency=Urgency(3)))
+    b = alice.tasks.create(TaskCreate(title="B", urgency=Urgency(3)))
+    c = alice.tasks.create(TaskCreate(title="C", urgency=Urgency(3)))
+    low = alice.tasks.create(TaskCreate(title="Bas", urgency=Urgency(1)))
+
+    def column():
+        return titles(alice.tasks.list(TaskFilter(), TaskSort(key="urgency")))
+
+    assert column() == ["A", "B", "C", "Bas"]
+    alice.tasks.move(c.id, order=[c.id, a.id, b.id, low.id])  # C en tête de son groupe
+    assert column() == ["C", "A", "B", "Bas"]
+    moved = alice.tasks.move(low.id, order=[c.id, low.id, a.id, b.id])  # « Bas » remonté entre C et A
+    assert moved.urgency == 3 and column() == ["C", "Bas", "A", "B"]
+    assert alice.undo.status().undo_label == "Reclasser « Bas » (urgence : ⏰ Pressant)"
+    alice.undo.undo()
+    assert alice.tasks.get(low.id).urgency == 1 and column() == ["C", "A", "B", "Bas"]
+
+
+def test_move_with_patch_is_one_undo_step(alice):
+    a = alice.tasks.create(TaskCreate(title="A", urgency=Urgency(4), status=Status.IN_PROGRESS))
+    b = alice.tasks.create(TaskCreate(title="B", urgency=Urgency(2)))
+    moved = alice.tasks.move(b.id, TaskPatch(status=Status.IN_PROGRESS), order=[b.id, a.id])
+    assert moved.status is Status.IN_PROGRESS and moved.urgency == 4
+    alice.undo.undo()
+    back = alice.tasks.get(b.id)
+    assert back.status is Status.NOT_STARTED and back.urgency == 2
+    with pytest.raises(InvalidOperation):
+        alice.tasks.move(b.id, order=[a.id])
+
+
+def test_move_refuses_invisible_tasks(alice, bob):
+    mine = alice.tasks.create(TaskCreate(title="A"))
+    secret = bob.tasks.create(TaskCreate(title="secret"))
+    with pytest.raises(NotFound):
+        alice.tasks.move(mine.id, order=[secret.id, mine.id])
+    alice.tasks.delete(mine.id)  # le rang éventuel part avec la tâche

@@ -96,7 +96,8 @@ class FilterBar:
                 )
                 ui.button("↺ Réinitialiser", on_click=self.reset).props("flat no-caps").mark("filter-reset")
         self._load_selects()
-        self.panel.set_visibility(active_count(self.value, ignore_text=True) > 0)
+        # Panneau déplié d'office seulement si les filtres s'écartent des réglages par défaut de la page.
+        self.panel.set_visibility(self._without_text(self.value) != self._without_text(self.default))
         self._update_button()
 
     def _select(self, label: str, options: dict) -> ui.select:
@@ -147,6 +148,10 @@ class FilterBar:
         count = active_count(self.value, ignore_text=True)
         self.toggle_button.set_text(f"🎛️ Filtres{f' ({count})' if count else ''}")
         self.toggle_button.props(f"color={'primary' if count else 'grey-7'}")
+
+    @staticmethod
+    def _without_text(flt: TaskFilter) -> dict:
+        return flt.model_dump(mode="json", exclude={"text", "parent_id"})
 
     def _toggle_panel(self) -> None:
         self.panel.set_visibility(not self.panel.visible)

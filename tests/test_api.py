@@ -232,6 +232,18 @@ def test_errors_are_french_json(client, admin_token):
     assert r.status_code == 422 and "un seul niveau" in r.json()["detail"]
 
 
+def test_move_through_api(client, admin_token):
+    h = bearer(admin_token)
+    top = client.post(f"{API}/tasks", json={"title": "Haut", "urgency": 4}, headers=h).json()
+    low = client.post(f"{API}/tasks", json={"title": "Bas", "urgency": 1}, headers=h).json()
+    r = client.post(
+        f"{API}/tasks/{low['id']}/move",
+        json={"patch": {"status": "in_progress"}, "order": [low["id"], top["id"]]},
+        headers=h,
+    )
+    assert r.status_code == 200 and r.json()["urgency"] == 4 and r.json()["status"] == "in_progress"
+
+
 def test_sharing_through_api(client, admin_token, bob_token):
     task = client.post(f"{API}/tasks", json={"title": "Commun"}, headers=bearer(admin_token)).json()
     assert client.get(f"{API}/tasks/{task['id']}", headers=bearer(bob_token)).status_code == 404
@@ -333,3 +345,17 @@ def test_duplicate_route(client, admin_token):
     task = client.post(f"{API}/tasks", json={"title": "Modèle"}, headers=h).json()
     copy = client.post(f"{API}/tasks/{task['id']}/duplicate", headers=h)
     assert copy.status_code == 201 and copy.json()["title"] == "Modèle (copie)"
+
+
+def test_boards_routes(client, admin_token):
+    h = bearer(admin_token)
+    board = client.post(f"{API}/boards", json={"name": "Projet X"}, headers=h).json()
+    todo = board["columns"][0]["id"]
+    task = client.post(f"{API}/tasks", json={"title": "Carte"}, headers=h).json()
+    r = client.put(f"{API}/boards/{board['id']}/cards/{task['id']}", json={"column_id": todo}, headers=h)
+    assert r.status_code == 204
+    content = client.post(f"{API}/boards/{board['id']}/content", headers=h).json()
+    assert [t["title"] for t in content["columns"][str(todo)]] == ["Carte"]
+    assert client.delete(f"{API}/boards/{board['id']}/cards/{task['id']}", headers=h).status_code == 204
+    assert client.delete(f"{API}/boards/{board['id']}", headers=h).status_code == 204
+    assert client.get(f"{API}/boards", headers=h).json() == []
