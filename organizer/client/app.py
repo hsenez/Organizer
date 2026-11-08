@@ -258,7 +258,7 @@ class DesktopClient:
                 "révoquer dans Réglages → 💻 Appareils."
             ).classes("text-xs text-gray-500 text-center w-full")
 
-    def version_check(self, max_age: float = 1800) -> versioning.VersionCheck | None:
+    def version_check(self, max_age: float = 600) -> versioning.VersionCheck | None:
         """Compare ce poste au serveur (résultat gardé ``max_age`` secondes) ; None si on ne sait pas."""
         checked_at, result = self._version
         if result is not None and time.monotonic() - checked_at < max_age:
@@ -268,9 +268,11 @@ class DesktopClient:
             return None
         try:
             data = api.call("GET", "/version", dict, auth=False)
-            result = versioning.check(str(data["version"]), int(data["api"]))
+            result = versioning.check(
+                str(data["version"]), int(data["api"]), installed=versioning.installed_version()
+            )
         except NotFound:  # serveur antérieur à la route /version
-            result = versioning.check(None, None)
+            result = versioning.check(None, None, installed=versioning.installed_version())
         except (OrganizerError, KeyError, TypeError, ValueError):
             return None
         self._version = (time.monotonic(), result)
@@ -286,7 +288,9 @@ class DesktopClient:
                 ui.label(f"🖥️ Cet appareil : {device_name()}")
                 result = self.version_check()
                 server_version = result.server if result and result.server else "?"
-                ui.label(f"🏷️ Versions : ce poste {versioning.__version__} · serveur {server_version}").mark(
+                installed = result.installed if result and result.installed else None
+                running = versioning.__version__ + (f" (installée : {installed})" if installed else "")
+                ui.label(f"🏷️ Versions : ce poste {running} · serveur {server_version}").mark(
                     "connection-versions"
                 )
                 if result is not None and not result.ok:

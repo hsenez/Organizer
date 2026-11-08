@@ -81,6 +81,6 @@ async def test_version_banner(server, user: User, monkeypatch):
     server.users.create_user("alice", "motdepasse", "Alice")
     await connect(user)
     await user.should_see(marker="version-banner")
-    await user.should_see("Une mise à jour d'Organizer est disponible")
+    await user.should_see("Ce poste est en retard")
     await user.open("/settings?tab=connection")
     await user.should_see("serveur 9.0.0")

@@ -86,6 +86,16 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - Mettre une date de début optionnelle d'uen tache
 - Mettre une date de rappel de mise à jour d'une tache obligatoire, par défaut 2 semaines après sa création
 - Taches récurrentes
+- Travail sur l'accueil pour display plus "straight to the point"
+- Possibilité d'éditer la liste des emojis proposés dans la création de projets
+
+#### Support HTTPS & reverse proxy
+
+- mettre en ligne sur https://organizer.blou.top
+- suggestion : revers proxy sur nginx
+- certificat HTTPS en utilisant certbot
+- exposition à l'extérieur en passant par cloudflare
+- Mission pour Claude : me proposer des alternatives à cette proposition si il y a mieux en termes de simplicité, ou sécurité ou confidentialité.
 
 #### Chantier important: Création d'événements. 
 

@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 1.9 — 2026-11-08
+> Version : 1.9.1 — 2026-11-08
 
 ---
 
@@ -627,9 +627,11 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 - **Version de l'API** (`organizer.API_VERSION`, entier) : augmentée seulement quand un client plus ancien
   ne peut plus fonctionner avec le serveur.
 - Le serveur l'annonce sans connexion : `GET /api/v1/version` → `{"version": "0.7.0", "api": 1}`.
-- **Client bureau** : compare sa version à celle du serveur (au plus toutes les 30 min) et affiche un bandeau
-  en haut des pages : 🔄 mise à jour disponible (serveur plus récent), ⚠️ en rouge si l'API n'est plus
-  compatible, ℹ️ si c'est le serveur qui est en retard. Les deux versions sont aussi dans Réglages →
+- **Client bureau** : compare sa version à celle du serveur (au plus toutes les 10 min) et affiche un bandeau
+  en haut des pages qui dit **qui** doit être mis à jour : 🔁 « mis à jour sur ce poste mais l'ancienne
+  version tourne encore » (version sur le disque plus récente que celle en mémoire : quitter et relancer
+  le client), 🔄 « ce poste est en retard » (commande de mise à jour du poste), ⚠️ en rouge si l'API n'est
+  plus compatible, ℹ️ « c'est le serveur qui est en retard » (`deploy/update.sh` sur le Pi). Les deux versions sont aussi dans Réglages →
   🔌 Connexion.
 - **Mettre à jour un poste** : `install/linux/update.sh` ou `install\windows\update.bat` — arrête le
   client, `git pull --ff-only`, relance l'installeur avec les options retenues (dépendances, lanceur,
@@ -686,3 +688,4 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.8 | **Étape 8** : temps réel (bus `core/events.py`, pages web abonnées, flux SSE `/api/v1/events` pour le client bureau, origine des modifications, attente pendant un glisser), PWA (manifeste, icônes maskable / apple-touch, service worker, raccourcis), HTTPS facultatif (`ORGANIZER_SSL_*`, `ORGANIZER_CA_FILE`), favicon = icône Post-it ; finitions : « 🌳 Rattacher à… » dans le menu des cartes, ↑ ↓ dans Ctrl+K, défilement automatique pendant un glisser, décalage de rappel par défaut lu au moment de créer, compteur « Filtres (n) » relatif aux filtres par défaut de la vue ; 246 tests + vérifications dans Firefox (temps réel entre onglets et client bureau, défilement) |
 | 2026-11-08 | 1.8.1 | **Version 0.8.0** du logiciel. Correction : **Ctrl+Alt+O** n'ouvrait pas Organizer sous KDE (raccourci posé sans le drapeau « présent », ignoré au clavier) ; l'installeur utilise `setShortcutKeys` et vérifie que la touche est bien attribuée. Relancer `install/linux/install.sh` (ou `--reuse`) sur les postes déjà installés |
 | 2026-11-08 | 1.9 | **Installation du serveur** : `deploy/install.sh` (venv, dépendances, service systemd généré pour l'utilisateur qui lance la commande — même sous sudo, jamais root —, `Restart=always`, démarrage au boot, vérification de la réponse, options retenues, `--print-service`, `--uninstall`) ; `deploy/update.sh` s'appuie dessus (`--reuse`) ; `deploy/organizer.service` (fixé sur l'utilisateur `pi`) supprimé ; 251 tests + installation, mise à jour et désinstallation déroulées dans un bac à sable |
+| 2026-11-08 | 1.9.1 | Bandeau de version du client bureau : détecte un client mis à jour sur le disque mais pas redémarré (« quittez puis relancez Organizer »), messages qui nomment qui doit être mis à jour (ce poste / le serveur), vérification toutes les 10 min ; version installée affichée dans 🔌 Connexion ; 254 tests |

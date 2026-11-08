@@ -260,7 +260,10 @@ Référence fonctionnelle complète : **`specifications.md`**.
   seulement si un client plus ancien ne peut plus fonctionner (route supprimée / modifiée de façon
   incompatible) — préférer des changements compatibles (champs ajoutés avec valeur par défaut).
 - Comparaison et messages : `organizer/versioning.py` ; route publique `GET /api/v1/version` ; bandeau du
-  client : `DesktopClient.version_check` → `UiContext.banner` → `app_frame`.
+  client : `DesktopClient.version_check` (cache 10 min) → `UiContext.banner` → `app_frame`. Le client
+  compare aussi la version **sur le disque** (`installed_version()`, lue dans `organizer/__init__.py`) à
+  celle **en mémoire** : un client qui tourne depuis avant un `git pull` affiche « quittez puis relancez »
+  (cas rencontré : bandeau trompeur après la mise à jour du Pi).
 - **Serveur** : `deploy/install.sh` (+ `deploy/common.sh` : `org_target_user` = `SUDO_USER` sous sudo, sinon
   `id -un`, refus en root direct ; `org_as_user` / `org_as_root`). Le service systemd est **généré**
   (`--print-service` pour le voir), plus de fichier statique. Tests : `tests/test_deploy.py`
@@ -302,7 +305,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 251 tests au total.
+- 254 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

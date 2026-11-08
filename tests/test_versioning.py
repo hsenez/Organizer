@@ -41,13 +41,38 @@ def test_check(server, server_api, kind, blocking):
 
 def test_messages():
     newer = versioning.check("0.8.0", 1, client_version="0.7.0", client_api=1)
-    assert "mise à jour" in versioning.message(newer, "linux") and "install/linux/update.sh" in (
+    assert "Mettez à jour ce poste" in versioning.message(newer, "linux") and "install/linux/update.sh" in (
         versioning.message(newer, "linux")
     )
     assert r"install\windows\update.bat" in versioning.message(newer, "win32")
     older = versioning.check("0.6.0", 1, client_version="0.7.0", client_api=1)
     assert "deploy/update.sh" in versioning.message(older, "linux")
     assert versioning.message(versioning.check("0.7.0", 1, "0.7.0", 1), "linux") == ""
+
+
+def test_restart_needed_when_code_updated_but_not_restarted():
+    result = versioning.check("0.8.0", 1, client_version="0.7.0", client_api=1, installed="0.8.0")
+    assert result.kind == "restart" and not result.blocking
+    text = versioning.message(result, "linux")
+    assert "Quitter Organizer" in text and "0.8.0" in text and "0.7.0" in text
+    # Code sur le disque identique à celui qui tourne : comparaison normale avec le serveur.
+    assert versioning.check("0.8.0", 1, "0.7.0", 1, installed="0.7.0").kind == "client_old"
+    assert versioning.check("0.8.0", 1, "0.8.0", 1, installed="0.8.0").ok
+
+
+def test_messages_name_who_must_update():
+    old_client = versioning.message(versioning.check("0.8.0", 1, "0.7.0", 1), "linux")
+    assert old_client.startswith("🔄 Ce poste est en retard")
+    old_server = versioning.message(versioning.check("0.7.0", 1, "0.8.0", 1), "linux")
+    assert "C'est le serveur qui est en retard" in old_server
+
+
+def test_installed_version(tmp_path):
+    assert versioning.installed_version() == __version__
+    init = tmp_path / "__init__.py"
+    init.write_text('"""doc"""\n__version__ = "9.1.0"\nAPI_VERSION = 1\n')
+    assert versioning.installed_version(init) == "9.1.0"
+    assert versioning.installed_version(tmp_path / "absent.py") is None
 
 
 def test_version_route_needs_no_login(tmp_path):
