@@ -76,10 +76,12 @@ def page(make_context):
             return ctx
         boards = ctx.ds.boards.list()
         board_keys = {"status", "due", "kind", "project", *(str(b.id) for b in boards)}
-        key = request.query_params.get("board") or ctx.ds.account.get_pref("kanban:last", "status")
+        last = ctx.ds.account.get_pref("kanban:last", "status")
+        key = request.query_params.get("board") or last
         if key not in board_keys:
             key = "status"
-        ctx.ds.account.set_pref("kanban:last", key)
+        if key != last:  # une écriture de moins à chaque visite
+            ctx.ds.account.set_pref("kanban:last", key)
         with app_frame(ctx, "/kanban", "Kanbans", open_task=request.query_params.get("task"), wide=True):
             KanbanView(ctx, key, boards)
         return None

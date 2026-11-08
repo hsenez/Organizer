@@ -4,10 +4,15 @@ Mêmes sous-objets et mêmes méthodes (signatures, types de retour, erreurs) qu
 :class:`organizer.core.datasource.LocalDataSource`, mais chaque appel passe par l'API REST du serveur.
 Les objets envoyés ne contiennent que les champs **explicitement fournis** (``exclude_unset``), comme les
 services l'attendent (patch partiel, héritage des attributs d'une sous-tâche…).
+
+Les données qui changent rarement (projets, tags, boards, utilisateurs, préférences, état « annuler »)
+sont gardées en mémoire (``ApiClient.cache``, voir :mod:`organizer.client.cache`) : chaque requête coûte un
+aller-retour réseau, ≈ 300 ms par Internet.
 """
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -16,7 +21,8 @@ from urllib.parse import quote
 from pydantic import BaseModel
 
 from organizer.client import system
-from organizer.client.api import ApiClient
+from organizer.client.api import UNDO_KEY, ApiClient
+from organizer.client.cache import EVERYTHING
 from organizer.core.events import ORIGIN_HEADER
 from organizer.core.schemas import (
     AdminUserPatch,
@@ -123,8 +129,12 @@ class RemoteTasks(_Part):
 
 class RemoteProjects(_Part):
     def list(self, include_archived: bool = False) -> list[ProjectOut]:
-        return self.api.call(
-            "GET", "/projects", list[ProjectOut], params={"include_archived": include_archived}
+        return self.api.cache.get(
+            f"projects:{include_archived}",
+            lambda: self.api.call(
+                "GET", "/projects", list[ProjectOut], params={"include_archived": include_archived}
+            ),
+            tables=["project"],
         )
 
     def get(self, project_id: int) -> ProjectOut:
@@ -145,7 +155,7 @@ class RemoteProjects(_Part):
 
 class RemoteTags(_Part):
     def list(self) -> list[TagOut]:
-        return self.api.call("GET", "/tags", list[TagOut])
+        return self.api.cache.get("tags", lambda: self.api.call("GET", "/tags", list[TagOut]), tables=["tag"])
 
     def get(self, tag_id: int) -> TagOut:
         return self.api.call("GET", f"/tags/{tag_id}", TagOut)
@@ -171,7 +181,9 @@ class RemoteTags(_Part):
 
 class RemoteUndo(_Part):
     def status(self) -> UndoStatus:
-        return self.api.call("GET", "/undo", UndoStatus)
+        # Mis à jour par la réponse de chaque écriture (en-tête ``X-Organizer-Undo``), oublié à chaque
+        # modification signalée par le temps réel (autre appareil).
+        return self.api.cache.get(UNDO_KEY, lambda: self.api.call("GET", "/undo", UndoStatus), [EVERYTHING])
 
     def undo(self) -> UndoResult | None:
         return self.api.call("POST", "/undo", UndoResult)
@@ -197,7 +209,11 @@ class RemoteAttachments(_Part):
 
 class RemoteBoards(_Part):
     def list(self) -> list[BoardOut]:
-        return self.api.call("GET", "/boards", list[BoardOut])
+        return self.api.cache.get(
+            "boards",
+            lambda: self.api.call("GET", "/boards", list[BoardOut]),
+            tables=["board", "board_column", "board_share"],
+        )
 
     def get(self, board_id: int) -> BoardOut:
         return self.api.call("GET", f"/boards/{board_id}", BoardOut)
@@ -243,7 +259,7 @@ class RemoteBoards(_Part):
 
 class RemoteAccount(_Part):
     def me(self) -> UserOut:
-        return self.api.call("GET", "/auth/me", UserOut)
+        return self.api.cache.get("me", lambda: self.api.call("GET", "/auth/me", UserOut))
 
     def update_profile(self, patch: ProfilePatch) -> UserOut:
         return self.api.call("PATCH", "/users/me", UserOut, json=_sent(patch))
@@ -252,11 +268,14 @@ class RemoteAccount(_Part):
         self.api.call("POST", "/users/me/password", json=_full(change))
 
     def get_pref(self, key: str, default: Any = None) -> Any:
-        value = self.api.call("GET", f"/users/me/prefs/{quote(key, safe='')}", Any)
-        return default if value is None else value
+        value = self.api.cache.get(
+            f"pref:{key}", lambda: self.api.call("GET", f"/users/me/prefs/{quote(key, safe='')}", Any)
+        )
+        return default if value is None else copy.deepcopy(value)
 
     def set_pref(self, key: str, value: Any) -> None:
         self.api.call("PUT", f"/users/me/prefs/{quote(key, safe='')}", json=value)
+        self.api.cache.put(f"pref:{key}", copy.deepcopy(value))
 
     def sessions(self) -> list[SessionOut]:
         return self.api.call("GET", "/auth/sessions", list[SessionOut])
@@ -319,7 +338,7 @@ class RemoteDataSource:
         self._cache_dir = cache_dir or system.cache_dir()
 
     def users_public(self) -> list[UserPublic]:
-        return self.api.call("GET", "/users", list[UserPublic])
+        return self.api.cache.get("users", lambda: self.api.call("GET", "/users", list[UserPublic]))
 
     def attachment_url(self, attachment_id: str) -> str:
         return f"{self.api.base_url}/api/v1/attachments/{quote(attachment_id)}"

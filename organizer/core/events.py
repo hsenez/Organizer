@@ -21,6 +21,9 @@ from dataclasses import dataclass
 log = logging.getLogger("organizer.events")
 
 ORIGIN_HEADER = "X-Organizer-Origin"
+# Réponse à une écriture du client bureau : état « annuler / rétablir » (JSON d'``UndoStatus``, en ASCII),
+# pour lui éviter une requête de plus à chaque clic.
+UNDO_HEADER = "X-Organizer-Undo"
 
 
 @dataclass(frozen=True)

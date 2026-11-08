@@ -99,6 +99,15 @@ class TaskEditor:
             return
         self._build()
 
+    def _page_changed(self) -> None:
+        """Modification faite dans l'éditeur ouvert : la page derrière n'est relue qu'à sa fermeture
+        (``_on_hide``), une requête de moins par clic (≈ 300 ms pour le client bureau à travers Internet).
+        Seuls les boutons annuler / rétablir suivent tout de suite."""
+        if self.dialog.value:
+            self.ctx.refresh(light=True)
+        else:
+            self.ctx.refresh()
+
     def _on_hide(self) -> None:
         self._save_notes()  # dernières frappes pas encore enregistrées
         if self.is_draft and (self.title_input.value or "").strip():
@@ -121,7 +130,7 @@ class TaskEditor:
             return False
         self.task = updated
         self._flash_saved()
-        self.ctx.refresh()
+        self._page_changed()
         if rebuild:
             self._build()
         return True
@@ -146,7 +155,7 @@ class TaskEditor:
             return False
         self.draft = None
         self.task = created
-        self.ctx.refresh()
+        self._page_changed()
         if rebuild:
             self._build()
             self._flash_saved("✔ Tâche créée")
@@ -462,7 +471,7 @@ class TaskEditor:
             if updated is not None:
                 self.task = updated
                 self._flash_saved()
-                self.ctx.refresh()
+                self._page_changed()
 
         ui.select(
             others,
@@ -519,7 +528,7 @@ class TaskEditor:
                     return
                 if self.ctx.call(self.ds.tasks.create, TaskCreate(title=text, parent_id=self.task.id)):
                     self.task = self.ds.tasks.get(self.task.id)
-                    self.ctx.refresh()
+                    self._page_changed()
                     self._subtasks()
                     self._focus_new_subtask()
 
@@ -537,7 +546,7 @@ class TaskEditor:
         if self.ctx.call(self.ds.tasks.update, sub.id, TaskPatch(status=target)) is None:
             return
         self.task = self.ds.tasks.get(self.task.id)
-        self.ctx.refresh()
+        self._page_changed()
         self._subtasks()
         if done:
             self._maybe_suggest_parent(self.task.id)
@@ -557,7 +566,7 @@ class TaskEditor:
                     dialog.close()
                     if self.ctx.call(self.ds.tasks.update, parent.id, TaskPatch(status=Status.DONE)):
                         ui.notify(f"✅ « {parent.title} » terminée", position="top")
-                        self.ctx.refresh()
+                        self._page_changed()
                         self.reload()
 
                 ui.button("✅ Oui, terminer", on_click=finish, color="positive")
@@ -567,7 +576,7 @@ class TaskEditor:
         updated = self.ctx.call(self.ds.tasks.detach, self.task.id)
         if updated is not None:
             self.task = updated
-            self.ctx.refresh()
+            self._page_changed()
             self._build()
 
     # --- liens ---
@@ -649,7 +658,7 @@ class TaskEditor:
     def _after_links_change(self) -> None:
         self.task = self.ds.tasks.get(self.task.id)
         self._flash_saved()
-        self.ctx.refresh()
+        self._page_changed()
         self._links()
 
     def _open_link(self, link) -> None:

@@ -4,6 +4,7 @@ configuration, verrou de la fenêtre, notifications des rappels, ouverture des f
 from __future__ import annotations
 
 import io
+import json
 import os
 import tarfile
 from datetime import date, timedelta
@@ -415,3 +416,114 @@ def test_dropped_file_uris_from_gtk():
         "file:///home/a/y%20z.txt",
     ]
     assert file_uris([], None) == []
+
+
+# --- mémoire du client (moins d'allers-retours) -----------------------------------------------------------
+
+
+def _counting(remote) -> list[str]:
+    """Liste (méthode chemin) des requêtes envoyées au serveur par ``remote``."""
+    sent: list[str] = []
+    original = remote.api.request
+
+    def request(method, path, **kwargs):
+        sent.append(f"{method} {path}")
+        return original(method, path, **kwargs)
+
+    remote.api.request = request
+    return sent
+
+
+def test_cache_keeps_rarely_changing_lists(remote, local):
+    sent = _counting(remote)
+    remote.projects.create(ProjectIn(name="Maison"))
+    remote.tags.create(TagIn(name="urgent"))
+    sent.clear()
+    for _ in range(3):
+        assert [p.name for p in remote.projects.list()] == ["Maison"]
+        assert [t.name for t in remote.tags.list()] == ["urgent"]
+        remote.users_public()
+        remote.account.me()
+    # Une seule fois chacun (le compte était déjà en mémoire : lu à la création de la source de données).
+    assert sent == ["GET /projects", "GET /tags", "GET /users"]
+
+    # Écriture de ce poste : la liste concernée est relue, pas les autres.
+    remote.projects.create(ProjectIn(name="Travail"))
+    sent.clear()
+    assert [p.name for p in remote.projects.list()] == ["Maison", "Travail"]
+    remote.tags.list()
+    assert sent == ["GET /projects"]
+
+    # Modification venue d'ailleurs, signalée par le temps réel.
+    local.tags.create(TagIn(name="plus tard"))
+    remote.api.cache.on_change(["tag"])
+    assert sorted(t.name for t in remote.tags.list()) == ["plus tard", "urgent"]
+
+
+def test_undo_status_comes_with_each_write(remote, local):
+    sent = _counting(remote)
+    task = remote.tasks.create(TaskCreate(title="Courses"))
+    remote.tasks.update(task.id, TaskPatch(title="Courses du samedi"))
+    sent.clear()
+    status = remote.undo.status()
+    assert sent == []  # donné par la réponse de l'écriture (en-tête X-Organizer-Undo)
+    assert status == local.undo.status() and status.undo_label
+    remote.undo.undo()
+    assert remote.undo.status() == local.undo.status()
+    assert sent == ["POST /undo"]
+    # Modification faite sur un autre appareil : l'état est relu.
+    local.tasks.create(TaskCreate(title="Ailleurs"))
+    remote.api.cache.on_change(["task"])
+    assert remote.undo.status() == local.undo.status()
+    assert sent[-1] == "GET /undo"
+
+
+def test_undo_brings_back_a_deleted_project(remote):
+    project = remote.projects.create(ProjectIn(name="Maison"))
+    assert [p.name for p in remote.projects.list()] == ["Maison"]
+    remote.projects.delete(project.id)
+    assert remote.projects.list() == []
+    remote.undo.undo()  # sans attendre l'événement temps réel
+    assert [p.name for p in remote.projects.list()] == ["Maison"]
+
+
+def test_prefs_are_remembered_and_copied(remote):
+    sent = _counting(remote)
+    remote.account.set_pref("view:tasks", {"filter": {"status": ["done"]}})
+    view = remote.account.get_pref("view:tasks")
+    view["filter"]["status"].append("cancelled")  # l'appelant modifie sa copie…
+    assert remote.account.get_pref("view:tasks") == {"filter": {"status": ["done"]}}  # … pas la mémoire
+    assert sent == ["PUT /users/me/prefs/view%3Atasks"]
+
+
+def test_reconnection_forgets_everything(remote):
+    sent = _counting(remote)
+    remote.tags.list()
+    remote.api.cache.on_change(None)  # flux temps réel rétabli : des modifications ont pu être manquées
+    remote.tags.list()
+    assert sent == ["GET /tags", "GET /tags"]
+
+
+def test_cache_expires():
+    from organizer.client.cache import RemoteCache
+
+    now = [0.0]
+    cache = RemoteCache(ttl=300, short_ttl=60, clock=lambda: now[0])
+    loads = []
+    assert cache.get("users", lambda: loads.append(1) or ["a"]) == ["a"]
+    cache.get("projects", lambda: loads.append(2) or ["p"], tables=["project"])
+    now[0] = 61  # les comptes (sans événement) sont relus au bout d'une minute, les projets non
+    cache.get("users", lambda: loads.append(1) or ["a"])
+    cache.get("projects", lambda: loads.append(2) or ["p"], tables=["project"])
+    assert loads == [1, 2, 1]
+
+
+def test_undo_header_only_for_desktop_writes(state, http, alice_user):
+    from organizer.core.events import UNDO_HEADER
+
+    token, _ = state.auth.create_session(alice_user.id, kind="api")
+    headers = {"Authorization": f"Bearer {token}"}
+    r = http.post("/api/v1/tasks", json={"title": "Pain"}, headers=headers)
+    assert r.status_code == 201
+    assert json.loads(r.headers[UNDO_HEADER]) == {"undo_label": "Créer « Pain »", "redo_label": None}
+    assert UNDO_HEADER.lower() not in http.get("/api/v1/undo", headers=headers).headers

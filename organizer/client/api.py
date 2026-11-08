@@ -7,6 +7,7 @@ que sur le serveur) : l'interface les affiche comme en local. Un serveur injoign
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import json as jsonlib
 import os
@@ -18,6 +19,7 @@ import httpx
 from pydantic import TypeAdapter
 
 from organizer.client import system
+from organizer.client.cache import EVERYTHING, RemoteCache
 from organizer.core.errors import (
     Forbidden,
     InvalidOperation,
@@ -27,10 +29,13 @@ from organizer.core.errors import (
     ServerUnreachable,
     UndoConflict,
 )
+from organizer.core.events import UNDO_HEADER
+from organizer.core.schemas import UndoStatus
 
 API_PREFIX = "/api/v1"
 USER_AGENT = "Organizer-Bureau"
 NO_BODY: Any = object()  # pas de corps (distinct de ``None``, envoyé comme ``null``)
+UNDO_KEY = "undo"  # clé de l'état « annuler / rétablir » dans le cache
 
 _ERRORS: dict[int, type[OrganizerError]] = {
     401: NotAuthenticated,
@@ -77,6 +82,8 @@ class ApiClient:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.extra_headers: dict[str, str] = {}
+        # Partagé par les copies (``with_headers``) : toutes les pages du client profitent de la même mémoire.
+        self.cache = RemoteCache()
         self.http = http or httpx.Client(
             base_url=self.base_url,
             timeout=httpx.Timeout(timeout, connect=4.0),
@@ -122,6 +129,12 @@ class ApiClient:
                 f"🔌 Serveur injoignable ({self.base_url}) : vérifiez qu'il est démarré et que vous êtes sur "
                 "le même réseau."
             ) from exc
+        if method != "GET":
+            self.cache.on_write(path)
+        undo = response.headers.get(UNDO_HEADER)
+        if undo:
+            with contextlib.suppress(ValueError):
+                self.cache.put(UNDO_KEY, UndoStatus.model_validate(jsonlib.loads(undo)), [EVERYTHING])
         if response.status_code >= 400:
             raise error_from(response)
         return response

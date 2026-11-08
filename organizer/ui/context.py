@@ -34,6 +34,7 @@ class UiContext:
         self.ds = ds
         self.logout = logout
         self._refreshers: list[Callable[[], Any]] = []
+        self._light_refreshers: list[Callable[[], Any]] = []
         self.editor: Any = None  # TaskEditor de la page (créé par le layout)
         self.dark: Any = None  # ui.dark_mode de la page (créé par le layout)
         # Dépôt d'une carte dans une zone de la page : fonction (task_id, zone, index) fournie par la page.
@@ -59,16 +60,21 @@ class UiContext:
 
     # --- rafraîchissement ---
 
-    def on_refresh(self, callback: Callable[[], Any]) -> None:
+    def on_refresh(self, callback: Callable[[], Any], light: bool = False) -> None:
+        """``light`` : aussi appelé par un rafraîchissement léger (sans relecture de la page, ex. boutons
+        annuler / rétablir)."""
         self._refreshers.append(callback)
+        if light:
+            self._light_refreshers.append(callback)
 
     def set_dragging(self, active: bool) -> None:
         self.dragging = active
         if not active and self.live is not None:
             self.live.resume()
 
-    def refresh(self) -> None:
-        for callback in list(self._refreshers):
+    def refresh(self, light: bool = False) -> None:
+        """Rafraîchit la page ; ``light`` : seulement ce qui ne la relit pas (boutons annuler / rétablir)."""
+        for callback in list(self._light_refreshers if light else self._refreshers):
             callback()
 
     # --- appels protégés ---

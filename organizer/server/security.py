@@ -13,6 +13,7 @@ visiteur : c'est sur eux que s'appuient l'anti force brute et le cookie ``Secure
 
 from __future__ import annotations
 
+import json
 from urllib.parse import quote
 
 from starlette.concurrency import run_in_threadpool
@@ -20,6 +21,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
+from organizer.core.events import UNDO_HEADER
 from organizer.core.services.auth import ResolvedSession
 
 COOKIE_NAME = "organizer_session"
@@ -131,6 +133,20 @@ def docs_refusal(request: Request) -> Response:
     return RedirectResponse(f"/login?next={quote(request.url.path)}", status_code=303)
 
 
+def is_api_write(request: Request) -> bool:
+    return request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/")
+
+
+async def add_undo_status(request: Request, response: Response, auth: ResolvedSession) -> None:
+    """Écriture du client bureau : joint l'état « annuler / rétablir » à la réponse (il change à chaque
+    écriture ; le client s'épargne ainsi une requête, soit ≈ 300 ms par clic à travers Internet)."""
+    if response.status_code >= 500:
+        return
+    state = request.app.state.organizer
+    status = await run_in_threadpool(lambda: state.services_for(auth.user).undo.status())
+    response.headers[UNDO_HEADER] = json.dumps(status.model_dump(), ensure_ascii=True)
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """Résout la session ; refuse aussi la documentation de l'API aux visiteurs non connectés (elle décrit
     toutes les routes : inutile de la montrer à Internet)."""
@@ -152,6 +168,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             response = docs_refusal(request)
         else:
             response = await call_next(request)
+            if source == "bearer" and resolved is not None and is_api_write(request):
+                await add_undo_status(request, response, resolved)
 
         sets_cookie = any(h.startswith(f"{COOKIE_NAME}=") for h in response.headers.getlist("set-cookie"))
         if source == "cookie" and not sets_cookie:

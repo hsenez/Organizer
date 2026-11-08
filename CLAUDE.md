@@ -242,6 +242,17 @@ Référence fonctionnelle complète : **`specifications.md`**.
   (`events.closing` renvoie False), méthodes `organizer_present` / `organizer_quit` ajoutées à la fenêtre et
   appelées par `nicegui.native.native.method_queue` (elles doivent renvoyer None). `app.shutdown()` passerait
   par la fermeture annulée : pour quitter, toujours `organizer_quit`.
+- **Latence** : chaque appel de l'UI est une requête bloquante (≈ 20 ms en local, ≈ 300 ms par Cloudflare).
+  `client/cache.py` (`RemoteCache`, attaché à `ApiClient.cache`, partagé par les copies `with_headers`) garde
+  projets, tags, boards (oubliés si leurs tables changent : `DesktopClient._dispatch_change` →
+  `cache.on_change`), utilisateurs, `me`, préférences (délai court, pas d'événement), état d'annulation
+  (`UNDO_KEY`, rempli par l'en-tête `X-Organizer-Undo` que `security.add_undo_status` joint aux écritures
+  en Bearer). `cache.on_write(path)` à chaque écriture du poste (table `WRITES` ; annuler / rétablir oublie
+  projets, tags, boards). Les valeurs rendues sont des copies (préférences : copie profonde). Une méthode de
+  `remote.py` qui lit une donnée gardée en mémoire doit déclarer ses tables. L'éditeur appelle
+  `_page_changed()` (rafraîchissement **léger** : `ctx.refresh(light=True)` = boutons annuler / rétablir) ;
+  la page est relue à la fermeture (`_on_hide`). Mesure : client lancé par un script qui enveloppe
+  `ApiClient.request` (durée, chemin) + clics rejoués dans Firefox.
 - Pages ouvertes mémorisées (`DesktopClient._pages`) : « nouvelle tâche » ouvre l'éditeur dans la page
   affichée (`_in_page`), sinon charge `/?task=new`.
 - Linux : `GLib.set_prgname("organizer")` dans le sous-processus = identifiant Wayland = nom du `.desktop`.
@@ -392,7 +403,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 326 tests au total.
+- 333 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

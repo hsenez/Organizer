@@ -145,7 +145,7 @@ def app_frame(
     # ``ignore`` : dans un champ texte, Ctrl+Z reste l'annulation de frappe du navigateur.
     ui.keyboard(on_key=on_key, ignore=["input", "select", "button", "textarea"])
 
-    ctx.on_refresh(update_undo_buttons)
+    ctx.on_refresh(update_undo_buttons, light=True)
     update_undo_buttons()
     if open_task == "new":
         ctx.editor.open_new()

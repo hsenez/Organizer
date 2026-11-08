@@ -431,7 +431,10 @@ class DesktopClient:
     # --- installation ---
 
     def _dispatch_change(self, event: ChangeEvent | None) -> None:
-        """Modification reçue du serveur (fil du flux SSE) → pages ouvertes."""
+        """Modification reçue du serveur (fil du flux SSE) → mémoire du client, puis pages ouvertes."""
+        api = self.api
+        if api is not None:
+            api.cache.on_change(event.tables if event is not None else None)
         for _client, ctx in list(self._pages):
             if ctx.live is not None:
                 ctx.live.notify(event)
