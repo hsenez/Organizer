@@ -131,7 +131,7 @@ run_client.py
   - changer son mot de passe déconnecte les autres appareils ; désactiver un compte ou réinitialiser son
     mot de passe (admin) le déconnecte partout ;
   - les redirections après connexion n'acceptent que des chemins internes (pas de redirection ouverte).
-- **API REST** `/api/v1`, documentée sur **`/docs`** : authentification par `Authorization: Bearer <jeton>`
+- **API REST** `/api/v1`, documentée sur **`/docs`** (réservé aux utilisateurs connectés) : authentification par `Authorization: Bearer <jeton>`
   (client bureau) ou par le cookie (navigateur). Erreurs en JSON `{"detail": "message en français"}`.
 - **Visibilité des tâches** :
   - chaque tâche a un **propriétaire** ; elle est privée par défaut ;
@@ -668,7 +668,9 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
   réponse, ex. pièces jointes) : `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
   `Referrer-Policy: same-origin`, et `Strict-Transport-Security: max-age=31536000` (HSTS, 1 an) pour les
   visiteurs en HTTPS uniquement.
-- À venir (`TODO.md`) : `/docs` réservé aux connectés, limite d'échecs de connexion par identifiant, export
+- **Documentation de l'API** (`/docs`, `/redoc`, `/openapi.json`) réservée aux connectés : sinon redirection
+  vers `/login?next=/docs` (401 pour le schéma JSON).
+- À venir (`TODO.md`) : limite d'échecs de connexion par identifiant, export
   de la base (admin, jeton de sauvegarde), restauration (`deploy/restore.sh`), guide Cloudflare (README).
 
 ---
@@ -714,3 +716,4 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
 | 2026-11-08 | 1.9 | **Installation du serveur** : `deploy/install.sh` (venv, dépendances, service systemd généré pour l'utilisateur qui lance la commande — même sous sudo, jamais root —, `Restart=always`, démarrage au boot, vérification de la réponse, options retenues, `--print-service`, `--uninstall`) ; `deploy/update.sh` s'appuie dessus (`--reuse`) ; `deploy/organizer.service` (fixé sur l'utilisateur `pi`) supprimé ; 251 tests + installation, mise à jour et désinstallation déroulées dans un bac à sable |
 | 2026-11-08 | 1.9.1 | Bandeau de version du client bureau : détecte un client mis à jour sur le disque mais pas redémarré (« quittez puis relancez Organizer »), messages qui nomment qui doit être mis à jour (ce poste / le serveur), vérification toutes les 10 min ; version installée affichée dans 🔌 Connexion ; 254 tests |
 | 2026-11-08 | 1.10 | **Mise en ligne, étape 1** (Cloudflare Tunnel retenu, §10.4) : cookie `Secure` selon le protocole du visiteur (et non plus selon le certificat du serveur), en-têtes de sécurité sur toutes les réponses (HSTS en HTTPS seulement), vraie IP du visiteur derrière un proxy local vérifiée par des tests (`tests/test_proxy.py`), page « Serveur injoignable » de la PWA reformulée ; 264 tests |
+| 2026-11-08 | 1.11 | Mise en ligne, étape 2a : documentation de l'API (`/docs`, `/redoc`, `/openapi.json`) réservée aux utilisateurs connectés ; 270 tests |

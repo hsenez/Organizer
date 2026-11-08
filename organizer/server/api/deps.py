@@ -9,7 +9,7 @@ from organizer.core.schemas import UserOut
 from organizer.core.services import Services
 from organizer.core.services.account import AccountService
 from organizer.core.services.auth import ResolvedSession
-from organizer.server.security import request_auth
+from organizer.server.security import NOT_AUTHENTICATED, request_auth
 from organizer.server.state import AppState
 
 
@@ -20,7 +20,7 @@ def get_state(request: Request) -> AppState:
 def get_auth(request: Request) -> ResolvedSession:
     auth = request_auth(request)
     if auth is None:
-        raise HTTPException(status_code=401, detail="Non connecté (ou session expirée).")
+        raise HTTPException(status_code=401, detail=NOT_AUTHENTICATED)
     return auth
 
 

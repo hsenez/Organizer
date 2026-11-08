@@ -13,14 +13,17 @@ visiteur : c'est sur eux que s'appuient l'anti force brute et le cookie ``Secure
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from organizer.core.services.auth import ResolvedSession
 
 COOKIE_NAME = "organizer_session"
+NOT_AUTHENTICATED = "Non connecté (ou session expirée)."
 # Ressources internes de NiceGUI et fichiers statiques : pas besoin d'authentification.
 _SKIPPED_PREFIXES = ("/_nicegui", "/static", "/favicon", "/icons", "/manifest.webmanifest", "/sw.js")
 
@@ -110,7 +113,28 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "?"
 
 
+def is_api_docs(request: Request) -> bool:
+    """Documentation de l'API publiée par FastAPI (``/docs``, ``/docs/oauth2-redirect``, ``/redoc``,
+    ``/openapi.json``) : adresses lues sur l'application, qui les fixe (``ui.run(fastapi_docs=True)``)."""
+    path = request.url.path
+    app = request.app
+    return any(
+        url and (path == url or path.startswith(url + "/"))
+        for url in (getattr(app, "docs_url", None), getattr(app, "redoc_url", None))
+    ) or path == getattr(app, "openapi_url", None)
+
+
+def docs_refusal(request: Request) -> Response:
+    """Visiteur non connecté sur la documentation : page de connexion (puis retour), 401 pour le JSON."""
+    if request.url.path == getattr(request.app, "openapi_url", None):
+        return JSONResponse({"detail": NOT_AUTHENTICATED}, status_code=401)
+    return RedirectResponse(f"/login?next={quote(request.url.path)}", status_code=303)
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
+    """Résout la session ; refuse aussi la documentation de l'API aux visiteurs non connectés (elle décrit
+    toutes les routes : inutile de la montrer à Internet)."""
+
     async def dispatch(self, request: Request, call_next) -> Response:
         request.state.auth = None
         request.state.auth_token = None
@@ -124,7 +148,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.auth = resolved
                 request.state.auth_token = token if resolved else None
 
-        response = await call_next(request)
+        if resolved is None and is_api_docs(request):
+            response = docs_refusal(request)
+        else:
+            response = await call_next(request)
 
         sets_cookie = any(h.startswith(f"{COOKIE_NAME}=") for h in response.headers.getlist("set-cookie"))
         if source == "cookie" and not sets_cookie:

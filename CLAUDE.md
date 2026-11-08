@@ -261,6 +261,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - `SecurityHeadersMiddleware` (ASGI pur, pour laisser passer le SSE) : en-têtes ajoutés seulement s'ils sont
   absents de la réponse. Tests : `tests/test_proxy.py` passe par `uvicorn.Config(...).load()` pour avoir la
   même pile qu'en vrai (`TestClient(..., client=("127.0.0.1", port))` simule le proxy).
+- Documentation de l'API refusée aux non connectés dans `AuthMiddleware` (`is_api_docs` lit `docs_url`,
+  `redoc_url`, `openapi_url` sur l'application : NiceGUI les fixe dans `ui.run(fastapi_docs=True)`).
 - Avec `nosniff`, un script servi sous un mauvais type est bloqué : après une mise à jour de NiceGUI ou un
   nouveau fichier statique, vérifier les `Content-Type` des ressources d'une page.
 
@@ -301,7 +303,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
 ```bash
 python3 -m venv .venv                          # création du venv (déjà fait)
 .venv/bin/pip install -r requirements-dev.txt  # dépendances dev (serveur + client + outils)
-.venv/bin/python run_server.py                 # serveur sur http://0.0.0.0:2603 (doc API : /docs)
+.venv/bin/python run_server.py                 # serveur sur http://0.0.0.0:2603 (doc API : /docs, connecté)
 .venv/bin/python run_client.py                 # client bureau (fenêtre native ; --browser : navigateur)
 .venv/bin/pytest                               # tests
 .venv/bin/ruff format .                        # mise en forme (110 colonnes)

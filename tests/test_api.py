@@ -191,6 +191,35 @@ def test_invalid_cookie_is_cleared(client, admin_token):
     assert f'{COOKIE_NAME}=""' in r.headers.get("set-cookie", "")
 
 
+# --- documentation de l'API -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/docs/oauth2-redirect"])
+def test_api_docs_redirect_anonymous_to_login(client, admin_token, path):
+    r = client.get(path, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == f"/login?next={path}"
+
+
+def test_openapi_schema_requires_login(client, admin_token):
+    r = client.get("/openapi.json")
+    assert r.status_code == 401 and r.json()["detail"].startswith("Non connecté")
+
+
+def test_api_docs_available_when_logged_in(client, state, admin_token):
+    assert client.get("/openapi.json", headers=bearer(admin_token)).json()["info"]["title"]
+    # Navigateur : le cookie suffit, pour la page comme pour le schéma qu'elle charge.
+    user_id = client.get(f"{API}/auth/me", headers=bearer(admin_token)).json()["id"]
+    client.get(f"/auth/complete?ticket={state.tickets.issue(user_id, persistent=False)}")
+    assert client.get("/docs").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
+
+
+def test_expired_cookie_on_docs_is_cleared(client, admin_token):
+    client.cookies.set(COOKIE_NAME, "perime")
+    r = client.get("/docs", follow_redirects=False)
+    assert r.status_code == 303 and f'{COOKIE_NAME}=""' in r.headers["set-cookie"]
+
+
 # --- données ----------------------------------------------------------------------------------------------
 
 
