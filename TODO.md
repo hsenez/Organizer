@@ -114,6 +114,28 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   - Les événements et taches publics ou partagées spécifiquement avec moi sont potentiellement visibles aussi mais on peut filtrer poru ne pas les voir
 
 
+#### Chantier : client bureau plus fluide et mode hors connexion (demandé, « un jour »)
+
+Idée de départ : réécrire le client bureau en Qt (PyQt / PySide6), toutes les actions passant par l'API, avec
+un mode **hors connexion** (coupure réseau) et une **synchronisation** au retour de la connexion.
+
+- **Faisable, mais deux projets à séparer** :
+  1. **Hors connexion + synchronisation** (le plus utile, le plus difficile ; indépendant de la bibliothèque
+     graphique, faisable dans le client actuel) : copie locale (SQLite) lue et modifiée par le client, file
+     des modifications à envoyer. Points durs : identifiants des tâches créées hors connexion (provisoires,
+     ou passage à des UUID dans le modèle), conflits (même champ modifié sur deux appareils : règle à
+     choisir, ex. dernier qui écrit gagne, champ par champ), annuler / rétablir (historique aujourd'hui sur
+     le serveur), pièces jointes envoyées plus tard, partage / droits, beaucoup de tests de synchronisation.
+  2. **Interface Qt** : préférer **PySide6** (LGPL) à PyQt (GPL ou licence commerciale). Coût : deux
+     interfaces à maintenir (aujourd'hui le site et le client partagent les mêmes pages) ; tout à refaire
+     (éditeur, markdown façon Obsidian, kanbans et glisser-déposer, matrice, réglages…), et chaque nouvelle
+     fonctionnalité deux fois ensuite.
+- **Fluidité sans changer de bibliothèque** : appels à l'API en arrière-plan (aujourd'hui chaque clic attend
+  la réponse du serveur), affichage mis à jour tout de suite puis envoi au serveur ; avec la copie locale
+  du point 1, toutes les lectures deviennent instantanées.
+- **Ordre conseillé** : (1) copie locale + synchronisation dans le client actuel ; (2) affichage immédiat ;
+  (3) interface Qt seulement si ce n'est pas assez fluide, en s'appuyant sur cette copie locale.
+
 ### ✅ Faits récemment
 
 - ⚡ Temps réel (web + client bureau), 📲 PWA, HTTPS facultatif, 🌳 « Rattacher à… », ↑ ↓ dans Ctrl+K,
