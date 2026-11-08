@@ -136,3 +136,14 @@ async def test_dropped_file_paths_are_read_on_desktop(server, user: User, tmp_pa
     assert link.label == "devis signé.txt"
     _, path = sv.attachments.get(link.target)
     assert path.read_text() == "signé"
+
+
+async def test_connection_tab_shows_the_route(server, user: User):
+    server.users.create_user("alice", "motdepasse-12", "Alice")
+    await connect(user)
+    await user.should_see("Bonjour Alice")
+    await user.open("/settings?tab=connection")
+    await user.should_see(marker="connection-route")
+    await user.should_see("En ce moment : adresse du serveur")
+    user.find(marker="connection-lan").click()  # désactivé
+    await user.should_see("réseau local désactivé")

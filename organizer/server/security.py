@@ -13,6 +13,7 @@ visiteur : c'est sur eux que s'appuient l'anti force brute et le cookie ``Secure
 
 from __future__ import annotations
 
+import ipaddress
 import json
 from urllib.parse import quote
 
@@ -109,6 +110,16 @@ def describe_user_agent(user_agent: str) -> str:
         "",
     )
     return f"{browser} · {system}" if system else browser
+
+
+def is_local_address(ip: str) -> bool:
+    """Adresse du Pi lui-même ou d'une machine du réseau local (adresses privées). Derrière Cloudflare
+    Tunnel, un visiteur venu d'Internet garde son adresse publique (voir l'en-tête du module)."""
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private
 
 
 def client_ip(request: Request) -> str:

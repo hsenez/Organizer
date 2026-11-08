@@ -15,6 +15,7 @@ from organizer.core.events import EventBus
 from organizer.core.schemas import UserOut
 from organizer.core.services import AuthService, Services, UserService
 from organizer.core.services.auth import LoginThrottle
+from organizer.server.local_access import instance_key
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ class AppState:
     throttle: LoginThrottle
     tickets: TicketStore = field(default_factory=TicketStore)
     events: EventBus = field(default_factory=EventBus)
+    local_key: bytes = b""  # clé secrète du serveur (accès par le réseau local, voir ``local_access``)
 
     def services_for(self, user: UserOut, origin: str | None = None) -> Services:
         """Services de ``user`` ; ``origin`` : page / appareil à l'origine des modifications."""
@@ -79,6 +81,7 @@ def create_state(settings: Settings | None = None) -> AppState:
     engine = make_engine(settings.db_path)
     init_db(engine)
     return AppState(
+        local_key=instance_key(settings.data_dir),
         settings=settings,
         engine=engine,
         auth=AuthService(engine, settings),

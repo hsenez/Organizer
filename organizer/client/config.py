@@ -22,6 +22,12 @@ class ClientConfig:
     token: str | None = None
     # Raccourcis clavier globaux enregistrés par l'installeur (pour les afficher) : show, new_task.
     shortcuts: dict[str, str] = field(default_factory=dict)
+    # Accès direct par le réseau local (voir ``lan.py``) : permis ou non, et ce que le serveur a indiqué
+    # (adresses, clé du compte pour vérifier son identité ; secrète comme le jeton).
+    lan_enabled: bool = True
+    lan_urls: list[str] = field(default_factory=list)
+    lan_key: str = ""
+    lan_user: int | None = None
 
 
 def normalize_server_url(text: str) -> str:

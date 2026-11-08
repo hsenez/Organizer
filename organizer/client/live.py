@@ -80,6 +80,7 @@ class EventListener:
                 backoff = self.max_backoff
             except httpx.HTTPError as exc:
                 log.info("Flux temps réel interrompu : %s", exc.__class__.__name__)
+                api.route.use_server()  # réseau local perdu ? reconnexion par l'adresse configurée
             except Exception:
                 log.exception("Erreur dans le flux temps réel")
             self.stop_event.wait(backoff)

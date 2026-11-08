@@ -377,6 +377,15 @@ class ApiKeyCreated(_Schema):
     key: ApiKeyOut
 
 
+class LocalAccessOut(_Schema):
+    """Accès direct au serveur par le réseau local (client bureau) : adresses à essayer et clé du compte,
+    avec laquelle le serveur prouve son identité avant que le client ne lui envoie son jeton."""
+
+    urls: list[str] = Field(default_factory=list)
+    key: str
+    user_id: int
+
+
 # --- Pièces jointes ---------------------------------------------------------------------------------------
 
 

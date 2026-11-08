@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import ipaddress
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -23,22 +22,19 @@ from organizer.core.services.account import AccountService
 from organizer.core.services.auth import API_KEY_PREFIX
 from organizer.server.api.deps import get_account, get_state
 from organizer.server.backup import BackupArchive
-from organizer.server.security import NOT_AUTHENTICATED, client_ip, extract_token, request_auth
+from organizer.server.security import (
+    NOT_AUTHENTICATED,
+    client_ip,
+    extract_token,
+    is_local_address,
+    request_auth,
+)
 from organizer.server.state import AppState
 
 router = APIRouter(prefix="/admin", tags=["Administration"])
 log = logging.getLogger("organizer.backup")
 
 KEY_OUTSIDE_LAN = "Le jeton de sauvegarde ne fonctionne que depuis le réseau local."
-
-
-def is_local_address(ip: str) -> bool:
-    """Adresse du Pi lui-même ou d'une machine du réseau local (adresses privées)."""
-    try:
-        address = ipaddress.ip_address(ip)
-    except ValueError:
-        return False
-    return address.is_loopback or address.is_private
 
 
 def backup_access(request: Request) -> str:

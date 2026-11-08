@@ -26,6 +26,7 @@ import platform
 import secrets
 import socket
 import sys
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -33,7 +34,7 @@ from pathlib import Path
 import httpx
 from fastapi import Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
-from nicegui import Client, app, ui
+from nicegui import Client, app, run, ui
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -41,6 +42,7 @@ from organizer import ASSETS_DIR, FAVICON, versioning
 from organizer.client import instance, system, window
 from organizer.client.api import ApiClient
 from organizer.client.config import ClientConfig, ConfigStore, normalize_server_url
+from organizer.client.lan import LanSwitch
 from organizer.client.live import EventListener
 from organizer.client.notifications import NotifiedLog, ReminderNotifier, make_sender
 from organizer.client.remote import RemoteAccount, RemoteDataSource, RemoteTasks
@@ -122,6 +124,13 @@ class DesktopClient:
         self._pages: list[tuple[Client, UiContext]] = []  # pages ouvertes (la fenêtre n'en montre qu'une)
         self._version: tuple[float, versioning.VersionCheck | None] = (0.0, None)
         self._hidden_hint_shown = False
+        # Passage automatique par le réseau local (voir ``lan.py``).
+        self.lan = LanSwitch(
+            lambda: self.config,
+            lambda: self.store.save(self.config),
+            lambda: self.api,
+            http_factory=http_factory,
+        )
 
     # --- connexion ---
 
@@ -134,8 +143,8 @@ class DesktopClient:
         """Client de l'API du serveur configuré, ou None si ce poste n'est pas connecté."""
         if not (self.config.server and self.config.token):
             return None
-        if self._api is None or (self._api.base_url, self._api.token) != (
-            self.config.server,
+        if self._api is None or (self._api.server_url, self._api.token) != (
+            normalize_server_url(self.config.server),
             self.config.token,
         ):
             self._api = self.new_api(self.config.server, self.config.token)
@@ -154,12 +163,22 @@ class DesktopClient:
             )
         body = {"username": username.strip(), "password": password, "device_name": device_name()}
         result = api.call("POST", "/auth/login", LoginOut, json=body, auth=False)
-        self.config = ClientConfig(server=server, username=username.strip(), token=result.token)
+        previous = self.config
+        self.config = ClientConfig(
+            server=server,
+            username=username.strip(),
+            token=result.token,
+            shortcuts=previous.shortcuts,
+            lan_enabled=previous.lan_enabled,
+        )
         self.store.save(self.config)
+        self.lan.info_at = None  # adresses locales et clé du compte : à redemander
+        threading.Thread(target=self.lan.tick, name="organizer-lan-login", daemon=True).start()
         return result.user
 
     def forget_token(self) -> None:
         self.config.token = None
+        self.config.lan_key, self.config.lan_user = "", None  # clé propre au compte
         self.store.save(self.config)
 
     def logout(self) -> None:
@@ -291,6 +310,7 @@ class DesktopClient:
             ui.label("🔌 Connexion au serveur").classes("text-lg font-semibold")
             with ui.column().classes("gap-1 text-sm"):
                 ui.label(f"🖧 Serveur : {self.config.server}").mark("connection-server")
+                self._route_label(ctx)
                 ui.label(f"👤 Compte : {ctx.user.display_name} ({self.config.username})")
                 ui.label(f"🖥️ Cet appareil : {device_name()}")
                 result = self.version_check()
@@ -316,6 +336,49 @@ class DesktopClient:
                 ui.button("🚪 Se déconnecter / changer de serveur", on_click=self.logout).props(
                     "outline no-caps color=negative"
                 ).mark("connection-logout")
+
+    def _route_label(self, ctx: UiContext) -> None:
+        """Par où passent les requêtes (réseau local ou adresse configurée), et le réglage associé."""
+        api = self.api
+
+        @ui.refreshable
+        def route() -> None:
+            if api is not None and api.route.local:
+                ui.label(f"🏠 En ce moment : réseau local, {api.base_url} (rapide)").mark("connection-route")
+            elif not self.config.lan_enabled:
+                ui.label("🌍 En ce moment : adresse du serveur (réseau local désactivé)").mark(
+                    "connection-route"
+                )
+            elif self.lan.unsupported:
+                ui.label(
+                    "🌍 En ce moment : adresse du serveur (le serveur ne propose pas l'accès local)"
+                ).mark("connection-route")
+            else:
+                ui.label("🌍 En ce moment : adresse du serveur (réseau local non trouvé)").mark(
+                    "connection-route"
+                )
+
+        async def recheck() -> None:
+            await run.io_bound(self.lan.tick)
+            route.refresh()
+
+        def toggle(e) -> None:
+            self.config.lan_enabled = bool(e.value)
+            self.store.save(self.config)
+            if api is not None and not self.config.lan_enabled:
+                api.route.use_server()
+            route.refresh()
+
+        route()
+        with ui.row().classes("items-center gap-2"):
+            ui.checkbox(
+                "Passer par le réseau local quand il est disponible",
+                value=self.config.lan_enabled,
+                on_change=toggle,
+            ).mark("connection-lan")
+            ui.button("🔄 Revérifier", on_click=recheck).props("flat dense no-caps").mark(
+                "connection-lan-check"
+            )
 
     async def _test_notification(self) -> None:
         await make_sender()("🔔 Organizer", "Les notifications fonctionnent sur ce poste.", None)
@@ -444,7 +507,12 @@ class DesktopClient:
         self.listener.start()
 
     def install(
-        self, *, notifications: bool = True, single_instance: bool = False, live: bool = True
+        self,
+        *,
+        notifications: bool = True,
+        single_instance: bool = False,
+        live: bool = True,
+        lan: bool = True,
     ) -> None:
         common = {"favicon": FAVICON, "dark": None}
         ui.page("/connect", title="Connexion · Organizer", **common)(self.connect_page)
@@ -458,6 +526,9 @@ class DesktopClient:
         if live:
             app.on_startup(self.start_live)
             app.on_shutdown(lambda: self.listener.stop())
+        if lan:
+            app.on_startup(self.lan.start)
+            app.on_shutdown(self.lan.stop)
         if single_instance and self.launch_secret and self.port:
             app.on_startup(lambda: instance.write(self.store.directory, self.port, self.launch_secret))
             app.on_shutdown(lambda: instance.remove(self.store.directory))

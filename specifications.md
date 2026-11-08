@@ -629,6 +629,19 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 - **Icône** de l'application (`organizer/assets/`, générée depuis un SVG par `scripts/make_icons.sh`) :
   fenêtre, lanceur, menu Démarrer ; identifiant d'application `organizer` (Wayland) pour que la barre des
   tâches associe la fenêtre au lanceur.
+- **Réseau local automatique** (`client/lan.py`, `server/local_access.py`) : le client configuré sur l'adresse
+  publique demande au serveur (`GET /api/v1/local-access`, avec son jeton) ses adresses sur le réseau local
+  (détectées : adresse de sortie et adresses IPv4 privées du Pi, port d'écoute ; aucune si `--host
+  127.0.0.1` ; imposées par `ORGANIZER_LOCAL_URLS`) et la **clé du compte** (HMAC de la clé secrète du
+  serveur `<données>/instance.key` et de l'identifiant du compte), gardées dans `client.json`. Il essaie ces
+  adresses : le serveur doit d'abord **prouver** qu'il connaît la clé (`GET /api/v1/local-access/proof?
+  user=…&nonce=…` → HMAC du nombre tiré par le client ; route **réservée aux adresses privées** : impossible
+  de la faire calculer au vrai serveur à travers Internet pour la rejouer). Une seule fois prouvée, toutes
+  les pages passent par l'adresse locale (`ApiClient.route`, partagée) ; preuve renouvelée avant une requête
+  si elle date de plus de 15 s ; retour à l'adresse publique (et seconde tentative de la requête, sauf
+  envoi de fichier) dès que le réseau local ne répond plus ; essai du réseau local toutes les 60 s,
+  adresses redemandées toutes les 10 min. Désactivable (Réglages → 🔌 Connexion, `lan_enabled`). Sur le
+  réseau local, le jeton circule en HTTP simple (comme avant la mise en ligne).
 
 ### 10.2 📦 Installation du client bureau
 
@@ -811,3 +824,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-08 | 1.16.2 | Dépôt de fichiers depuis Dolphin dans la fenêtre du client bureau : WebKitGTK masque fichiers et adresses à la page (constaté dans le journal de diagnostic) → adresses captées côté GTK et relayées à la page, fichiers lus sur le poste. **Redémarrage du serveur** : il attendait la fin du flux temps réel des clients bureau (jamais) jusqu'à l'arrêt forcé par systemd après 90 s → attente limitée à 3 s (`timeout_graceful_shutdown`) ; 326 tests |
 | 2026-11-08 | 1.17 | **Version 0.9.0** du logiciel. Mise en ligne, étape 5 : guide **Cloudflare Tunnel** pas à pas dans le README (intitulés du tableau de bord vérifiés en novembre 2026 : Networking → Tunnels, Routes → Published application), réglages du domaine, vérifications, téléphones et client bureau par l'adresse publique. Chantier « mise en ligne » terminé |
 | 2026-11-08 | 1.17.1 | **Client bureau plus réactif** à travers Internet (≈ 300 ms par requête par Cloudflare, contre ≈ 20 ms sur le réseau local ; diagnostic : 3 requêtes successives par clic) : mémoire des données qui changent rarement (`client/cache.py` : projets, tags, boards, utilisateurs, préférences ; oubliées sur événement temps réel, écriture du poste ou délai), état « annuler / rétablir » joint à la réponse de chaque écriture (en-tête `X-Organizer-Undo`), page derrière l'éditeur relue seulement à sa fermeture, dernier kanban enregistré seulement s'il change. Un clic dans l'éditeur : 3 requêtes → 1 ; 333 tests |
+| 2026-11-08 | 1.18 | **Version 0.9.1** du logiciel. **Réseau local automatique** pour le client bureau (§10.1) : adresses locales et clé du compte données par le serveur, preuve d'identité réservée au réseau local avant tout envoi du jeton, bascule de toutes les pages, retour à l'adresse publique hors de la maison ; routes `/api/v1/local-access` et `/local-access/proof` ; état et réglage dans Réglages → 🔌 Connexion ; 345 tests + essai réel (découverte de l'adresse du poste, bascule) |

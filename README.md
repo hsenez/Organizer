@@ -73,6 +73,14 @@ ouvrent directement l'application. Par rapport au site :
 - 🔔 **notifications système** quand la date de rappel d'un suivi est atteinte (une fois par jour ;
   désactivables dans Réglages → 🔔 Rappels ; bouton de test dans Réglages → 🔌 Connexion) ;
 - Réglages → 🔌 **Connexion** : se déconnecter ou changer de serveur.
+- 🏠 **Réseau local automatique** : connecté à l'adresse publique (`https://organizer.blou.top`), le client
+  passe tout seul par le réseau local quand il est à la maison (≈ 20 ms par requête au lieu de ≈ 300 ms à
+  travers Internet), et revient à l'adresse publique ailleurs. Rien à régler : le serveur lui donne ses
+  adresses locales et une clé, et doit prouver qu'il la connaît avant que le client ne lui envoie son jeton.
+  Conditions : serveur et client à jour, serveur écoutant sur le réseau local (`--host 0.0.0.0`, la valeur
+  par défaut). État et réglage : Réglages → 🔌 Connexion (« 🏠 En ce moment : réseau local… »). Si le Pi a
+  plusieurs adresses ou que la détection se trompe : variable `ORGANIZER_LOCAL_URLS=http://192.168.1.13:2603`
+  dans le service du serveur.
 - Depuis un téléphone : même adresse dans le navigateur (interface adaptée, menu ☰).
 - Raccourcis : **N** nouvelle tâche, **Ctrl+K** rechercher, **Ctrl+Z** annuler, **Ctrl+Maj+Z** / **Ctrl+Y**
   rétablir.
@@ -241,7 +249,7 @@ jeton créé depuis n'existera plus.
 dépendances, service régénéré s'il a changé, redémarrage, vérification de la version). Mettre à jour le
 serveur **avant** les postes.
 
-**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.9.0** ; 1.0.0 une fois validé sur le Pi et les téléphones),
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.9.1** ; 1.0.0 une fois validé sur le Pi et les téléphones),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
 
 ## 📲 Sur le téléphone
@@ -364,7 +372,8 @@ curl -sI http://organizer.blou.top/ | head -1      # 301 : redirigé vers https
   réinstaller depuis l'adresse publique (il faut aussi se reconnecter).
 - **Client bureau** (utilisable hors de la maison) : Réglages → 🔌 Connexion → changer de serveur → taper
   l'adresse **avec** `https://` : `https://organizer.blou.top` (sans `https://`, le client suppose une
-  adresse locale en HTTP et ajoute le port 2603).
+  adresse locale en HTTP et ajoute le port 2603). À la maison, il passera tout seul par le réseau local
+  (voir « Réseau local automatique » plus haut).
 - **Réseau local** : `http://<ip-du-pi>:2603` continue de fonctionner (le serveur écoute toujours sur
   `0.0.0.0`). Pour n'autoriser **que** le tunnel : `deploy/install.sh --reuse --host 127.0.0.1` (les appareils
   de la maison passent alors eux aussi par `https://organizer.blou.top`). La sauvegarde par jeton marche

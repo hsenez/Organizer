@@ -13,5 +13,5 @@ from tests import client_harness
 client = DesktopClient(
     ConfigStore(Path(os.environ["ORGANIZER_CLIENT_DIR"])), http_factory=lambda _server: client_harness.HTTP
 )
-client.install(notifications=False, live=False)
+client.install(notifications=False, live=False, lan=False)
 ui.run()

@@ -253,6 +253,18 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `_page_changed()` (rafraîchissement **léger** : `ctx.refresh(light=True)` = boutons annuler / rétablir) ;
   la page est relue à la fermeture (`_on_hide`). Mesure : client lancé par un script qui enveloppe
   `ApiClient.request` (durée, chemin) + clics rejoués dans Firefox.
+- **Réseau local automatique** : `server/local_access.py` (`instance_key` dans `<données>/instance.key`,
+  `user_key`, `proof`, `local_urls`) + routes `api/local.py` (`/local-access` avec session ;
+  `/local-access/proof` seulement si `security.is_local_address(client_ip)`). Client : `client/lan.py`
+  (`LanSwitch` : `refresh_info`, `verify` **sans jeton**, `check`, `before_request` installé comme
+  `Route.checker`, fil `tick` toutes les 60 s ; partage l'objet `DesktopClient.config` via
+  `get_config` / `save_config`). `ApiClient.route` (`Route` : `server_url` / `base_url`, `http`, `local`,
+  `use_local` / `use_server`), partagée par les copies `with_headers` ; `ApiClient.request` revient à
+  l'adresse configurée et retente une fois si le réseau local échoue ; `live.py` revient aussi à l'adresse
+  configurée sur coupure du flux. `DesktopClient.api` compare `route.server_url` (pas `base_url`, qui
+  change). Tests : `tests/test_lan.py` (classe `Net` : deux `TestClient` vus depuis une IP publique / privée,
+  serveur imposteur, réseau local coupé par `httpx.MockTransport`). Les tests de pages du client passent
+  `install(lan=False)`.
 - Pages ouvertes mémorisées (`DesktopClient._pages`) : « nouvelle tâche » ouvre l'éditeur dans la page
   affichée (`_in_page`), sinon charge `/?task=new`.
 - Linux : `GLib.set_prgname("organizer")` dans le sous-processus = identifiant Wayland = nom du `.desktop`.
@@ -403,7 +415,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 333 tests au total.
+- 345 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
