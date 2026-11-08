@@ -265,3 +265,43 @@ def test_desktop_client_keeps_lan_info_and_forgets_key_on_logout(state, alice, t
     client.forget_token()
     saved = store.load()
     assert saved.lan_key == "" and saved.lan_user is None and saved.lan_urls == [LOCAL]
+
+
+# --- indicateur « réseau local / Internet » ---------------------------------------------------------------
+
+
+def test_is_lan_url():
+    from organizer.client.lan import is_lan_url
+
+    assert is_lan_url("http://192.168.1.13:2603") and is_lan_url("http://raspberrypi.local:2603")
+    assert is_lan_url("http://localhost:2603")
+    assert not is_lan_url("https://organizer.blou.top") and not is_lan_url("http://86.245.12.7:2603")
+
+
+def test_desktop_connection_indicator(state, alice, tmp_path):
+    from organizer.client.app import DesktopClient
+    from organizer.client.config import ConfigStore
+
+    app = create_api_app(state)
+    net = Net(app, app)
+    client = DesktopClient(ConfigStore(tmp_path / "client"), http_factory=net.factory)
+    client.login(PUBLIC, "alice", "motdepasse-12")
+    info = client.connection_info()
+    assert not info.local and "Par Internet" in info.tooltip and info.target == "/settings?tab=connection"
+    client.lan.tick()
+    info = client.connection_info()
+    assert info.local and LOCAL in info.tooltip
+    client.config.lan_enabled = False
+    client.api.route.use_server()
+    assert "désactivé" in client.connection_info().tooltip
+    # Serveur configuré directement par son adresse locale : c'est déjà le réseau local.
+    client.config.server = LOCAL
+    assert client.connection_info().local
+
+
+def test_web_connection_texts():
+    from organizer.ui.components.connection_badge import web_connection
+
+    outside = web_connection(False, "https://organizer.blou.top", [LOCAL])
+    assert not outside.local and "Cloudflare" in outside.tooltip and LOCAL in outside.tooltip
+    assert web_connection(True, LOCAL, [LOCAL]).local

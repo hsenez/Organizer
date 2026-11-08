@@ -42,7 +42,7 @@ from organizer import ASSETS_DIR, FAVICON, versioning
 from organizer.client import instance, system, window
 from organizer.client.api import ApiClient
 from organizer.client.config import ClientConfig, ConfigStore, normalize_server_url
-from organizer.client.lan import LanSwitch
+from organizer.client.lan import LanSwitch, is_lan_url
 from organizer.client.live import EventListener
 from organizer.client.notifications import NotifiedLog, ReminderNotifier, make_sender
 from organizer.client.remote import RemoteAccount, RemoteDataSource, RemoteTasks
@@ -56,7 +56,8 @@ from organizer.core.errors import (
 from organizer.core.events import ChangeEvent
 from organizer.core.schemas import LoginOut, TaskOut, UserOut
 from organizer.ui.auth_shell import auth_shell
-from organizer.ui.context import Banner, UiContext
+from organizer.ui.components.connection_badge import desktop_connection
+from organizer.ui.context import Banner, Connection, UiContext
 from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
 
@@ -208,6 +209,8 @@ class DesktopClient:
         ctx = UiContext(RemoteDataSource(api, user, origin=origin), logout=self.logout)
         LiveRefresh(ctx, ui.context.client, origin)
         ctx.extra_settings["connection"] = ("🔌 Connexion", self.connection_settings)
+        ctx.connection = self.connection_info
+        ctx.connection_live = True
         ctx.quit = self.quit
         result = self.version_check()
         if result is not None and not result.ok:
@@ -336,6 +339,23 @@ class DesktopClient:
                 ui.button("🚪 Se déconnecter / changer de serveur", on_click=self.logout).props(
                     "outline no-caps color=negative"
                 ).mark("connection-logout")
+
+    def connection_info(self) -> Connection:
+        """Par où passe ce poste en ce moment (indicateur en bas à gauche des pages)."""
+        api = self.api
+        if api is None:
+            return desktop_connection(False, self.config.server)
+        if api.route.local:
+            return desktop_connection(True, api.base_url)
+        if is_lan_url(api.server_url):  # serveur configuré directement par son adresse locale
+            return desktop_connection(True, api.server_url)
+        if not self.config.lan_enabled:
+            reason = "réseau local désactivé dans les réglages"
+        elif self.lan.unsupported:
+            reason = "le serveur ne propose pas l'accès local : à mettre à jour"
+        else:
+            reason = "serveur introuvable sur ce réseau"
+        return desktop_connection(False, api.server_url, reason)
 
     def _route_label(self, ctx: UiContext) -> None:
         """Par où passent les requêtes (réseau local ou adresse configurée), et le réglage associé."""

@@ -147,3 +147,13 @@ async def test_connection_tab_shows_the_route(server, user: User):
     await user.should_see("En ce moment : adresse du serveur")
     user.find(marker="connection-lan").click()  # désactivé
     await user.should_see("réseau local désactivé")
+
+
+async def test_connection_badge_on_desktop(server, user: User):
+    server.users.create_user("alice", "motdepasse-12", "Alice")
+    await connect(user)
+    await user.should_see("Bonjour Alice")
+    (badge,) = user.find(marker="connection-badge").elements
+    assert (
+        badge.text == "🌍"
+    )  # serveur de test « http://pi:2603 » : ni adresse locale, ni réseau local trouvé

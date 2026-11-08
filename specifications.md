@@ -642,6 +642,13 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   envoi de fichier) dès que le réseau local ne répond plus ; essai du réseau local toutes les 60 s,
   adresses redemandées toutes les 10 min. Désactivable (Réglages → 🔌 Connexion, `lan_enabled`). Sur le
   réseau local, le jeton circule en HTTP simple (comme avant la mise en ligne).
+- **Indicateur de connexion** (`ui/components/connection_badge.py`, coin bas gauche de chaque page, rond
+  🏠 / 🌍 et infobulle) : client bureau = route en cours (relue toutes les 3 s ; une adresse configurée
+  déjà locale compte comme réseau local ; raison affichée si Internet : désactivé, serveur trop ancien,
+  introuvable), clic → Réglages → 🔌 Connexion ; web = adresse du visiteur vue par le serveur (privée ou
+  publique, derrière Cloudflare) et, par Internet, l'adresse locale conseillée à la maison. Un navigateur ne
+  bascule pas tout seul : changer d'adresse, c'est changer d'origine (autre cookie, autre application
+  installée, page HTTPS qui ne peut pas appeler une adresse HTTP).
 
 ### 10.2 📦 Installation du client bureau
 
@@ -825,3 +832,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-08 | 1.17 | **Version 0.9.0** du logiciel. Mise en ligne, étape 5 : guide **Cloudflare Tunnel** pas à pas dans le README (intitulés du tableau de bord vérifiés en novembre 2026 : Networking → Tunnels, Routes → Published application), réglages du domaine, vérifications, téléphones et client bureau par l'adresse publique. Chantier « mise en ligne » terminé |
 | 2026-11-08 | 1.17.1 | **Client bureau plus réactif** à travers Internet (≈ 300 ms par requête par Cloudflare, contre ≈ 20 ms sur le réseau local ; diagnostic : 3 requêtes successives par clic) : mémoire des données qui changent rarement (`client/cache.py` : projets, tags, boards, utilisateurs, préférences ; oubliées sur événement temps réel, écriture du poste ou délai), état « annuler / rétablir » joint à la réponse de chaque écriture (en-tête `X-Organizer-Undo`), page derrière l'éditeur relue seulement à sa fermeture, dernier kanban enregistré seulement s'il change. Un clic dans l'éditeur : 3 requêtes → 1 ; 333 tests |
 | 2026-11-08 | 1.18 | **Version 0.9.1** du logiciel. **Réseau local automatique** pour le client bureau (§10.1) : adresses locales et clé du compte données par le serveur, preuve d'identité réservée au réseau local avant tout envoi du jeton, bascule de toutes les pages, retour à l'adresse publique hors de la maison ; routes `/api/v1/local-access` et `/local-access/proof` ; état et réglage dans Réglages → 🔌 Connexion ; 345 tests + essai réel (découverte de l'adresse du poste, bascule) |
+| 2026-11-08 | 1.18.1 | **Version 0.9.2**. Indicateur 🏠 réseau local / 🌍 Internet en bas à gauche de chaque page, avec infobulle explicative (client bureau : suit les bascules, clic → réglages de connexion ; web : selon l'adresse du visiteur) ; 350 tests + rendu vérifié dans Firefox |

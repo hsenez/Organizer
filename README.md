@@ -87,6 +87,10 @@ ouvrent directement l'application. Par rapport au site :
 - Réglages (projets, tags, thème, appareils connectés, comptes des utilisateurs…) : menu du compte →
   ⚙️ Réglages, ou `http://<ip>:2603/settings`.
 - Lien direct vers une tâche : `http://<ip>:2603/tasks?task=<numéro>` (`?task=new` : nouvelle tâche).
+- **Indicateur de connexion** (rond en bas à gauche) : 🏠 réseau local (rapide) ou 🌍 par Internet
+  (Cloudflare, un peu plus lent) ; l'infobulle explique. Dans le client bureau, il suit les bascules
+  automatiques et ouvre les réglages de connexion d'un clic. Dans un navigateur, la page reste sur
+  l'adresse ouverte : à la maison, préférer `http://<ip-du-pi>:2603` (un favori) à l'adresse publique.
 - **Pièces jointes** : dans l'éditeur d'une tâche, « 📎 Joindre un fichier » (plusieurs à la fois possible),
   ou **déposez les fichiers** depuis le gestionnaire de fichiers sur l'éditeur ouvert ou directement sur la
   **carte** d'une tâche (liste, kanbans, accueil… ; navigateur et client bureau). Le fichier est **copié**
@@ -249,7 +253,7 @@ jeton créé depuis n'existera plus.
 dépendances, service régénéré s'il a changé, redémarrage, vérification de la version). Mettre à jour le
 serveur **avant** les postes.
 
-**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.9.1** ; 1.0.0 une fois validé sur le Pi et les téléphones),
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.9.2** ; 1.0.0 une fois validé sur le Pi et les téléphones),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
 
 ## 📲 Sur le téléphone

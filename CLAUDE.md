@@ -265,6 +265,11 @@ Référence fonctionnelle complète : **`specifications.md`**.
   change). Tests : `tests/test_lan.py` (classe `Net` : deux `TestClient` vus depuis une IP publique / privée,
   serveur imposteur, réseau local coupé par `httpx.MockTransport`). Les tests de pages du client passent
   `install(lan=False)`.
+- Indicateur de connexion : `UiContext.connection` (fonction → `Connection(local, tooltip, target)`) et
+  `connection_live` ; `components/connection_badge.py` (`page_sticky` bas gauche, `ui.button(color=None)`
+  sinon le fond reste « primary », `ui.tooltip` créé une fois + `set_text`, `ui.timer` si `connection_live`).
+  Fourni par `server_context` (`web_connection` : `is_local_address(client_ip)`) et
+  `DesktopClient.connection_info` (`desktop_connection`, `lan.is_lan_url`).
 - Pages ouvertes mémorisées (`DesktopClient._pages`) : « nouvelle tâche » ouvre l'éditeur dans la page
   affichée (`_in_page`), sinon charge `/?task=new`.
 - Linux : `GLib.set_prgname("organizer")` dans le sous-processus = identifiant Wayland = nom du `.desktop`.
@@ -415,7 +420,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 345 tests au total.
+- 350 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

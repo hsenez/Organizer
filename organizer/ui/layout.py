@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from nicegui import events, ui
 
 from organizer.core.services.users import MIN_PASSWORD_LENGTH, WEAK_PASSWORD_PREF
+from organizer.ui.components.connection_badge import connection_badge
 from organizer.ui.components.dnd import DragDrop
 from organizer.ui.components.file_drop import FileDrop
 from organizer.ui.components.search_dialog import SearchDialog
@@ -123,6 +124,7 @@ def app_frame(
                     ui.label(module.label)
     menu_button.on_click(drawer.toggle)
 
+    connection_badge(ctx)
     with ui.page_sticky(position="bottom-right", x_offset=20, y_offset=20):
         ui.button(icon="add", on_click=ctx.editor.open_new).props("fab color=primary").tooltip(
             "Nouvelle tâche (N)"

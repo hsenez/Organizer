@@ -15,11 +15,13 @@ from organizer.core.datasource import LocalDataSource
 from organizer.core.errors import OrganizerError
 from organizer.core.services.account import AccountService
 from organizer.core.services.users import MIN_PASSWORD_LENGTH
+from organizer.server import local_access
 from organizer.server.api.auth import check_credentials
-from organizer.server.security import client_ip, describe_user_agent, request_auth
+from organizer.server.security import client_ip, describe_user_agent, is_local_address, request_auth
 from organizer.server.state import AppState
 from organizer.server.web_auth import safe_next
 from organizer.ui.auth_shell import auth_shell as _auth_shell
+from organizer.ui.components.connection_badge import web_connection
 from organizer.ui.context import UiContext
 from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
@@ -147,6 +149,12 @@ def server_context(request: Request) -> UiContext | RedirectResponse:
     ctx = UiContext(
         LocalDataSource(services, auth.user, account), logout=lambda: ui.navigate.to("/auth/logout")
     )
+    connection = web_connection(
+        is_local_address(client_ip(request)),
+        f"{request.url.scheme}://{request.url.netloc}",
+        local_access.local_urls(state.settings),
+    )
+    ctx.connection = lambda: connection
     client = ui.context.client
     live = LiveRefresh(ctx, client, origin)
     client.on_delete(state.events.subscribe(live.notify))  # désabonnement quand la page disparaît

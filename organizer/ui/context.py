@@ -16,6 +16,16 @@ T = TypeVar("T")
 
 
 @dataclass(frozen=True)
+class Connection:
+    """Par où passe la page : réseau local (``local``) ou Internet ; ``tooltip`` l'explique, ``target`` : page
+    ouverte d'un clic sur l'indicateur (réglages de connexion du client bureau)."""
+
+    local: bool
+    tooltip: str
+    target: str | None = None
+
+
+@dataclass(frozen=True)
 class Banner:
     """Avertissement affiché en haut des pages, avec un bouton qui mène où agir."""
 
@@ -46,6 +56,10 @@ class UiContext:
         # Avertissements en haut des pages (bureau : mise à jour disponible). Le cadre y ajoute ceux qui
         # valent partout (mot de passe trop court).
         self.banners: list[Banner] = []
+        # Indicateur « réseau local / Internet » (coin bas gauche) ; ``connection_live`` : peut changer
+        # pendant que la page est ouverte (client bureau), à relire régulièrement.
+        self.connection: Callable[[], Connection] | None = None
+        self.connection_live = False
         self.banner_rows: dict[str, Any] = {}  # bandeaux affichés, par marqueur (pour en retirer un)
         # Temps réel (``ui/live.py``) : rafraîchissement quand les données changent ailleurs.
         self.live: Any = None

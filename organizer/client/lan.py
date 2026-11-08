@@ -27,6 +27,8 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
+from ipaddress import ip_address
+from urllib.parse import urlparse
 
 import httpx
 
@@ -41,6 +43,18 @@ PROBE_TIMEOUT = 0.8  # s : un serveur sur le réseau local répond en quelques m
 RECHECK_AFTER = 15.0  # s : preuve redemandée avant une requête par le réseau local si plus ancienne
 SCAN_EVERY = 60.0  # s : essai du réseau local quand on passe par l'adresse publique
 INFO_EVERY = 600.0  # s : adresses et clé redemandées au serveur (l'adresse du Pi peut changer)
+
+
+def is_lan_url(url: str) -> bool:
+    """Adresse d'un serveur sur le réseau local (IP privée, ``raspberrypi.local``…) ?"""
+    host = (urlparse(url).hostname or "").lower()
+    if host in ("localhost",) or host.endswith((".local", ".lan", ".home", ".internal")):
+        return True
+    try:
+        address = ip_address(host)
+    except ValueError:
+        return False
+    return address.is_private or address.is_loopback
 
 
 def expected_proof(key: str, nonce: str) -> str:

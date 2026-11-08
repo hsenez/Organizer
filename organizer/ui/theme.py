@@ -100,6 +100,14 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .dnd-attach-no { outline: 3px solid #fa5252 !important; box-shadow: 0 0 0 6px rgba(250, 82, 82, .22) !important; }
 .dnd-zone-over { background: rgba(92, 124, 250, .10) !important; outline: 2px dashed #5c7cfa; outline-offset: -2px; }
 .dnd-zone-denied { background: rgba(250, 82, 82, .08) !important; outline: 2px dashed #fa5252; outline-offset: -2px; }
+/* Indicateur réseau local / Internet (connection_badge.py) : discret, net au survol. */
+.connection-badge { opacity: .6; font-size: 1.15rem; width: 36px; height: 36px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+.connection-badge:hover { opacity: 1; }
+.connection-local { background: #e6fcf5 !important; }
+.connection-internet { background: #e7f5ff !important; }
+.body--dark .connection-local { background: #0b3b30 !important; }
+.body--dark .connection-internet { background: #102a43 !important; }
 /* Fichiers du système survolant une zone de dépôt (file_drop.js) : cadre et invitation. */
 .file-drop-over { position: relative; outline: 3px dashed #5c7cfa !important; outline-offset: -6px; }
 .file-drop-over::after { content: attr(data-file-drop-label); position: absolute; inset: 0; z-index: 3000;

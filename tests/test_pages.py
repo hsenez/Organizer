@@ -732,3 +732,12 @@ def test_local_path_from_file_uri():
 
     assert local_path("file:///home/alice/devis%20sign%C3%A9.pdf") == Path("/home/alice/devis signé.pdf")
     assert local_path("file:///C:/Users/Alice/a.txt") == Path("C:/Users/Alice/a.txt")
+
+
+async def test_connection_badge_on_every_page(user: User):
+    await login(user)
+    for path in ("/", "/tasks", "/kanban"):
+        await user.open(path)
+        await user.should_see(marker="connection-badge")
+    (badge,) = user.find(marker="connection-badge").elements
+    assert badge.text in ("🏠", "🌍")
