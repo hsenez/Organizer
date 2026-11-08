@@ -17,6 +17,7 @@ from organizer.client import instance, system
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="run_client.py", description="Organizer — client bureau")
     action = parser.add_mutually_exclusive_group()
+    action.add_argument("--show", action="store_true", help="afficher Organizer (comportement par défaut)")
     action.add_argument("--new-task", action="store_true", help="ouvrir l'éditeur sur une nouvelle tâche")
     action.add_argument("--quit", action="store_true", help="arrêter le client lancé")
     action.add_argument(

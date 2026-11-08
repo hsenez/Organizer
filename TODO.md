@@ -51,34 +51,30 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 
 ## 🧩 Autres points en attente (relevés pendant le développement)
 
-- 🌳 Menu des cartes « Rattacher à… » (sélecteur de tâche) : alternative au Ctrl+drop / maintien au doigt.
 - ↕️ Réordonner les sous-tâches par glisser-déposer dans l'éditeur (le service le permet déjà).
 - 📊 Boards personnalisés : réordonner les boards eux-mêmes ; choisir les colonnes de départ à la création.
-- 📱 Glisser-déposer : faire défiler automatiquement le kanban (et une longue colonne) quand on approche du
-  bord de l'écran.
 - 🎯 Matrice : reclasser les cartes dans une case (comme au kanban) ; pleine largeur comme les kanbans ?
 - 📊 Boards personnalisés : l'ordre y est libre (il ne touche pas l'urgence) — à confirmer à l'usage.
-- 🎛️ Matrice : le filtre par défaut (statuts ouverts) compte comme « Filtres (1) » — à rendre plus clair.
 
 - 📋 **Vue compacte** de la liste (une ligne par tâche, comme les résultats de Ctrl+K).
-- 🧭 Recherche Ctrl+K : naviguer dans les résultats avec les flèches du clavier.
-- 🐍 Faire tourner les tests sous **Python 3.11** (version du Pi) — jamais exécutés dans cette version.
+- 🐍 Faire tourner les tests sous **Python 3.11** (version du Pi) — jamais exécutés dans cette version
+  (sur le Pi : `.venv/bin/pip install pytest pytest-asyncio && .venv/bin/pytest`).
+- 📲 PWA jamais essayée sur un vrai téléphone (iPhone en HTTP, Android en HTTPS) ; HTTPS avec mkcert
+  jamais mis en place.
+- ✏️ Temps réel : si la tâche ouverte dans l'éditeur est modifiée ailleurs, l'éditeur ne se met pas à jour
+  (volontairement : il ne doit pas changer sous les doigts) — afficher plutôt « modifiée ailleurs » ?
 - 🪟 Client bureau : jamais essayé sous **Windows** (WebView2, `os.startfile`, notifications WinRT).
 - 🖥️ Client bureau : glisser un fichier depuis l'explorateur sur une tâche pour l'ajouter en lien (pywebview
   fournit le chemin complet : événement `drop` de NiceGUI natif) — rejoint le sujet des liens de fichiers.
 - 🔔 Si l'envoi d'une notification échoue (D-Bus absent…), la tâche est quand même notée « notifiée » pour
   la journée (desktop-notifier ne signale pas l'échec).
-- 🎨 Icône « Post-it en vrac » : l'utiliser aussi comme favicon du site et icône de la PWA (étape 8).
 - 🔄 Scripts de mise à jour Windows (`update.ps1`) jamais exécutés ; `deploy/update.sh` à essayer sur le Pi.
-- 🏷️ Poser l'étiquette `v0.7.0` (et les suivantes) au moment des commits de version.
 - 🧺 Client bureau : icône dans la zone de notification (« tray ») avec Ouvrir / Nouvelle tâche / Quitter —
   demanderait une dépendance (pystray + AppIndicator sous Linux).
 - ⌨️ Raccourcis globaux GNOME (gsettings) écrits mais jamais essayés (poste de dev sous KDE).
 - 🪟 Wayland : le jeton d'activation du lanceur est transmis pour ramener la fenêtre au premier plan ; à
   confirmer à l'usage (KDE peut se contenter de la faire clignoter dans la barre des tâches).
 - 🗄️ Outil de **migration du schéma** de la base (ajout de colonnes) le jour où ce sera nécessaire.
-- ⚙️ Le décalage de rappel par défaut modifié dans les réglages ne s'applique aux nouvelles tâches de la
-  page ouverte qu'après rechargement.
 
 
 ### Ajoutés Manuellement
@@ -102,6 +98,8 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 
 ### ✅ Faits récemment
 
+- ⚡ Temps réel (web + client bureau), 📲 PWA, HTTPS facultatif, 🌳 « Rattacher à… », ↑ ↓ dans Ctrl+K,
+  défilement automatique pendant un glisser, rappel par défaut à jour, compteur de filtres (étape 8).
 - ⏰ Heure d'échéance dans l'éditeur · 💻 appareils connectés et 📁 projets dans les réglages ·
   📋 dupliquer une tâche (étape 5).
 - 📊 Kanbans, 🎯 matrice, glisser-déposer souris / tactile et Ctrl+drop (étape 6).

@@ -13,10 +13,17 @@ from nicegui import ui
 
 
 class DragDrop(ui.element, component="dnd.js"):
-    def __init__(self, on_drop: Callable[[dict], None], on_attach: Callable[[dict], None]) -> None:
+    def __init__(
+        self,
+        on_drop: Callable[[dict], None],
+        on_attach: Callable[[dict], None],
+        on_state: Callable[[bool], None] | None = None,
+    ) -> None:
         super().__init__()
         self.on("drop", lambda e: on_drop(e.args))
         self.on("attach", lambda e: on_attach(e.args))
+        if on_state is not None:  # début / fin d'un glisser (le temps réel attend la fin du geste)
+            self.on("dragstate", lambda e: on_state(bool(e.args.get("active"))))
 
 
 def drop_zone(

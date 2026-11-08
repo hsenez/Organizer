@@ -59,6 +59,10 @@ class TaskEditor:
 
     def open_new(self) -> None:
         """Ouvre l'éditeur complet sur une nouvelle tâche (brouillon)."""
+        # Profil à jour : le décalage de rappel par défaut a pu changer dans un autre onglet.
+        fresh = self.ctx.call(self.ds.account.me)
+        if fresh is not None:
+            self.ds.user = fresh
         self.draft = {}
         self.task = self._draft_out()
         self._build()

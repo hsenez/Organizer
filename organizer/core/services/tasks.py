@@ -323,7 +323,12 @@ class TaskService(BaseService):
             and task.reminder_offset_days is None
             and task.reminder_manual_date is None
         ):
-            task.reminder_offset_days = self.actor.reminder_offset_days
+            # Valeur actuelle du réglage (elle a pu changer depuis l'ouverture de la page).
+            with Session(self.ctx.engine) as s:
+                current = s.get(User, self.actor.id)
+            task.reminder_offset_days = (
+                current.reminder_offset_days if current is not None else self.actor.reminder_offset_days
+            )
 
     def create(self, data: TaskCreate) -> TaskOut:
         given = data.model_fields_set

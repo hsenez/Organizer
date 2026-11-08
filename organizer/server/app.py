@@ -7,6 +7,7 @@ import logging
 from nicegui import app, ui
 
 from organizer.config import Settings, load_settings
+from organizer.server import pwa
 from organizer.server.pages import register_pages
 from organizer.server.state import AppState, create_state
 from organizer.server.wiring import install
@@ -19,6 +20,8 @@ def build(settings: Settings | None = None) -> AppState:
     state = create_state(settings or load_settings())
     install(app, state)
     register_pages()
+    pwa.add_static(app)
+    pwa.add_head()
 
     app.on_startup(lambda: log.info("%d session(s) expirée(s) purgée(s)", state.auth.purge_expired()))
     return state
@@ -37,4 +40,9 @@ def main() -> None:
         show=False,
         fastapi_docs=True,  # documentation de l'API sur /docs
         show_welcome_message=True,
+        **(
+            {"ssl_certfile": state.settings.ssl_cert, "ssl_keyfile": state.settings.ssl_key}
+            if state.settings.https
+            else {}
+        ),
     )

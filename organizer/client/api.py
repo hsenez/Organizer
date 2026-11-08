@@ -7,7 +7,9 @@ que sur le serveur) : l'interface les affiche comme en local. Un serveur injoign
 
 from __future__ import annotations
 
+import copy
 import json as jsonlib
+import os
 from functools import cache
 from typing import Any
 
@@ -72,11 +74,20 @@ class ApiClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self.extra_headers: dict[str, str] = {}
         self.http = http or httpx.Client(
             base_url=self.base_url,
             timeout=httpx.Timeout(timeout, connect=4.0),
             headers={"User-Agent": USER_AGENT},
+            # Serveur en HTTPS avec un certificat d'une autorité locale (mkcert…) : son certificat racine.
+            verify=os.environ.get("ORGANIZER_CA_FILE") or True,
         )
+
+    def with_headers(self, headers: dict[str, str]) -> ApiClient:
+        """Même connexion, avec des en-têtes en plus sur chaque requête (ex. origine de la page)."""
+        clone = copy.copy(self)
+        clone.extra_headers = {**self.extra_headers, **headers}
+        return clone
 
     def close(self) -> None:
         self.http.close()
@@ -91,7 +102,9 @@ class ApiClient:
         files: dict[str, Any] | None = None,
         auth: bool = True,
     ) -> httpx.Response:
-        headers = {"Authorization": f"Bearer {self.token}"} if auth and self.token else {}
+        headers = dict(self.extra_headers)
+        if auth and self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         kwargs: dict[str, Any] = {"params": params, "headers": headers}
         if files is not None:
             kwargs["files"] = files

@@ -216,14 +216,41 @@ Référence fonctionnelle complète : **`specifications.md`**.
   affichée (`_in_page`), sinon charge `/?task=new`.
 - Linux : `GLib.set_prgname("organizer")` dans le sous-processus = identifiant Wayland = nom du `.desktop`.
 - Raccourcis globaux : impossibles à capter soi-même sous Wayland → déclarés au bureau par
-  `organizer/client/install.py` (KDE : `doRegister` + `setForeignShortcutKeys` sur le composant
-  `organizer.desktop`, actions `_launch` et `new-task` ; vérifiable avec `qdbus6 org.kde.kglobalaccel
-  /component/organizer_desktop org.kde.kglobalaccel.Component.invokeShortcut _launch`). Fermer la fenêtre
-  dans un test : script KWin filtré sur le **pid** du sous-processus (`workspace.windowList()`).
+  `organizer/client/install.py`. KDE : composant `organizer.desktop`, actions `_launch` (ouvrir) et
+  `new-task`, par `doRegister` + **`setShortcutKeys(..., SetPresent | NoAutoloading)`**. ⚠️ Avec
+  `setForeignShortcutKeys`, le raccourci est enregistré et répond à `invokeShortcut` (D-Bus) mais Plasma 6
+  l'ignore sur un vrai appui clavier (bug rencontré : Ctrl+Alt+O inopérant). `invokeShortcut` ne prouve donc
+  rien : tester avec un **vrai appui**, par un clavier virtuel `uinput` (`/dev/uinput` accessible à
+  l'utilisateur ; script Python stdlib : `UI_DEV_SETUP` / `UI_DEV_CREATE`, événements `EV_KEY` ; codes
+  Ctrl 29, Alt 56, O 24, N 49). Le journal de KWin (`journalctl --user`) signale les actions inconnues
+  (« failed to find an action matching… »). Fermer la fenêtre dans un test : script KWin filtré sur le
+  **pid** du sous-processus (`workspace.windowList()`).
 - Installeurs : `install/linux/install.sh`, `install/windows/install.ps1` (UTF-8 **avec BOM** et fins de
   ligne CRLF, sinon Windows PowerShell 5.1 abîme les accents ; jamais exécuté faute de Windows).
-- Icône : `scripts/make_icons.sh <svg>` régénère `organizer/client/assets/` (rsvg-convert + ImageMagick,
+- Icône : `scripts/make_icons.sh <svg> <svg plein>` régénère `organizer/assets/` (rsvg-convert + ImageMagick,
   outils de développement seulement ; les fichiers produits sont versionnés).
+
+## Étape 8 : temps réel, PWA
+
+- **Temps réel** : `core/events.py` (`EventBus`, `ChangeEvent` = tables + auteur + origine). Publié par
+  `UnitOfWork` après commit (`on_commit`, seulement si l'historique a capté des changements : opérations
+  avec libellé) et par `UndoService`. `Services(..., events=, origin=)` ; `AppState.events`,
+  `services_for(user, origin)`. Pages web : `server_context` crée une `LiveRefresh` (`ui/live.py`) abonnée
+  au bus (désabonnement `client.on_delete`). API : `GET /api/v1/events` (SSE, `api/events.py`, `HEARTBEAT`) ;
+  client bureau : `client/live.py` (`EventListener` dans un fil, `parse_sse`), origine envoyée par
+  `RemoteDataSource(origin=)` (en-tête `X-Organizer-Origin`, `ApiClient.with_headers`).
+- `LiveRefresh` : rafraîchit après 0,4 s, ignore les événements de sa propre origine, attend la fin d'un
+  glisser (`dnd.js` émet `dragstate`, `UiContext.set_dragging`). L'éditeur de tâche n'est **pas** abonné à
+  `refresh()` (il ne doit pas changer sous les doigts).
+- **PWA** : `server/pwa.py` (routes manifeste + `sw.js` dans `wiring.install` ; `add_static` `/icons` et
+  `add_head` en-têtes partagés dans `app.build`). Icônes : `organizer/assets/` (`ASSETS_DIR`, `FAVICON` dans
+  `organizer/__init__.py`), régénérées par `scripts/make_icons.sh icone.svg icone-pleine.svg`.
+- HTTPS : `Settings.ssl_cert` / `ssl_key` (`ORGANIZER_SSL_*`) → `ui.run(ssl_*)`, cookie `Secure` ; client :
+  `ORGANIZER_CA_FILE`.
+- `dnd.js` : défilement automatique près des bords (`autoScroll`, rAF) ; l'aimantation (`snap-x`) est
+  coupée pendant un glisser (CSS `body.dnd-active *`), sinon chaque petit pas est annulé.
+- Tests du temps réel : `tests/test_live.py` (vrai serveur uvicorn dans un fil pour le flux SSE) ; dans les
+  tests de pages, `asyncio.sleep(0.6)` laisse passer le délai de `LiveRefresh`.
 
 ## Versions et mises à jour
 
@@ -268,7 +295,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 233 tests au total.
+- 246 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
@@ -278,7 +305,9 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 7 : client bureau (fenêtre native, `RemoteDataSource` via l'API, connexion par jeton, ouverture
   des fichiers locaux, notifications des rappels). Vérifié sous Linux (GTK) ; **Windows jamais essayé**.
   Puis : arrière-plan, instance unique, raccourcis globaux, installeurs, icône « Post-it en vrac »
-  (source : `organizer/client/assets/organizer.svg`).
-- ⏭️ Étape 8 : temps réel (WebSocket), PWA, finitions.
+  (source : `organizer/assets/organizer.svg`).
+- ✅ Étape 8 : temps réel (SSE), PWA, HTTPS facultatif, finitions. Feuille de route terminée.
+- ⚠️ Toujours jamais exécuté sous **Python 3.11** (le téléchargement d'un interpréteur 3.11 a été refusé
+  par les garde-fous de l'outil) : à valider sur le Pi (`pytest`) ou avec un Python 3.11 local.
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.

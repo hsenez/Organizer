@@ -30,16 +30,23 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from organizer import ASSETS_DIR
 from organizer.client import system
 from organizer.client.config import ConfigStore
 
 APP_ID = "organizer"
 DESKTOP_FILE = f"{APP_ID}.desktop"
-ASSETS = Path(__file__).parent / "assets"
+ASSETS = ASSETS_DIR
 ICON_SIZES = (16, 24, 32, 48, 64, 128, 256, 512)
 DEFAULT_KEYS = {"show": "Ctrl+Alt+O", "new_task": "Ctrl+Alt+N"}
 # Action du fichier .desktop déclenchée par chaque raccourci (``_launch`` = l'application elle-même).
 KDE_ACTIONS = {"show": ("_launch", "Organizer"), "new_task": ("new-task", "Nouvelle tâche")}
+KDE_LEGACY_ACTIONS = ("open",)  # action d'une version intermédiaire, à nettoyer
+# Drapeaux de setShortcutKeys. « Présent » est indispensable : un raccourci posé sans lui
+# (setForeignShortcutKeys) est bien enregistré et répond à l'appel D-Bus invokeShortcut, mais Plasma 6
+# l'ignore sur un vrai appui clavier, sauf s'il a déjà lu l'action dans le lanceur.
+KDE_SET_PRESENT = 0x2
+KDE_NO_AUTOLOADING = 0x4
 GNOME_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys"
 GNOME_PATH = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/organizer-{name}/"
 OPTIONS_FILE = "install.json"
@@ -234,7 +241,7 @@ def desktop_kind() -> str:
     return "other"
 
 
-async def _kde_call(calls: list[tuple[str, tuple]]) -> None:
+async def _kde_call(calls: list[tuple[str, tuple]]) -> list:
     from dbus_fast.aio import MessageBus
 
     bus = await MessageBus().connect()
@@ -243,26 +250,34 @@ async def _kde_call(calls: list[tuple[str, tuple]]) -> None:
         accel = bus.get_proxy_object("org.kde.kglobalaccel", "/kglobalaccel", node).get_interface(
             "org.kde.KGlobalAccel"
         )
-        for method, args in calls:
-            await getattr(accel, f"call_{method}")(*args)
+        return [await getattr(accel, f"call_{method}")(*args) for method, args in calls]
     finally:
         bus.disconnect()
 
 
 def kde_register(keys: dict[str, str], component: str = DESKTOP_FILE) -> None:
-    calls = []
+    """Déclare les raccourcis à kglobalaccel ; lève RuntimeError si KDE a dû en attribuer un autre
+    (combinaison déjà prise)."""
+    calls: list[tuple[str, tuple]] = [("unregister", (component, a)) for a in KDE_LEGACY_ACTIONS]
+    wanted = {}
     for name, combo in keys.items():
         action, friendly = KDE_ACTIONS[name]
         action_id = [component, action, "Organizer", friendly]
+        wanted[len(calls) + 1] = combo
         calls += [
             ("do_register", (action_id,)),
-            ("set_foreign_shortcut_keys", (action_id, [[[qt_keycode(combo)]]])),
+            ("set_shortcut_keys", (action_id, [[[qt_keycode(combo)]]], KDE_SET_PRESENT | KDE_NO_AUTOLOADING)),
         ]
-    asyncio.run(_kde_call(calls))
+    results = asyncio.run(_kde_call(calls))
+    for index, combo in wanted.items():
+        granted = [code for (seq,) in (results[index] or []) for code in seq]
+        if qt_keycode(combo) not in granted:
+            raise RuntimeError(f"{combo} est déjà utilisé par une autre application")
 
 
 def kde_unregister(component: str = DESKTOP_FILE) -> None:
-    asyncio.run(_kde_call([("unregister", (component, action)) for action, _ in KDE_ACTIONS.values()]))
+    actions = [action for action, _ in KDE_ACTIONS.values()] + list(KDE_LEGACY_ACTIONS)
+    asyncio.run(_kde_call([("unregister", (component, action)) for action in actions]))
 
 
 def _gsettings(*args: str) -> str:
@@ -361,7 +376,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if not args.no_shortcuts:
-        commands = {"show": command(python, root), "new_task": command(python, root, "--new-task")}
+        commands = {"show": command(python, root, "--show"), "new_task": command(python, root, "--new-task")}
         try:
             if kind == "kde":
                 kde_register(keys)

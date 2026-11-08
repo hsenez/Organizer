@@ -32,6 +32,9 @@ class UiContext:
         self.quit: Callable[[], None] | None = None
         # Avertissement en haut des pages (bureau : mise à jour disponible) : (texte, bloquant).
         self.banner: tuple[str, bool] | None = None
+        # Temps réel (``ui/live.py``) : rafraîchissement quand les données changent ailleurs.
+        self.live: Any = None
+        self.dragging = False  # glisser-déposer en cours : le rafraîchissement attend la fin du geste
 
     @property
     def user(self):
@@ -44,6 +47,11 @@ class UiContext:
 
     def on_refresh(self, callback: Callable[[], Any]) -> None:
         self._refreshers.append(callback)
+
+    def set_dragging(self, active: bool) -> None:
+        self.dragging = active
+        if not active and self.live is not None:
+            self.live.resume()
 
     def refresh(self) -> None:
         for callback in list(self._refreshers):

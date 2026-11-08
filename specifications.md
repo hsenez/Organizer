@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 1.7 — 2026-11-08
+> Version : 1.8.1 — 2026-11-08
 
 ---
 
@@ -24,7 +24,7 @@ s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry P
  🌐 Navigateur ─┼──┼─▶ NiceGUI (pages web)  ──┐                                              │
                 │  │                          ├─▶ Services métier ─▶ SQLModel ─▶ SQLite      │
  🖥️ Client  ────┼──┼─▶ API REST /api/v1  ─────┘        │                                     │
-   bureau       │  │   WebSocket /api/v1/events ◀──────┘ (diffusion des changements)         │
+   bureau       │  │   SSE /api/v1/events ◀────────────┘ (diffusion des changements)         │
                 │  │   Pièces jointes : data/uploads/                                        │
                 │  └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -34,8 +34,13 @@ s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry P
   - Côté **client bureau**, la même interface tourne localement dans une fenêtre native (pywebview) et accède
     aux données via l'API REST du serveur (`RemoteDataSource`, httpx).
   - Les deux implémentent la même interface `DataSource` : le code UI ne sait pas où sont les données.
-- **Temps réel** : toute modification est diffusée (bus d'événements interne + WebSocket pour les clients bureau)
-  pour que les autres écrans se rafraîchissent.
+- **Temps réel** (✅ étape 8) : toute modification est diffusée pour que les autres écrans se rafraîchissent
+  seuls (≈ 0,5 s) : bus d'événements interne (`core/events.py`) → pages web du serveur directement, clients
+  bureau par un flux **SSE** (`GET /api/v1/events`, simple HTTP en flux, au lieu du WebSocket prévu). Seul un
+  signal « ces tables ont changé » est diffusé ; chaque écran relit ce qu'il a le droit de voir. La page ou
+  l'appareil à l'origine d'une modification ne se rafraîchit pas une seconde fois (en-tête
+  `X-Organizer-Origin` pour le client bureau) ; une page attend la fin d'un glisser-déposer en cours ; un
+  client bureau qui se reconnecte se rafraîchit (il a pu manquer des modifications).
 - **Pas de mode hors ligne** en v1 : le client bureau a besoin du serveur.
 
 ### 2.1 Bibliothèques
@@ -77,7 +82,8 @@ organizer/
     wiring.py            # assemblage : middleware, erreurs, routes (partagé avec les tests)
     web_auth.py          # /auth/complete (ticket → cookie), /auth/logout
     pages.py             # /login, /setup + branchement des pages de l'UI sur LocalDataSource
-    api/                 # routes REST /api/v1 (auth, users, labels, tasks, undo) ; WebSocket à venir
+    api/                 # routes REST /api/v1 (auth, users, labels, tasks, boards, undo, events : SSE)
+    pwa.py               # manifeste, service worker, en-têtes iOS / Android, icônes /icons
   client/                # ✅ étape 7
     app.py               # DesktopClient : /connect, pages sur RemoteDataSource, verrou de la fenêtre, main()
     api.py               # ApiClient (httpx, jeton Bearer) ; erreurs HTTP → erreurs métier
@@ -94,7 +100,7 @@ organizer/
                          # search_dialog, tag_chips, dnd (.py + .js : glisser-déposer),
                          # resizer (.py + resize.js : largeur des colonnes)
     pages/               # home, tasks (+ recherche), kanban, matrix, settings
-  static/                # icônes, manifeste PWA (à venir)
+  assets/                # icônes (SVG source, PNG, ICO, maskable, apple-touch) — scripts/make_icons.sh
 tests/
 scripts/demo.py          # démo terminal + données d'exemple (base data/demo.db)
 deploy/organizer.service # service systemd pour le Raspberry Pi
@@ -263,8 +269,10 @@ Partout où des tâches apparaissent en cartes (liste, kanbans, matrice, accueil
 - **Sur téléphone** (pas de touche Ctrl) : **appui long** (~0,35 s, petite vibration) pour saisir la carte, puis
   on la glisse ; le défilement est bloqué tant qu'on porte la carte (un doigt qui bouge tout de suite fait
   défiler normalement). La **maintenir ~1 s au-dessus d'une autre carte** passe en mode rattachement (même
-  code couleur), et le relâchement rattache. *À venir : menu de la carte → « 🌳 Rattacher à… » (sélecteur
-  de tâche avec recherche).*
+  code couleur), et le relâchement rattache. Partout aussi : menu ⋯ de la carte → **« 🌳 Rattacher à… »**
+  (recherche, seules les tâches pouvant l'accueillir sont proposées).
+- **Défilement automatique** : pendant un glisser, approcher la carte du bord de l'écran (ou du kanban)
+  fait défiler la page ou les colonnes.
 - Implémentation : un seul composant par page (`ui/components/dnd.js`), qui gère souris, événements tactiles
   et, à défaut, événements « pointer » ; les règles de rattachement sont dupliquées côté navigateur pour la
   surbrillance instantanée et revérifiées par le serveur.
@@ -525,7 +533,13 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 - Kanbans : colonnes en défilement horizontal au doigt (repliables, redimensionnables) ; matrice 2×2 empilée.
 - Éditeur en plein écran ; curseurs utilisables au doigt.
 - Glisser-déposer tactile (appui long pour saisir une carte).
-- Manifeste **PWA** : ajout à l'écran d'accueil, icône, plein écran.
+- **PWA** (✅ étape 8) : manifeste (`/manifest.webmanifest`), icônes (dont « maskable » pour Android et
+  `apple-touch-icon` pour iOS), plein écran (`standalone`), raccourcis « Nouvelle tâche » et « Kanbans »
+  (appui long sur l'icône), couleur de la barre d'état selon le thème. Service worker minimal, actif en
+  HTTPS : rien en cache (pas de mode hors ligne), mais une page « Serveur injoignable » lisible.
+  - **iPhone** : Safari → Partager → « Sur l'écran d'accueil » ; fonctionne en HTTP sur le réseau local.
+  - **Android** : en HTTP, Chrome ne crée qu'un raccourci qui s'ouvre dans le navigateur ; le vrai mode
+    « application » demande le serveur en **HTTPS** (§10).
 
 ---
 
@@ -574,7 +588,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   pas écouter le clavier hors de sa fenêtre : KDE Plasma (kglobalaccel, par D-Bus) et GNOME (gsettings) sont
   configurés automatiquement, les autres bureaux reçoivent la commande à associer ; sous Windows, ce sont les
   touches de raccourci des raccourcis du menu Démarrer.
-- **Icône** de l'application (`organizer/client/assets/`, générée depuis un SVG par `scripts/make_icons.sh`) :
+- **Icône** de l'application (`organizer/assets/`, générée depuis un SVG par `scripts/make_icons.sh`) :
   fenêtre, lanceur, menu Démarrer ; identifiant d'application `organizer` (Wayland) pour que la barre des
   tâches associe la fenêtre au lanceur.
 
@@ -599,7 +613,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 ### 10.3 🏷️ Versions et mises à jour
 
 - **Version du logiciel** `MAJEUR.MINEUR.CORRECTIF` (`organizer.__version__`) : `0.<étape>.<correctif>`
-  pendant le développement (0.7.0 = étape 7), **1.0.0** à la fin de l'étape 8 ; ensuite MINEUR pour une
+  pendant le développement (0.7.0 = étape 7, 0.8.0 = étape 8), **1.0.0** une fois validé sur le Pi et les téléphones ; ensuite MINEUR pour une
   nouveauté, CORRECTIF pour une correction, MAJEUR pour un changement qui casse la compatibilité. Une
   étiquette git `v<version>` marque chaque version publiée.
 - **Version de l'API** (`organizer.API_VERSION`, entier) : augmentée seulement quand un client plus ancien
@@ -618,6 +632,9 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   nouvelles tables sont créées au démarrage (une nouvelle colonne demanderait une migration).
 - Ordre conseillé : **le serveur d'abord**, puis les postes (le bandeau les y invite).
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
+- **HTTPS** (facultatif) : `ORGANIZER_SSL_CERT` / `ORGANIZER_SSL_KEY` (fichiers PEM) ; le cookie de session
+  devient alors `Secure`. Certificat conseillé : autorité locale **mkcert** (son certificat racine est à
+  installer sur les téléphones) ; le client bureau la reconnaît avec `ORGANIZER_CA_FILE=<rootCA.pem>`.
 
 ---
 
@@ -632,7 +649,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 5 | ✅ Modules : liste (filtres, tri, regroupement mémorisés), recherche Ctrl+K, réglages, dupliquer, heure d'échéance |
 | 6 | ✅ Kanbans (prédéfinis + personnalisés, partage), matrice 2×2 / 4×4, glisser-déposer souris et tactile, Ctrl+drop |
 | 7 | ✅ Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
-| 8 | Temps réel, PWA, finitions |
+| 8 | ✅ Temps réel (SSE), PWA, HTTPS facultatif, finitions (Rattacher à…, flèches dans Ctrl+K, défilement automatique, rappel par défaut à jour, compteur de filtres) |
 
 ---
 
@@ -657,3 +674,5 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.5 | **Étape 7 livrée** : client bureau (`organizer/client`, `run_client.py`) — fenêtre native pywebview, connexion par jeton (`/connect`), `RemoteDataSource` (contrat identique aux services, vérifié par les tests), verrou de la fenêtre, ouverture des liens / fichiers locaux / pièces jointes, notifications des rappels (desktop-notifier 6.2.0), onglet de réglages 🔌 Connexion ; 206 tests + parcours vérifié dans Firefox et dans la fenêtre native |
 | 2026-11-08 | 1.6 | Client bureau : fonctionne en **arrière-plan** (fermer = cacher ; ⏻ Quitter dans le menu du compte), **instance unique** pilotée par la ligne de commande (`--new-task`, `--quit`, `--hidden`), **raccourcis clavier globaux** (KDE / GNOME / Windows), **installeurs** Linux (`install/linux/install.sh`) et Windows (`install/windows/install.bat`), icône de l'application « Post-it en vrac » (choisie parmi 5 propositions), journal `client.log` ; 221 tests + essais réels (fenêtre native, KDE) |
 | 2026-11-08 | 1.7 | **Versions** : `organizer.__version__` = 0.7.0 et `API_VERSION` = 1, route publique `GET /api/v1/version`, bandeau « mise à jour disponible » sur le client bureau ; scripts de mise à jour `install/linux/update.sh`, `install/windows/update.bat`, `deploy/update.sh` (Pi) ; options d'installation retenues (`--reuse`) ; 233 tests + mise à jour complète simulée |
+| 2026-11-08 | 1.8 | **Étape 8** : temps réel (bus `core/events.py`, pages web abonnées, flux SSE `/api/v1/events` pour le client bureau, origine des modifications, attente pendant un glisser), PWA (manifeste, icônes maskable / apple-touch, service worker, raccourcis), HTTPS facultatif (`ORGANIZER_SSL_*`, `ORGANIZER_CA_FILE`), favicon = icône Post-it ; finitions : « 🌳 Rattacher à… » dans le menu des cartes, ↑ ↓ dans Ctrl+K, défilement automatique pendant un glisser, décalage de rappel par défaut lu au moment de créer, compteur « Filtres (n) » relatif aux filtres par défaut de la vue ; 246 tests + vérifications dans Firefox (temps réel entre onglets et client bureau, défilement) |
+| 2026-11-08 | 1.8.1 | **Version 0.8.0** du logiciel. Correction : **Ctrl+Alt+O** n'ouvrait pas Organizer sous KDE (raccourci posé sans le drapeau « présent », ignoré au clavier) ; l'installeur utilise `setShortcutKeys` et vérifie que la touche est bien attribuée. Relancer `install/linux/install.sh` (ou `--reuse`) sur les postes déjà installés |

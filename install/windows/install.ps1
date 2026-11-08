@@ -27,7 +27,7 @@ $Venv = Join-Path $Root ".venv"
 $Python = Join-Path $Venv "Scripts\python.exe"
 $Pythonw = Join-Path $Venv "Scripts\pythonw.exe"
 $Script = Join-Path $Root "run_client.py"
-$Icon = Join-Path $Root "organizer\client\assets\organizer.ico"
+$Icon = Join-Path $Root "organizer\assets\organizer.ico"
 
 $Programs = [Environment]::GetFolderPath("Programs")   # menu Démarrer de l'utilisateur
 $Links = [ordered]@{

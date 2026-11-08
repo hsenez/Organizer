@@ -55,7 +55,7 @@ def app_frame(
     ui.page_title(f"{title} · Organizer")
     ctx.editor = TaskEditor(ctx)
     search = SearchDialog(ctx)
-    DragDrop(on_drop=ctx.handle_drop, on_attach=ctx.attach).mark("dnd")
+    DragDrop(on_drop=ctx.handle_drop, on_attach=ctx.attach, on_state=ctx.set_dragging).mark("dnd")
     # Ctrl+K est réservé par certains navigateurs (barre de recherche de Firefox) : on le garde pour nous.
     ui.add_body_html(
         "<script>document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && "

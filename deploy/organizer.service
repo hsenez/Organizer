@@ -13,6 +13,9 @@ User=pi
 WorkingDirectory=/home/pi/organizer
 Environment=ORGANIZER_DATA_DIR=/home/pi/organizer/data
 Environment=ORGANIZER_PORT=2603
+# HTTPS (facultatif, pour installer l'application sur Android) : voir README.md, « HTTPS ».
+#Environment=ORGANIZER_SSL_CERT=/home/pi/organizer/certs/organizer.pem
+#Environment=ORGANIZER_SSL_KEY=/home/pi/organizer/certs/organizer-key.pem
 ExecStart=/home/pi/organizer/.venv/bin/python run_server.py
 Restart=on-failure
 RestartSec=5

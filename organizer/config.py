@@ -41,6 +41,14 @@ class Settings:
     login_failure_window_minutes: int = 10
     # Taille maximale d'une pièce jointe (Mo).
     max_upload_mb: int = 50
+    # HTTPS (facultatif) : certificat et clé au format PEM. Nécessaire pour installer l'application sur un
+    # téléphone Android en mode « application » (PWA) ; l'iPhone s'en passe.
+    ssl_cert: str = field(default_factory=lambda: _env("SSL_CERT", ""))
+    ssl_key: str = field(default_factory=lambda: _env("SSL_KEY", ""))
+
+    @property
+    def https(self) -> bool:
+        return bool(self.ssl_cert and self.ssl_key)
 
     @property
     def db_path(self) -> Path:

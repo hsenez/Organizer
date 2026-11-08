@@ -37,10 +37,11 @@ from nicegui import Client, app, ui
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from organizer import versioning
+from organizer import ASSETS_DIR, FAVICON, versioning
 from organizer.client import instance, system, window
 from organizer.client.api import ApiClient
 from organizer.client.config import ClientConfig, ConfigStore, normalize_server_url
+from organizer.client.live import EventListener
 from organizer.client.notifications import NotifiedLog, ReminderNotifier, make_sender
 from organizer.client.remote import RemoteAccount, RemoteDataSource, RemoteTasks
 from organizer.core.errors import (
@@ -50,9 +51,11 @@ from organizer.core.errors import (
     OrganizerError,
     ServerUnreachable,
 )
+from organizer.core.events import ChangeEvent
 from organizer.core.schemas import LoginOut, TaskOut, UserOut
 from organizer.ui.auth_shell import auth_shell
 from organizer.ui.context import UiContext
+from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
 
 log = logging.getLogger("organizer.client")
@@ -60,7 +63,7 @@ log = logging.getLogger("organizer.client")
 WINDOW_COOKIE = "organizer_window"
 ENV_SECRET = instance.ENV_SECRET
 ENV_PORT = instance.ENV_PORT
-ASSETS = Path(__file__).parent / "assets"
+ASSETS = ASSETS_DIR
 DEFAULT_SHORTCUTS = {"show": "Ctrl+Alt+O", "new_task": "Ctrl+Alt+N"}
 
 
@@ -182,7 +185,9 @@ class DesktopClient:
             return RedirectResponse("/connect?expired=1", status_code=303)
         except ServerUnreachable:
             return RedirectResponse("/connect?offline=1", status_code=303)
-        ctx = UiContext(RemoteDataSource(api, user), logout=self.logout)
+        origin = secrets.token_hex(8)
+        ctx = UiContext(RemoteDataSource(api, user, origin=origin), logout=self.logout)
+        LiveRefresh(ctx, ui.context.client, origin)
         ctx.extra_settings["connection"] = ("🔌 Connexion", self.connection_settings)
         ctx.quit = self.quit
         result = self.version_check()
@@ -414,8 +419,20 @@ class DesktopClient:
 
     # --- installation ---
 
-    def install(self, *, notifications: bool = True, single_instance: bool = False) -> None:
-        common = {"favicon": "📋", "dark": None}
+    def _dispatch_change(self, event: ChangeEvent | None) -> None:
+        """Modification reçue du serveur (fil du flux SSE) → pages ouvertes."""
+        for _client, ctx in list(self._pages):
+            if ctx.live is not None:
+                ctx.live.notify(event)
+
+    def start_live(self) -> None:
+        self.listener = EventListener(lambda: self.api, self._dispatch_change)
+        self.listener.start()
+
+    def install(
+        self, *, notifications: bool = True, single_instance: bool = False, live: bool = True
+    ) -> None:
+        common = {"favicon": FAVICON, "dark": None}
         ui.page("/connect", title="Connexion · Organizer", **common)(self.connect_page)
         register_app_pages(self.context)
         app.on_page_exception(self.page_error)
@@ -424,6 +441,9 @@ class DesktopClient:
             app.add_middleware(LaunchGuard, secret=self.launch_secret)
         if notifications:
             app.on_startup(self.start_notifier)
+        if live:
+            app.on_startup(self.start_live)
+            app.on_shutdown(lambda: self.listener.stop())
         if single_instance and self.launch_secret and self.port:
             app.on_startup(lambda: instance.write(self.store.directory, self.port, self.launch_secret))
             app.on_shutdown(lambda: instance.remove(self.store.directory))
@@ -502,7 +522,7 @@ def main(args: argparse.Namespace) -> None:
         native=native,
         window_size=(1400, 900) if native else None,
         title="Organizer",
-        favicon=(_icon("ico") if sys.platform == "win32" else None) or "📋",
+        favicon=(_icon("ico") if sys.platform == "win32" else None) or FAVICON,
         dark=None,
         language="fr",
         reload=False,

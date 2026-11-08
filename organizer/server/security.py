@@ -13,7 +13,7 @@ from organizer.core.services.auth import ResolvedSession
 
 COOKIE_NAME = "organizer_session"
 # Ressources internes de NiceGUI et fichiers statiques : pas besoin d'authentification.
-_SKIPPED_PREFIXES = ("/_nicegui", "/static", "/favicon")
+_SKIPPED_PREFIXES = ("/_nicegui", "/static", "/favicon", "/icons", "/manifest.webmanifest", "/sw.js")
 
 
 def set_session_cookie(response: Response, token: str, persistent: bool, settings: Settings) -> None:
@@ -23,7 +23,7 @@ def set_session_cookie(response: Response, token: str, persistent: bool, setting
         max_age=settings.remember_me_days * 86400 if persistent else None,
         httponly=True,
         samesite="lax",
-        secure=False,  # HTTP simple sur le réseau local (pas de HTTPS en v1)
+        secure=settings.https,  # cookie réservé au HTTPS quand le serveur en fait
         path="/",
     )
 

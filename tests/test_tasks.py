@@ -451,3 +451,11 @@ def test_move_refuses_invisible_tasks(alice, bob):
     with pytest.raises(NotFound):
         alice.tasks.move(mine.id, order=[secret.id, mine.id])
     alice.tasks.delete(mine.id)  # le rang éventuel part avec la tâche
+
+
+def test_followup_uses_current_offset_setting(alice, users):
+    from organizer.core.schemas import ProfilePatch
+
+    users.update_profile(alice.actor.id, ProfilePatch(reminder_offset_days=5))  # changé ailleurs
+    task = alice.tasks.create(TaskCreate(title="Relancer", kind=TaskKind.FOLLOWUP))
+    assert task.reminder_offset_days == 5

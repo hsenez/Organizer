@@ -3,12 +3,14 @@ l'application (``organizer/ui``) sur la source de données locale."""
 
 from __future__ import annotations
 
+import secrets
 from urllib.parse import quote
 
 from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 from nicegui import app, ui
 
+from organizer import FAVICON
 from organizer.core.datasource import LocalDataSource
 from organizer.core.errors import OrganizerError
 from organizer.core.services.account import AccountService
@@ -18,6 +20,7 @@ from organizer.server.state import AppState
 from organizer.server.web_auth import safe_next
 from organizer.ui.auth_shell import auth_shell as _auth_shell
 from organizer.ui.context import UiContext
+from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
 
 
@@ -133,16 +136,21 @@ def server_context(request: Request) -> UiContext | RedirectResponse:
         return redirect
     auth = request_auth(request)
     state = _state()
-    services = state.services_for(auth.user)
+    origin = secrets.token_hex(8)  # cette page : elle ne se rafraîchit pas pour ses propres modifications
+    services = state.services_for(auth.user, origin=origin)
     account = AccountService(state.users, state.auth, auth.user.id, auth.session.id)
-    return UiContext(
+    ctx = UiContext(
         LocalDataSource(services, auth.user, account), logout=lambda: ui.navigate.to("/auth/logout")
     )
+    client = ui.context.client
+    live = LiveRefresh(ctx, client, origin)
+    client.on_delete(state.events.subscribe(live.notify))  # désabonnement quand la page disparaît
+    return ctx
 
 
 def register_pages() -> None:
     """Enregistre les pages auprès de NiceGUI (appelé par ``organizer.server.app.build``)."""
-    common = {"favicon": "📋", "dark": None}
+    common = {"favicon": FAVICON, "dark": None}
     ui.page("/login", title="Connexion · Organizer", **common)(login_page)
     ui.page("/setup", title="Bienvenue · Organizer", **common)(setup_page)
     register_app_pages(server_context)

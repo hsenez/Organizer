@@ -9,6 +9,7 @@ moment du commit. Les services n'ont donc rien à faire de particulier pour êtr
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -162,8 +163,12 @@ class UnitOfWork:
         policy: UndoPolicy,
         label: str | None = None,
         group_key: str | None = None,
+        on_commit: Callable[[set[str]], None] | None = None,
     ):
+        """``on_commit`` : appelé après la validation avec les tables modifiées (si ``label`` est fourni et
+        qu'il y a eu des modifications) — diffusion en temps réel."""
         self.engine = engine
+        self.on_commit = on_commit
         self.user_id = user_id
         self.policy = policy
         self.label = label
@@ -182,6 +187,8 @@ class UnitOfWork:
                 self.session.flush()
                 self._store_history()
                 self.session.commit()
+                if self.on_commit is not None and self.recorder is not None and self.recorder.changes:
+                    self.on_commit({change.table for change in self.recorder.changes})
             else:
                 self.session.rollback()
         finally:

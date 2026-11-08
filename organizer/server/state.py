@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 
 from organizer.config import Settings
 from organizer.core.db import init_db, make_engine
+from organizer.core.events import EventBus
 from organizer.core.schemas import UserOut
 from organizer.core.services import AuthService, Services, UserService
 from organizer.core.services.auth import LoginThrottle
@@ -62,9 +63,13 @@ class AppState:
     users: UserService
     throttle: LoginThrottle
     tickets: TicketStore = field(default_factory=TicketStore)
+    events: EventBus = field(default_factory=EventBus)
 
-    def services_for(self, user: UserOut) -> Services:
-        return Services.for_user(self.engine, user.id, settings=self.settings)
+    def services_for(self, user: UserOut, origin: str | None = None) -> Services:
+        """Services de ``user`` ; ``origin`` : page / appareil à l'origine des modifications."""
+        return Services.for_user(
+            self.engine, user.id, settings=self.settings, events=self.events, origin=origin
+        )
 
 
 def create_state(settings: Settings | None = None) -> AppState:

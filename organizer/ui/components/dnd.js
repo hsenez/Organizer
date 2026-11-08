@@ -7,7 +7,9 @@
 // - Souris : on glisse après quelques pixels ; **Ctrl** (⌘ sur Mac) au-dessus d'une carte = rattacher la
 //   tâche comme sous-tâche de cette carte (surbrillance verte si possible, rouge sinon).
 // - Doigt : appui long pour saisir la carte ; **rester ~1 s au-dessus d'une carte** = rattacher.
-// Événements envoyés au serveur : « drop » {task, zone, index} et « attach » {task, parent}.
+// - Près d'un bord (fenêtre, ou zone qui défile horizontalement comme le kanban), la page défile toute seule.
+// Événements envoyés au serveur : « drop » {task, zone, index}, « attach » {task, parent} et « dragstate »
+// {active} (début / fin du geste : le temps réel attend la fin pour rafraîchir la page).
 
 const CARD = "[data-dnd-task]";
 const ZONE = "[data-dnd-zone]";
@@ -16,6 +18,8 @@ const MOUSE_THRESHOLD = 6;
 const TOUCH_SLOP = 10;
 const LONG_PRESS_MS = 350;
 const TOUCH_ATTACH_MS = 900;
+const EDGE = 70; // px : distance au bord à partir de laquelle on fait défiler
+const MAX_SPEED = 20; // px par image
 const HIGHLIGHTS = ["dnd-attach-ok", "dnd-attach-no", "dnd-zone-over", "dnd-zone-denied"];
 // Les téléphones émettent des événements « touch » (on les utilise : ils permettent de bloquer le défilement) ;
 // sinon (écran tactile sans événements touch, stylet), on se rabat sur les événements « pointer ».
@@ -176,6 +180,7 @@ export default {
       document.body.appendChild(marker);
       card.classList.add("dnd-source");
       document.body.classList.add("dnd-active");
+      this.$emit("dragstate", { active: true });
       this.drag = {
         card, ghost, badge, marker, touch, x, y,
         home: card.closest(ZONE),
@@ -190,6 +195,7 @@ export default {
         attach: null,
       };
       this.move(x, y);
+      this.scrollFrame = requestAnimationFrame(() => this.autoScroll());
     },
     move(x, y) {
       const drag = this.drag;
@@ -269,8 +275,43 @@ export default {
       badge.style.left = `${x + 16}px`;
       badge.style.top = `${y + 20}px`;
     },
+    // Défilement automatique près des bords, tant que le geste dure.
+    autoScroll() {
+      const drag = this.drag;
+      if (!drag) return;
+      const speed = (d) => (d < EDGE ? Math.ceil(((EDGE - Math.max(d, 0)) / EDGE) * MAX_SPEED) : 0);
+      let moved = false;
+      const dy = speed(drag.y) ? -speed(drag.y) : speed(window.innerHeight - drag.y);
+      if (dy) {
+        const before = window.scrollY;
+        window.scrollBy(0, dy);
+        moved = window.scrollY !== before;
+      }
+      const scroller = this.horizontalScroller(drag.x, drag.y);
+      if (scroller) {
+        const r = scroller.getBoundingClientRect();
+        const dx = speed(drag.x - r.left) ? -speed(drag.x - r.left) : speed(r.right - drag.x);
+        if (dx) {
+          const before = scroller.scrollLeft;
+          scroller.scrollLeft += dx;
+          moved = moved || scroller.scrollLeft !== before;
+        }
+      }
+      if (moved) this.move(drag.x, drag.y); // la zone sous le doigt a changé
+      this.scrollFrame = requestAnimationFrame(() => this.autoScroll());
+    },
+    horizontalScroller(x, y) {
+      let el = document.elementFromPoint(x, y);
+      while (el && el !== document.body) {
+        const style = getComputedStyle(el);
+        if (/(auto|scroll)/.test(style.overflowX) && el.scrollWidth > el.clientWidth) return el;
+        el = el.parentElement;
+      }
+      return null;
+    },
     cleanup() {
       clearTimeout(this.attachTimer);
+      cancelAnimationFrame(this.scrollFrame);
       if (!this.drag) return;
       this.drag.ghost.remove();
       this.drag.badge.remove();
@@ -278,6 +319,7 @@ export default {
       this.drag.card.classList.remove("dnd-source");
       for (const cls of HIGHLIGHTS) document.querySelectorAll(`.${cls}`).forEach((el) => el.classList.remove(cls));
       document.body.classList.remove("dnd-active");
+      this.$emit("dragstate", { active: false });
     },
     finish(x, y) {
       this.move(x, y);

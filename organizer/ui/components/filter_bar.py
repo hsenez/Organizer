@@ -38,6 +38,25 @@ def active_count(flt: TaskFilter, *, ignore_text: bool = False) -> int:
     return count
 
 
+_CRITERIA = (
+    "importance",
+    "urgency",
+    "status",
+    "kind",
+    "project_ids",
+    "tag_ids",
+    "due",
+    "scope",
+    "include_subtasks",
+)
+
+
+def changed_count(flt: TaskFilter, default: TaskFilter) -> int:
+    """Nombre de critères modifiés par rapport aux filtres par défaut de la vue (hors texte) : les
+    réglages par défaut (ex. statuts ouverts de la matrice) ne comptent pas comme des filtres posés."""
+    return sum(getattr(flt, field) != getattr(default, field) for field in _CRITERIA)
+
+
 class FilterBar:
     def __init__(
         self,
@@ -145,7 +164,7 @@ class FilterBar:
         self._on_change(self.value)
 
     def _update_button(self) -> None:
-        count = active_count(self.value, ignore_text=True)
+        count = changed_count(self.value, self.default)
         self.toggle_button.set_text(f"🎛️ Filtres{f' ({count})' if count else ''}")
         self.toggle_button.props(f"color={'primary' if count else 'grey-7'}")
 

@@ -7,13 +7,14 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 - ↩️ Ctrl+Z partout pour annuler
 - 📝 Notes markdown façon Obsidian · 🔗 liens, fichiers et pièces jointes
 - 🖥️ Client bureau Linux / Windows · 🌐 web · 📱 téléphone
-- 👥 Plusieurs utilisateurs, 🍪 reconnexion rapide
+- 👥 Plusieurs utilisateurs, 🍪 reconnexion rapide, ⚡ mises à jour en temps réel sur tous les écrans
+- 📲 Installable sur le téléphone comme une application (PWA)
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — étapes 1 à 7 sur 8 : cœur métier, serveur, API, interface (accueil,
+> ✅ **Les 8 étapes de la feuille de route sont faites** : cœur métier, serveur, API, interface (accueil,
 > liste filtrable, recherche, réglages, éditeur, notes markdown façon Obsidian), kanbans, matrice d'Eisenhower,
-> glisser-déposer et client bureau. À venir : temps réel et finitions (étape 8).
+> glisser-déposer, client bureau, temps réel et PWA. Idées pour la suite : [`TODO.md`](TODO.md).
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -142,8 +143,35 @@ sauvegarder.
 **Mise à jour du serveur** : `deploy/update.sh` sur le Pi (`git pull`, dépendances, redémarrage du service,
 vérification de la version). Mettre à jour le serveur **avant** les postes.
 
-**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.7.0** ; 1.0.0 à la fin du développement),
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.8.0** ; 1.0.0 une fois validé sur le Pi et les téléphones),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
+
+## 📲 Sur le téléphone
+
+Ouvrir `http://<ip-du-pi>:2603` puis :
+
+- **iPhone** : Safari → Partager → **« Sur l'écran d'accueil »** : Organizer s'ouvre en plein écran, comme
+  une application (appui long sur l'icône : « Nouvelle tâche », « Kanbans »).
+- **Android** : Chrome → ⋮ → « Ajouter à l'écran d'accueil ». En HTTP, c'est un raccourci qui s'ouvre dans
+  Chrome ; pour le vrai mode application, il faut le HTTPS (ci-dessous).
+
+### HTTPS (facultatif)
+
+Avec [mkcert](https://github.com/FiloSottile/mkcert) (une autorité de certification locale) :
+
+```bash
+mkcert -install                                   # sur le PC : crée l'autorité locale
+mkcert -cert-file organizer.pem -key-file organizer-key.pem raspberrypi.local 192.168.1.20
+# copier les deux fichiers sur le Pi (ex. /home/pi/organizer/certs/), puis dans deploy/organizer.service :
+#   Environment=ORGANIZER_SSL_CERT=/home/pi/organizer/certs/organizer.pem
+#   Environment=ORGANIZER_SSL_KEY=/home/pi/organizer/certs/organizer-key.pem
+mkcert -CAROOT                                    # dossier du certificat racine rootCA.pem
+```
+
+- Téléphones : installer `rootCA.pem` (Android : Paramètres → Sécurité → Installer un certificat ; iPhone :
+  l'ouvrir puis l'activer dans Réglages → Général → Informations → Réglages des certificats).
+- Client bureau : adresse `https://raspberrypi.local:2603` et variable `ORGANIZER_CA_FILE=<chemin de
+  rootCA.pem>` (le client ne lit pas le magasin de certificats du système).
 
 ## Développement
 

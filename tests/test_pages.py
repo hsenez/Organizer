@@ -332,6 +332,23 @@ async def test_quick_search_opens_editor(user: User):
     assert task.id
 
 
+async def test_quick_search_keyboard(user: User):
+    sv = await login(user)
+    sv.tasks.create(TaskCreate(title="Vélo : pneus", importance=Importance(4)))
+    second = sv.tasks.create(TaskCreate(title="Vélo : chaîne", importance=Importance(1)))
+    await user.open("/")
+    user.find(marker="search-button").click()
+    search = user.find(marker="search-input").type("velo")
+    search.trigger("keydown.down")
+    await user.should_see(marker="search-result-1")
+    row = next(iter(user.find(marker="search-result-1").elements))
+    assert "search-selected" in row.classes
+    search.trigger("keydown.enter")
+    await user.should_see(marker="task-editor")
+    await user.should_see("Vélo : chaîne")
+    assert second.id
+
+
 async def test_search_page_includes_closed_tasks(user: User):
     sv = await login(user)
     done = sv.tasks.create(TaskCreate(title="Pain acheté", status=Status.DONE))
@@ -506,3 +523,47 @@ async def test_matrix_drop_quadrant_and_cell(user: User):
     drop(user, task.id, "cell:4:2")
     t = sv.tasks.get(task.id)
     assert (t.importance, t.urgency) == (4, 2)
+
+
+# --- temps réel ---------------------------------------------------------------------------------------------
+
+
+async def test_page_follows_changes_made_elsewhere(user: User):
+    sv = await login(user)
+    elsewhere = state().services_for(state().users.get(sv.actor.id), origin="autre-appareil")
+    await user.open("/tasks")
+    elsewhere.tasks.create(TaskCreate(title="Ajoutée sur le téléphone"))
+    await asyncio.sleep(0.6)
+    await user.should_see("Ajoutée sur le téléphone")
+
+    # Pendant un glisser-déposer, la page attend la fin du geste.
+    user.find(marker="dnd").trigger("dragstate", {"active": True})
+    elsewhere.tasks.create(TaskCreate(title="Pendant le glisser"))
+    await asyncio.sleep(0.6)
+    await user.should_not_see("Pendant le glisser")
+    user.find(marker="dnd").trigger("dragstate", {"active": False})
+    await asyncio.sleep(0.6)
+    await user.should_see("Pendant le glisser")
+
+
+async def test_attach_from_card_menu(user: User):
+    sv = await login(user)
+    parent = sv.tasks.create(TaskCreate(title="Grand ménage"))
+    child = sv.tasks.create(TaskCreate(title="Vitres"))
+    await user.open("/tasks")
+    await user.should_see(marker=f"task-card-{child.id}")
+    open_menu(user, f"card-menu-{child.id}")
+    user.find(marker=f"card-attach-{child.id}").click()
+    await user.should_see(marker="attach-dialog")
+    await user.should_see(marker=f"attach-to-{parent.id}")
+    await user.should_not_see(marker=f"attach-to-{child.id}")  # pas elle-même
+    user.find(marker=f"attach-to-{parent.id}").click()
+    await user.should_see("sous-tâche de")
+    assert sv.tasks.get(child.id).parent_id == parent.id
+
+
+async def test_matrix_default_filter_is_not_counted(user: User):
+    await login(user)
+    await user.open("/matrix")
+    await user.should_see("🎛️ Filtres")
+    await user.should_not_see("🎛️ Filtres (1)")

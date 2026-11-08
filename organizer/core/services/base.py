@@ -8,6 +8,7 @@ from datetime import date
 
 from sqlalchemy import Engine
 
+from organizer.core.events import ChangeEvent, EventBus
 from organizer.core.unit_of_work import UndoPolicy, UnitOfWork
 
 
@@ -26,6 +27,8 @@ class ServiceContext:
     actor: Actor
     policy: UndoPolicy
     today: Callable[[], date] = date.today
+    events: EventBus | None = None  # diffusion en temps réel des modifications
+    origin: str | None = None  # page / appareil à l'origine des modifications
 
 
 class BaseService:
@@ -41,7 +44,19 @@ class BaseService:
 
     def uow(self, label: str | None = None, group_key: str | None = None) -> UnitOfWork:
         """Transaction ; avec ``label``, l'opération est enregistrée dans l'historique annuler / rétablir."""
-        return UnitOfWork(self.ctx.engine, self.actor.id, self.ctx.policy, label=label, group_key=group_key)
+        return UnitOfWork(
+            self.ctx.engine,
+            self.actor.id,
+            self.ctx.policy,
+            label=label,
+            group_key=group_key,
+            on_commit=self.notify,
+        )
+
+    def notify(self, tables: set[str]) -> None:
+        """Diffuse « ces tables ont changé » aux autres écrans."""
+        if self.ctx.events is not None and tables:
+            self.ctx.events.publish(ChangeEvent.of(tables, self.actor.id, self.ctx.origin))
 
 
 def quoted(text: str, limit: int = 40) -> str:

@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from organizer import __version__
 from organizer.core.errors import OrganizerError
-from organizer.server import web_auth
+from organizer.server import pwa, web_auth
 from organizer.server.api import api_router
 from organizer.server.security import AuthMiddleware
 from organizer.server.state import AppState
@@ -24,6 +24,7 @@ def install(app: FastAPI, state: AppState) -> None:
 
     app.include_router(api_router)
     app.include_router(web_auth.router)
+    pwa.install(app)
 
 
 def create_api_app(state: AppState) -> FastAPI:

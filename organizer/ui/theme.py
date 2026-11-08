@@ -84,10 +84,13 @@ body.body--dark { background: #12141a; }
 .pulse { display: inline-block; animation: organizer-pulse 1.6s ease-in-out infinite; }
 
 .task-row:hover { background: rgba(120, 130, 150, .12); }
+.search-selected { background: rgba(92, 124, 250, .16); }
 
 /* --- Glisser-déposer ------------------------------------------------------------------------------- */
 .task-card, .task-row { -webkit-touch-callout: none; user-select: none; }
 body.dnd-active, body.dnd-active * { cursor: grabbing !important; user-select: none !important; }
+/* Défilement automatique pendant un glisser : l'aimantation des colonnes annulerait chaque petit pas. */
+body.dnd-active * { scroll-snap-type: none !important; }
 .dnd-ghost { position: fixed !important; z-index: 9999; pointer-events: none; opacity: .92; margin: 0 !important;
     transform: rotate(2deg) scale(1.02); box-shadow: 0 14px 30px rgba(20, 30, 60, .30) !important; }
 .dnd-source { opacity: .35; }

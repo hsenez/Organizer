@@ -13,7 +13,7 @@ from nicegui import ui
 
 from organizer.core import rules
 from organizer.core.enums import DueBucket, LinkKind, Status, Urgency
-from organizer.core.schemas import TaskOut, TaskPatch
+from organizer.core.schemas import TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
 from organizer.ui.components.dnd import draggable
 from organizer.ui.components.tag_chips import tag_chip
@@ -146,10 +146,53 @@ def _card_menu(task: TaskOut, ctx: UiContext, menu_extra=None) -> None:
             )
             if menu_extra is not None:
                 menu_extra()
+            if not task.has_subtasks:  # alternative au Ctrl + glisser-déposer / maintien au doigt
+                ui.menu_item("🌳 Rattacher à…", on_click=lambda: attach_dialog(task, ctx)).mark(
+                    f"card-attach-{task.id}"
+                )
             if task.parent_id is not None:
                 ui.menu_item("🌳 Détacher du parent", on_click=detach)
             if task.can_delete:
                 ui.menu_item("🗑️ Supprimer", on_click=lambda: confirm_delete(task, ctx))
+
+
+def attach_dialog(task: TaskOut, ctx: UiContext) -> None:
+    """« 🌳 Rattacher à… » : choisir, avec une recherche, la tâche dont ``task`` deviendra une sous-tâche."""
+    with ui.dialog() as dialog, ui.card().classes("w-[560px] max-w-[96vw] gap-3").mark("attach-dialog"):
+        ui.label(f"🌳 Rattacher « {task.title} » à…").classes("text-lg font-semibold")
+        search = (
+            ui.input(placeholder="🔍 Chercher la tâche parente…")
+            .props("outlined dense clearable autofocus")
+            .classes("w-full")
+        )
+        results = ui.column().classes("w-full gap-0 max-h-[55vh] overflow-y-auto")
+
+        def choose(parent: TaskOut) -> None:
+            dialog.close()
+            ctx.attach({"task": task.id, "parent": parent.id})
+
+        def refresh() -> None:
+            results.clear()
+            found = (
+                ctx.call(ctx.ds.tasks.list, TaskFilter(text=search.value or ""), TaskSort(key="priority"))
+                or []
+            )
+            found = [
+                t for t in found if rules.attach_refusal_reason(task, t) is None and not t.status.is_closed
+            ]
+            with results:
+                if not found:
+                    ui.label("Aucune tâche ne peut accueillir cette sous-tâche.").classes(
+                        "text-sm text-gray-500 p-2"
+                    )
+                for parent in found[:50]:
+                    task_row(parent, ctx, on_click=lambda p=parent: choose(p)).mark(f"attach-to-{parent.id}")
+
+        search.on("update:model-value", refresh, throttle=0.3, leading_events=False)
+        refresh()
+        with ui.row().classes("w-full justify-end"):
+            ui.button("Annuler", on_click=dialog.close).props("flat")
+    dialog.open()
 
 
 def duplicate(task: TaskOut, ctx: UiContext) -> None:

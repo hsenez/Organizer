@@ -1,4 +1,5 @@
-"""Recherche rapide (Ctrl+K, ou 🔍 dans l'en-tête) : résultats pendant la frappe, clic → éditeur."""
+"""Recherche rapide (Ctrl+K, ou 🔍 dans l'en-tête) : résultats pendant la frappe ; ↑ ↓ pour choisir,
+Entrée ou clic → éditeur."""
 
 from __future__ import annotations
 
@@ -27,15 +28,18 @@ class SearchDialog:
                 .mark("search-input")
             )
             self.input.on("update:model-value", self._refresh, throttle=0.25, leading_events=False)
-            self.input.on("keydown.enter", self._open_first)
+            self.input.on("keydown.enter", self._open_selected)
+            self.input.on("keydown.down", lambda: self._move(1))
+            self.input.on("keydown.up", lambda: self._move(-1))
             self.results = ui.column().classes("w-full gap-0 max-h-[60vh] overflow-y-auto")
             with ui.row().classes("w-full items-center"):
-                ui.label("Entrée : ouvrir le premier résultat · Échap : fermer").classes(
-                    "text-xs text-gray-500"
-                )
+                ui.label("↑ ↓ : choisir · Entrée : ouvrir · Échap : fermer").classes("text-xs text-gray-500")
                 ui.space()
                 ui.button("Recherche avancée →", on_click=self._full_page).props("flat no-caps dense")
         self._found: list = []
+        self._rows: list[ui.row] = []
+        self._selected = 0
+        self._searched = ""
 
     def open(self) -> None:
         self.input.set_value("")
@@ -46,7 +50,7 @@ class SearchDialog:
     def _refresh(self) -> None:
         text = (self.input.value or "").strip()
         self.results.clear()
-        self._found = []
+        self._found, self._rows, self._selected, self._searched = [], [], 0, text
         with self.results:
             if not text:
                 ui.label(
@@ -61,8 +65,12 @@ class SearchDialog:
             self._found = found
             if not found:
                 ui.label("Aucun résultat.").classes("text-sm text-gray-500 p-2")
-            for task in found[:MAX_RESULTS]:
-                task_row(task, self.ctx, on_click=lambda t=task: self._open(t.id))
+            for index, task in enumerate(found[:MAX_RESULTS]):
+                row = task_row(task, self.ctx, on_click=lambda t=task: self._open(t.id)).mark(
+                    f"search-result-{index}"
+                )
+                self._rows.append(row)
+            self._highlight()
             if len(found) > MAX_RESULTS:
                 ui.label(f"… et {len(found) - MAX_RESULTS} autres (recherche avancée)").classes(
                     "text-xs text-gray-500 p-2"
@@ -72,10 +80,29 @@ class SearchDialog:
         self.dialog.close()
         self.ctx.editor.open(task_id)
 
-    def _open_first(self) -> None:
-        self._refresh()
+    def _highlight(self) -> None:
+        for index, row in enumerate(self._rows):
+            if index == self._selected:
+                row.classes(add="search-selected")
+            else:
+                row.classes(remove="search-selected")
+
+    def _move(self, delta: int) -> None:
+        if (self.input.value or "").strip() != self._searched:
+            self._refresh()
+        if not self._rows:
+            return
+        self._selected = (self._selected + delta) % len(self._rows)
+        self._highlight()
+        ui.run_javascript(
+            f"getHtmlElement({self._rows[self._selected].id})?.scrollIntoView({{block: 'nearest'}})"
+        )
+
+    def _open_selected(self) -> None:
+        if (self.input.value or "").strip() != self._searched:
+            self._refresh()  # la frappe n'a pas encore été prise en compte
         if self._found:
-            self._open(self._found[0].id)
+            self._open(self._found[min(self._selected, len(self._found) - 1)].id)
 
     def _full_page(self) -> None:
         self.dialog.close()

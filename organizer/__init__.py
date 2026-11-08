@@ -8,5 +8,11 @@ Versions (voir ``organizer/versioning.py``) :
   plus ancien ne peut plus fonctionner avec le serveur (route supprimée ou modifiée…).
 """
 
-__version__ = "0.7.0"
+from pathlib import Path
+
+__version__ = "0.8.0"
 API_VERSION = 1
+
+# Icônes de l'application (générées par scripts/make_icons.sh) : fenêtre, lanceurs, favicon, PWA.
+ASSETS_DIR = Path(__file__).parent / "assets"
+FAVICON = ASSETS_DIR / "organizer.svg"

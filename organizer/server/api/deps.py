@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request
 
+from organizer.core.events import ORIGIN_HEADER
 from organizer.core.schemas import UserOut
 from organizer.core.services import Services
 from organizer.core.services.account import AccountService
@@ -35,7 +36,9 @@ def get_admin(request: Request) -> UserOut:
 
 
 def get_services(request: Request) -> Services:
-    return get_state(request).services_for(get_user(request))
+    # L'en-tête d'origine permet au client bureau de ne pas se rafraîchir pour ses propres modifications.
+    origin = request.headers.get(ORIGIN_HEADER) or None
+    return get_state(request).services_for(get_user(request), origin=origin[:64] if origin else None)
 
 
 def get_account(request: Request) -> AccountService:

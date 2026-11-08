@@ -84,6 +84,7 @@ class UndoService(BaseService):
                     f"Impossible {verb} — {label} : les données ont été modifiées depuis. "
                     "Cette action a été retirée de l'historique."
                 ) from exc
+        self.notify({change.table for change in changes})
         return UndoResult(action=action, label=label, task_ids=_task_ids(changes))
 
 

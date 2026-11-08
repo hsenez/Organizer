@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from sqlalchemy import Engine
 
 from organizer.config import Settings
+from organizer.core.events import EventBus
 from organizer.core.services.attachments import AttachmentService
 from organizer.core.services.auth import AuthService
 from organizer.core.services.base import Actor, ServiceContext
@@ -28,13 +29,17 @@ class Services:
         actor: Actor,
         settings: Settings | None = None,
         today: Callable[[], date] | None = None,
+        events: EventBus | None = None,
+        origin: str | None = None,
     ):
         settings = settings or Settings()
         policy = UndoPolicy(
             history_size=settings.undo_history_size,
             merge_window=timedelta(seconds=settings.undo_merge_window_seconds),
         )
-        ctx = ServiceContext(engine=engine, actor=actor, policy=policy, today=today or date.today)
+        ctx = ServiceContext(
+            engine=engine, actor=actor, policy=policy, today=today or date.today, events=events, origin=origin
+        )
         self.actor = actor
         self.users = UserService(engine)
         self.projects = ProjectService(ctx)

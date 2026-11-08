@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from organizer.client import system
 from organizer.client.api import ApiClient
+from organizer.core.events import ORIGIN_HEADER
 from organizer.core.schemas import (
     AdminUserPatch,
     BoardContent,
@@ -287,7 +288,12 @@ class RemoteDataSource:
         opener: Callable[[str], None] = system.open_path,
         browser: Callable[[str], None] = system.open_url,
         cache_dir: Path | None = None,
+        origin: str | None = None,
     ) -> None:
+        """``origin`` : identifiant de la page, envoyé avec chaque requête pour que le serveur ne la
+        prévienne pas de ses propres modifications (temps réel)."""
+        if origin:
+            api = api.with_headers({ORIGIN_HEADER: origin})
         self.api = api
         self.tasks = RemoteTasks(api)
         self.projects = RemoteProjects(api)
