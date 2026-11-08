@@ -434,6 +434,53 @@ async def test_settings_theme_devices_and_users(user: User):
     assert sorted(u.username for u in state().users.list()) == ["alice", "bob"]
 
 
+async def test_data_tab_download_and_backup_keys(user: User):
+    """Onglet 🗄️ Données (admin) : télécharger la sauvegarde avec le cookie, créer / révoquer un jeton."""
+    import io
+    import tarfile
+
+    sv = await login(user)
+    sv.tasks.create(TaskCreate(title="Sauvegardée"))
+    await user.open("/settings?tab=data")
+    user.find(marker="backup-download").click()
+    response = await user.download.next()
+    assert response.status_code == 200
+    names = tarfile.open(fileobj=io.BytesIO(response.content)).getnames()
+    assert names[0] == "organizer.db" and names[-1] == "manifest.json"
+
+    await user.should_see("Aucun jeton pour l'instant.")
+    user.find(marker="new-backup-key").click()
+    with user.scope(marker="backup-key-dialog"):
+        user.find(marker="backup-key-label").clear().type("Borg du Pi")
+    user.find(marker="backup-key-create").click()
+    await user.should_see(marker="backup-key-token")
+    token = user.find(marker="backup-key-token").elements.pop().value
+    (key,) = state().auth.list_api_keys()
+    await user.should_see(marker=f"backup-key-{key.id}")
+    await user.should_see("jamais utilisé")
+    assert key.label == "Borg du Pi" and state().auth.resolve_api_key(token, "backup") is not None
+
+    user.find(marker=f"revoke-key-{key.id}").click()
+    user.find(marker="revoke-key-confirm").click()
+    assert state().auth.list_api_keys() == []
+    assert state().auth.resolve_api_key(token, "backup") is None
+
+
+async def test_data_tab_hidden_from_non_admin(user: User):
+    await user.open("/login")
+    alice = state().users.create_user("alice", "motdepasse-12", "Alice")
+    state().users.create_user("bob", "motdepasse-12", "Bob", by=state().users.actor_for(alice.id))
+    await user.open("/login")
+    fill(user, "Identifiant", "bob")
+    fill(user, "Mot de passe", "motdepasse-12")
+    user.find("Se connecter").click()
+    await user.should_see("Bonjour Bob")
+    await user.open("/settings?tab=data")
+    await user.should_see(marker="tab-profile")
+    await user.should_not_see(marker="tab-data")
+    await user.should_not_see(marker="backup-download")
+
+
 # --- étape 6 : kanbans, matrice, glisser-déposer ----------------------------------------------------------
 # Le geste lui-même (souris, doigt, Ctrl) est testé dans un vrai navigateur ; ici on simule les événements que
 # le composant de glisser-déposer envoie au serveur.

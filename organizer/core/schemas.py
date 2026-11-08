@@ -354,6 +354,29 @@ class LoginOut(_Schema):
     session: SessionOut
 
 
+class ApiKeyIn(_Schema):
+    label: str = Field(default="", max_length=100)
+
+
+class ApiKeyOut(_Schema):
+    """Jeton d'accès limité (sauvegarde), sans le secret."""
+
+    id: int
+    scope: str
+    label: str
+    user_id: int  # créateur
+    created_at: datetime
+    last_used_at: datetime | None = None
+    last_used_ip: str = ""
+
+
+class ApiKeyCreated(_Schema):
+    """Jeton qui vient d'être créé : le secret n'est transmis **qu'une fois**."""
+
+    token: str
+    key: ApiKeyOut
+
+
 # --- Pièces jointes ---------------------------------------------------------------------------------------
 
 

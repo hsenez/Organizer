@@ -5,7 +5,8 @@ L'interface (``organizer/ui``) ne manipule **que** un objet :class:`DataSource`.
 - :class:`LocalDataSource` (serveur) : appelle directement les services, donc la base SQLite ;
 - :class:`organizer.client.remote.RemoteDataSource` (client bureau) : mêmes méthodes, via l'API REST du
   serveur ; elle sait en plus ouvrir liens, fichiers locaux et pièces jointes sur le poste (``open_url``,
-  ``open_path``, ``open_attachment``), utilisés quand ``is_desktop`` est vrai.
+  ``open_path``, ``open_attachment``) et enregistrer une sauvegarde (``save_backup``), utilisés quand
+  ``is_desktop`` est vrai.
 
 Les sous-objets (``tasks``, ``projects``…) exposent les mêmes méthodes, avec les mêmes signatures, que les
 services de :mod:`organizer.core.services` : c'est ce contrat que la version distante doit respecter.
@@ -41,6 +42,8 @@ class DataSource(Protocol):
 
     def attachment_url(self, attachment_id: str) -> str: ...
 
+    def backup_url(self, uploads: bool = True) -> str: ...
+
 
 class LocalDataSource:
     """Accès direct aux services (côté serveur)."""
@@ -63,3 +66,7 @@ class LocalDataSource:
 
     def attachment_url(self, attachment_id: str) -> str:
         return f"/api/v1/attachments/{attachment_id}"
+
+    def backup_url(self, uploads: bool = True) -> str:
+        """Sauvegarde du serveur (admin), téléchargée par le navigateur avec le cookie de session."""
+        return "/api/v1/admin/backup" + ("" if uploads else "?uploads=false")

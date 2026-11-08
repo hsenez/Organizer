@@ -20,6 +20,8 @@ from organizer.client.api import ApiClient
 from organizer.core.events import ORIGIN_HEADER
 from organizer.core.schemas import (
     AdminUserPatch,
+    ApiKeyCreated,
+    ApiKeyOut,
     BoardContent,
     BoardIn,
     BoardOut,
@@ -274,6 +276,15 @@ class RemoteAccount(_Part):
     def admin_update(self, user_id: int, patch: AdminUserPatch) -> UserOut:
         return self.api.call("PATCH", f"/users/{user_id}", UserOut, json=_sent(patch))
 
+    def backup_keys(self) -> list[ApiKeyOut]:
+        return self.api.call("GET", "/admin/backup-keys", list[ApiKeyOut])
+
+    def create_backup_key(self, label: str = "") -> ApiKeyCreated:
+        return self.api.call("POST", "/admin/backup-keys", ApiKeyCreated, json={"label": label})
+
+    def revoke_backup_key(self, key_id: int) -> None:
+        self.api.call("DELETE", f"/admin/backup-keys/{key_id}")
+
 
 class RemoteDataSource:
     """Accès aux données par l'API du serveur (client bureau)."""
@@ -312,6 +323,14 @@ class RemoteDataSource:
 
     def attachment_url(self, attachment_id: str) -> str:
         return f"{self.api.base_url}/api/v1/attachments/{quote(attachment_id)}"
+
+    def backup_url(self, uploads: bool = True) -> str:
+        return f"{self.api.base_url}/api/v1/admin/backup" + ("" if uploads else "?uploads=false")
+
+    def save_backup(self, uploads: bool = True, folder: Path | None = None) -> Path:
+        """Télécharge une sauvegarde du serveur (admin) dans ``folder`` (par défaut le dossier
+        Téléchargements) ; renvoie le chemin de l'archive."""
+        return self.api.save("/admin/backup", folder or system.downloads_dir(), params={"uploads": uploads})
 
     # --- ouverture avec le système (spécifications §4.4) ---
 

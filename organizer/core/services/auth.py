@@ -3,6 +3,9 @@
 - Le jeton est un secret aléatoire (256 bits) ; seule son empreinte SHA-256 est stockée.
 - Les sessions sont **glissantes** : chaque utilisation (au plus toutes les 10 minutes) repousse l'expiration.
 - Connexion d'un utilisateur désactivé ou session expirée → refusée.
+
+Jetons d'accès limités (:class:`ApiKey`, ex. sauvegarde) : jamais acceptés comme session, seulement par la
+route de leur portée (:meth:`AuthService.resolve_api_key`).
 """
 
 from __future__ import annotations
@@ -20,10 +23,13 @@ from sqlmodel import Session, select
 
 from organizer.config import Settings
 from organizer.core.errors import Forbidden, NotFound
-from organizer.core.models import AuthSession, User, utcnow
-from organizer.core.schemas import SessionOut, UserOut
+from organizer.core.models import ApiKey, AuthSession, User, utcnow
+from organizer.core.schemas import ApiKeyCreated, ApiKeyOut, SessionOut, UserOut
 
 RENEW_EVERY = timedelta(minutes=10)
+# Préfixe des jetons d'accès limités : les reconnaître d'un coup d'œil (et dans un outil de détection de
+# secrets).
+API_KEY_PREFIX = {"backup": "orgbk_"}
 
 
 def hash_token(token: str) -> str:
@@ -138,6 +144,52 @@ class AuthService:
             result = s.exec(query)
             s.commit()
             return result.rowcount or 0
+
+    # --- jetons d'accès limités (sauvegarde) ---
+
+    def create_api_key(self, user_id: int, scope: str = "backup", label: str = "") -> ApiKeyCreated:
+        """Crée un jeton de portée ``scope`` ; renvoie le secret, à transmettre une seule fois."""
+        token = API_KEY_PREFIX[scope] + secrets.token_urlsafe(32)
+        with Session(self.engine) as s:
+            row = ApiKey(
+                user_id=user_id, token_hash=hash_token(token), scope=scope, label=label.strip()[:100]
+            )
+            s.add(row)
+            s.commit()
+            s.refresh(row)
+            return ApiKeyCreated(token=token, key=ApiKeyOut.model_validate(row))
+
+    def list_api_keys(self, scope: str = "backup") -> list[ApiKeyOut]:
+        with Session(self.engine) as s:
+            rows = s.exec(select(ApiKey).where(ApiKey.scope == scope).order_by(ApiKey.created_at)).all()
+            return [ApiKeyOut.model_validate(r) for r in rows]
+
+    def revoke_api_key(self, key_id: int, scope: str = "backup") -> None:
+        with Session(self.engine) as s:
+            row = s.get(ApiKey, key_id)
+            if row is None or row.scope != scope:
+                raise NotFound("Jeton introuvable.")
+            s.delete(row)
+            s.commit()
+
+    def resolve_api_key(self, token: str | None, scope: str, ip: str = "") -> ApiKeyOut | None:
+        """Jeton valide pour ``scope`` (son créateur est toujours un administrateur actif), ou None.
+        Note la date et l'adresse de cette utilisation."""
+        if not token or not token.startswith(API_KEY_PREFIX[scope]):
+            return None
+        with Session(self.engine) as s:
+            row = s.exec(select(ApiKey).where(ApiKey.token_hash == hash_token(token))).first()
+            if row is None or row.scope != scope:
+                return None
+            creator = s.get(User, row.user_id)
+            if creator is None or not creator.is_active or not creator.is_admin:
+                return None
+            row.last_used_at = utcnow()
+            row.last_used_ip = ip[:64]
+            s.add(row)
+            s.commit()
+            s.refresh(row)
+            return ApiKeyOut.model_validate(row)
 
     def purge_expired(self) -> int:
         with Session(self.engine) as s:

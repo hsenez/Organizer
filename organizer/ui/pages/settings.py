@@ -1,14 +1,15 @@
-"""⚙️ Réglages : profil, apparence, rappels, projets, tags, appareils connectés, utilisateurs (admin).
+"""⚙️ Réglages : profil, apparence, rappels, projets, tags, appareils connectés, utilisateurs et données
+(admin).
 
-Onglet initial choisi par ``?tab=`` (profile, appearance, reminders, projects, tags, devices, users, et sur
-le client bureau connection).
+Onglet initial choisi par ``?tab=`` (profile, appearance, reminders, projects, tags, devices, users, data, et
+sur le client bureau connection).
 """
 
 from __future__ import annotations
 
 from fastapi import Request
 from fastapi.responses import Response
-from nicegui import ui
+from nicegui import run, ui
 from pydantic import ValidationError
 
 from organizer.core.errors import OrganizerError
@@ -37,7 +38,9 @@ TABS = {
     "tags": "🏷️ Tags",
     "devices": "💻 Appareils",
     "users": "👥 Utilisateurs",
+    "data": "🗄️ Données",
 }
+ADMIN_TABS = {"users", "data"}
 
 
 def page(make_context):
@@ -49,7 +52,7 @@ def page(make_context):
             with ui.row().classes("items-center gap-2"):
                 ui.label("⚙️").classes("text-2xl")
                 ui.label("Réglages").classes("text-2xl font-bold")
-            tabs_shown = {k: v for k, v in TABS.items() if k != "users" or ctx.user.is_admin}
+            tabs_shown = {k: v for k, v in TABS.items() if k not in ADMIN_TABS or ctx.user.is_admin}
             tabs_shown |= {key: label for key, (label, _) in ctx.extra_settings.items()}
             initial = request.query_params.get("tab")
             initial = initial if initial in tabs_shown else "profile"
@@ -69,6 +72,7 @@ def page(make_context):
                     "tags": _tags,
                     "devices": _devices,
                     "users": _users,
+                    "data": _data,
                     **{key: build for key, (_, build) in ctx.extra_settings.items()},
                 }
                 for key in tabs_shown:
@@ -650,4 +654,151 @@ def _password_dialog(ctx: UiContext, user) -> None:
         with ui.row().classes("w-full justify-end gap-2"):
             ui.button("Annuler", on_click=dialog.close).props("flat")
             ui.button("Enregistrer", on_click=save).props("unelevated")
+    dialog.open()
+
+
+# ======================================================================================================
+# Données : sauvegarde (admin)
+# ======================================================================================================
+
+
+def _data(ctx: UiContext) -> None:
+    with _card(
+        "💾 Sauvegarde",
+        "Archive .tar de tout le serveur : la base de données (copie cohérente, prise sans arrêter le "
+        "serveur), les pièces jointes, et un manifeste (date, version, empreintes des fichiers).",
+    ):
+        uploads = ui.checkbox("📎 Inclure les pièces jointes", value=True).mark("backup-uploads")
+
+        async def download() -> None:
+            include = bool(uploads.value)
+            if not ctx.ds.is_desktop:
+                ui.download.from_url(ctx.ds.backup_url(include))  # le navigateur, avec le cookie de session
+                return
+            # Client bureau : enregistrée dans « Téléchargements », hors de la boucle de l'interface (archive
+            # potentiellement volumineuse).
+            button.disable()
+            try:
+                path = await run.io_bound(ctx.ds.save_backup, include)
+            except OrganizerError as exc:
+                ui.notify(exc.message, type="negative", position="top")
+                return
+            finally:
+                button.enable()
+            ui.notify(f"💾 Sauvegarde enregistrée : {path}", type="positive", position="top", timeout=10000)
+
+        button = (
+            ui.button("⬇️ Télécharger une sauvegarde", on_click=download)
+            .props("unelevated no-caps")
+            .mark("backup-download")
+        )
+    _backup_keys(ctx)
+
+
+def _backup_keys(ctx: UiContext) -> None:
+    @ui.refreshable
+    def body() -> None:
+        keys = ctx.ds.account.backup_keys()
+        if not keys:
+            ui.label("Aucun jeton pour l'instant.").classes("text-sm text-gray-500")
+        for key in keys:
+            with (
+                ui.row()
+                .classes(
+                    "w-full items-center gap-3 no-wrap py-2 border-b border-gray-200 dark:border-gray-700"
+                )
+                .mark(f"backup-key-{key.id}")
+            ):
+                ui.label("🔑").classes("text-2xl")
+                with ui.column().classes("flex-1 min-w-0 gap-0"):
+                    ui.label(key.label or "Sauvegarde").classes("font-medium")
+                    used = (
+                        f"dernière utilisation le {fmt.local_datetime(key.last_used_at)}"
+                        f"{f' depuis {key.last_used_ip}' if key.last_used_ip else ''}"
+                        if key.last_used_at
+                        else "jamais utilisé"
+                    )
+                    ui.label(f"Créé le {fmt.local_datetime(key.created_at)} · {used}").classes(
+                        "text-xs text-gray-500"
+                    )
+                ui.button("Révoquer", on_click=lambda k=key: _revoke_key_dialog(ctx, k, body.refresh)).props(
+                    "flat no-caps color=negative"
+                ).mark(f"revoke-key-{key.id}")
+
+    with _card(
+        "🔑 Jetons de sauvegarde",
+        "Pour un script de sauvegarde planifié (borg…) : un jeton permet seulement de télécharger "
+        "l'archive, sans expiration, et uniquement depuis le réseau local. Il cesse de fonctionner si vous "
+        "le révoquez ou si son créateur n'est plus administrateur.",
+    ):
+        body()
+        ui.button("➕ Nouveau jeton", on_click=lambda: _new_key_dialog(ctx, body.refresh)).props(
+            "unelevated no-caps"
+        ).mark("new-backup-key")
+
+
+def _new_key_dialog(ctx: UiContext, on_saved) -> None:
+    with ui.dialog() as dialog, ui.card().classes("w-[560px] max-w-[95vw] gap-3").mark("backup-key-dialog"):
+        ui.label("➕ Nouveau jeton de sauvegarde").classes("text-lg font-semibold")
+        label = (
+            ui.input("Nom (à quoi il sert)", value="Sauvegarde borg du Pi")
+            .props("outlined dense autofocus maxlength=100")
+            .classes("w-full")
+            .mark("backup-key-label")
+        )
+        result = ui.column().classes("w-full gap-2")
+        buttons = ui.row().classes("w-full justify-end gap-2")
+
+        def create() -> None:
+            created: list = []
+            if not _try(lambda: created.append(ctx.ds.account.create_backup_key(label.value or ""))):
+                return
+            token = created[0].token
+            on_saved()
+            label.disable()
+            buttons.clear()
+            with result:
+                ui.label(
+                    "⚠️ Copiez ce jeton maintenant : il ne sera plus jamais affiché. Rangez-le comme un mot "
+                    "de passe (fichier lisible par vous seul)."
+                ).classes("text-sm text-orange-700 dark:text-orange-300")
+                ui.input("Jeton", value=token).props("outlined dense readonly").classes(
+                    "w-full font-mono"
+                ).mark("backup-key-token")
+                ui.label("Exemple, sur le Pi :").classes("text-sm text-gray-500")
+                ui.code(
+                    f'curl -fsS -H "Authorization: Bearer {token}" \\\n'
+                    "     http://127.0.0.1:2603/api/v1/admin/backup -o organizer.tar",
+                    language="bash",
+                ).classes("w-full text-xs")
+            with buttons:
+                ui.button("📋 Copier le jeton", on_click=lambda: ui.clipboard.write(token)).props(
+                    "flat no-caps"
+                )
+                ui.button("Fermer", on_click=dialog.close).props("unelevated")
+
+        with buttons:
+            ui.button("Annuler", on_click=dialog.close).props("flat")
+            ui.button("Créer", on_click=create).props("unelevated").mark("backup-key-create")
+    dialog.open()
+
+
+def _revoke_key_dialog(ctx: UiContext, key, on_saved) -> None:
+    with ui.dialog() as dialog, ui.card().classes("w-[440px] max-w-[95vw] gap-3"):
+        ui.label(f"Révoquer « {key.label or 'Sauvegarde'} » ?").classes("text-lg font-semibold")
+        ui.label(
+            "Le script qui l'utilise ne pourra plus télécharger de sauvegarde. C'est définitif : il faudra "
+            "créer un nouveau jeton."
+        ).classes("text-sm text-gray-500")
+
+        def revoke() -> None:
+            if _try(lambda: ctx.ds.account.revoke_backup_key(key.id), "🔑 Jeton révoqué"):
+                dialog.close()
+                on_saved()
+
+        with ui.row().classes("w-full justify-end gap-2"):
+            ui.button("Annuler", on_click=dialog.close).props("flat")
+            ui.button("Révoquer", on_click=revoke).props("unelevated color=negative").mark(
+                "revoke-key-confirm"
+            )
     dialog.open()

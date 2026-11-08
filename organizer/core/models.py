@@ -198,6 +198,26 @@ class AuthSession(SQLModel, table=True):
     expires_at: datetime
 
 
+class ApiKey(SQLModel, table=True):
+    """Jeton d'accès limité à une seule opération (``scope``), sans expiration, révocable.
+
+    Aujourd'hui une seule portée : ``backup`` (télécharger une sauvegarde, pour un script planifié). Créé par
+    un administrateur ; il cesse de fonctionner si son créateur perd les droits admin ou est désactivé.
+    Comme pour les sessions, seule l'empreinte SHA-256 du jeton est stockée.
+    """
+
+    __tablename__ = "api_key"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)  # créateur
+    token_hash: str = Field(index=True, unique=True)
+    scope: str = "backup"
+    label: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+    last_used_at: datetime | None = None
+    last_used_ip: str = ""
+
+
 class Attachment(SQLModel, table=True):
     """Fichier envoyé sur le serveur (stocké dans ``data/uploads/<id>``), référencé par un lien de tâche."""
 

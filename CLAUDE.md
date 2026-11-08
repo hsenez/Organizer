@@ -118,6 +118,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
   options des curseurs `slider-importance-4`…) et ouvrir les menus avec `open_menu()` dans les tests.
 - **Vérification visuelle** : Firefox headless piloté en WebDriver BiDi (aiohttp) avec un serveur de démo
   et un ticket de connexion (scripts de travail hors dépôt) ; à refaire après tout changement visuel notable.
+  Capture simple : cookie de session inséré dans `cookies.sqlite` d'un profil (⚠️ Firefox 159 : colonne
+  `expiry` en **millisecondes**), puis `firefox --headless --profile … --screenshot f.png <url>`.
 - ⚠️ Tout script de débogage lancé avec la fixture `user` doit importer la fixture `data_dir` de
   `tests/test_pages.py`, sinon il écrit dans le vrai dossier `data/`.
 
@@ -275,6 +277,23 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Avec `nosniff`, un script servi sous un mauvais type est bloqué : après une mise à jour de NiceGUI ou un
   nouveau fichier statique, vérifier les `Content-Type` des ressources d'une page.
 
+## Sauvegarde
+
+- `organizer/server/backup.py` : `BackupArchive(settings, include_uploads)` prend l'image de la base **à la
+  création** (`sqlite3` `backup()` → fichier temporaire `.backup-*.db` du dossier des données, journal
+  `DELETE`, `integrity_check`) ; `chunks()` produit le `.tar` à la main (en-têtes `TarInfo.tobuf`, blocs de
+  512 o, fin à un multiple de `RECORDSIZE`) sans copie complète, et supprime l'image (`finally` + tâche de
+  fond de la réponse). `manifest.json` **en dernier** (une archive tronquée n'en a pas).
+- Route `server/api/admin.py` : `backup_access` = session admin **ou** jeton `orgbk_…`
+  (`AuthService.resolve_api_key`, table `api_key`, jamais accepté par `resolve` comme session), jeton
+  limité aux adresses privées / de bouclage (`is_local_address`). Attention : `ipaddress` classe aussi les
+  plages de documentation (`203.0.113.0/24`…) comme privées → adresse publique de test : `86.245.12.7`.
+- Interface : `ds.backup_url(uploads)` (web : `ui.download.from_url`, avec le cookie) ;
+  `ds.save_backup(uploads, folder)` (client bureau seulement : `ApiClient.save` en flux vers
+  `system.downloads_dir()`, appelé par `run.io_bound`). Jetons : `ds.account.backup_keys / create_backup_key
+  / revoke_backup_key`.
+- Tests : `tests/test_backup.py` ; simulateur : `await user.download.next()` récupère le téléchargement.
+
 ## Versions et mises à jour
 
 - `organizer/__init__.py` : `__version__` (`0.<étape>.<correctif>` jusqu'à 1.0.0) et `API_VERSION`.
@@ -328,7 +347,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 264 tests au total.
+- 299 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

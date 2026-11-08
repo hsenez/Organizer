@@ -38,12 +38,44 @@ def cache_dir() -> Path:
     return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / APP_DIR_NAME
 
 
+def downloads_dir() -> Path:
+    """Dossier « Téléchargements » de l'utilisateur (``XDG_DOWNLOAD_DIR`` sous Linux), créé au besoin."""
+    if custom := os.environ.get("ORGANIZER_CLIENT_DIR"):
+        folder = Path(custom) / "downloads"
+    elif sys.platform == "win32" or sys.platform == "darwin":
+        folder = Path.home() / "Downloads"
+    else:
+        folder = _xdg_user_dir("DOWNLOAD") or Path.home() / "Downloads"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _xdg_user_dir(name: str) -> Path | None:
+    """Dossier utilisateur déclaré dans ``~/.config/user-dirs.dirs`` (``XDG_<NAME>_DIR="$HOME/…"``)."""
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "user-dirs.dirs"
+    try:
+        text = config.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if match := re.search(rf'^XDG_{name}_DIR="([^"]+)"', text, re.MULTILINE):
+        value = match.group(1).replace("$HOME", str(Path.home()))
+        path = Path(value)
+        if path.is_absolute() and path != Path.home():
+            return path
+    return None
+
+
 _UNSAFE = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+
+def safe_filename(filename: str) -> str:
+    """Nom de fichier utilisable sur tous les systèmes (ni chemin, ni caractère interdit sous Windows)."""
+    return _UNSAFE.sub("_", filename).strip(" .") or "fichier"
 
 
 def cache_file(root: Path, attachment_id: str, filename: str) -> Path:
     """Emplacement local d'une pièce jointe : ``<cache>/<id>/<nom>`` (nom nettoyé, jamais hors du dossier)."""
-    name = _UNSAFE.sub("_", filename).strip(" .") or "fichier"
+    name = safe_filename(filename)
     folder = root / _UNSAFE.sub("_", attachment_id)
     folder.mkdir(parents=True, exist_ok=True)
     return folder / name

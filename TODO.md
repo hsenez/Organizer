@@ -98,11 +98,8 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   1. ✅ Derrière un proxy : cookie `Secure` selon le visiteur, en-têtes de sécurité (HSTS…), IP réelle testée.
   2. ✅ Durcissement : `/docs` réservé aux connectés, limite d'échecs par identifiant (20 / h toutes IP),
      journal des connexions, option `--host` de `deploy/install.sh`, mots de passe de 12 caractères.
-  3. Sauvegarde : `organizer/backup.py` (image cohérente par l'API de sauvegarde SQLite, `.tar` **non
-     compressé** trié = base + `uploads/` + `manifest.json`), jeton de sauvegarde (table `api_key`,
-     illimité, révocable, réservé à l'export), `GET /api/v1/admin/backup`, onglet 🗄️ Données (admin) dans
-     les réglages, version distante pour le client bureau. Script borg de l'utilisateur sur le Pi :
-     `curl … http://127.0.0.1:2603/api/v1/admin/backup | borg import-tar …`.
+  3. ✅ Sauvegarde : `GET /api/v1/admin/backup` (`.tar` non compressé : base cohérente + `uploads/` +
+     `manifest.json`), jetons de sauvegarde (table `api_key`, réseau local seulement), onglet 🗄️ Données.
   4. Restauration : `deploy/restore.sh <archive.tar>` (vérification, données actuelles mises de côté,
      arrêt / redémarrage du service), `--db-only` ; exemples borg (`import-tar` / `export-tar`) dans le README.
   5. Guide Cloudflare Tunnel pas à pas dans le README (intitulés du tableau de bord vérifiés et datés).

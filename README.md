@@ -151,8 +151,26 @@ Les options sont retenues (`deploy/server.conf`). Suivi : `systemctl status orga
 `journalctl -u organizer -f`. Le journal contient aussi chaque tentative de connexion (identifiant, adresse
 IP, échec / blocage / réussite) : `journalctl -u organizer | grep organizer.auth`.
 
-Les données (base `organizer.db` et pièces jointes `uploads/`) sont dans le dossier des données : c'est lui
-qu'il faut sauvegarder.
+Les données (base `organizer.db` et pièces jointes `uploads/`) sont dans le dossier des données. Pour les
+sauvegarder, ne copiez pas ce dossier pendant que le serveur tourne (la copie de la base pourrait être
+incohérente) : utilisez l'export ci-dessous.
+
+### 🗄️ Sauvegarde
+
+- **À la main** : ⚙️ Réglages → 🗄️ **Données** (administrateurs) → ⬇️ *Télécharger une sauvegarde*.
+- **Automatique** (script planifié sur le Pi) : créez un **jeton de sauvegarde** au même endroit (🔑 *Nouveau
+  jeton* ; il n'est affiché qu'une fois), rangez-le dans un fichier lisible par vous seul, puis :
+
+  ```bash
+  curl -fsS -H "Authorization: Bearer $(cat ~/.config/organizer-backup.token)" \
+       http://127.0.0.1:2603/api/v1/admin/backup -o organizer.tar      # ?uploads=false : base seule
+  ```
+
+L'archive `.tar` (non compressée, pour qu'un outil comme borg dédoublonne d'un jour à l'autre) contient une
+copie cohérente de la base, les pièces jointes et un `manifest.json` (date, version, empreintes). Le jeton ne
+sert qu'à cela, n'expire pas, se révoque dans les réglages, et ne fonctionne que depuis le réseau local
+(jamais par Internet). Chaque sauvegarde est notée dans le journal : `journalctl -u organizer | grep
+organizer.backup`. Restauration et exemples borg : à venir (`deploy/restore.sh`).
 
 **Mise à jour du serveur** : `deploy/update.sh` (`git pull`, puis l'installeur avec les mêmes options :
 dépendances, service régénéré s'il a changé, redémarrage, vérification de la version). Mettre à jour le

@@ -2,7 +2,7 @@
 
 Utilisé par l'API REST et par l'interface (via la DataSource), pour que les règles soient les mêmes :
 changer son mot de passe déconnecte ses autres appareils ; désactiver un compte ou réinitialiser son mot de
-passe le déconnecte partout.
+passe le déconnecte partout. Les jetons de sauvegarde sont gérés par les administrateurs.
 """
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ from __future__ import annotations
 from organizer.core.errors import Forbidden
 from organizer.core.schemas import (
     AdminUserPatch,
+    ApiKeyCreated,
+    ApiKeyOut,
     PasswordChange,
     ProfilePatch,
     SessionOut,
@@ -80,3 +82,17 @@ class AccountService:
         if patch.is_active is False or patch.new_password:
             self.auth.revoke_all(user_id)
         return updated
+
+    # --- jetons de sauvegarde (admin) ---
+
+    def backup_keys(self) -> list[ApiKeyOut]:
+        self._admin()
+        return self.auth.list_api_keys("backup")
+
+    def create_backup_key(self, label: str = "") -> ApiKeyCreated:
+        """Nouveau jeton de sauvegarde : le secret n'est renvoyé qu'ici, une seule fois."""
+        return self.auth.create_api_key(self._admin().id, "backup", label or "Sauvegarde")
+
+    def revoke_backup_key(self, key_id: int) -> None:
+        self._admin()
+        self.auth.revoke_api_key(key_id, "backup")

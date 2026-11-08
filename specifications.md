@@ -520,7 +520,7 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 
 ### 8.6 ⚙️ Réglages
 
-Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders|projects|tags|devices|users`) :
+Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders|projects|tags|devices|users|data`) :
 
 - 👤 **Profil** : nom affiché ; changement de mot de passe (12 caractères minimum ; déconnecte les autres
   appareils).
@@ -536,6 +536,10 @@ Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders
   expiration ; déconnecter un appareil ou tous les autres.
 - 👥 **Utilisateurs** (admin) : créer un compte, réinitialiser un mot de passe, désactiver / réactiver,
   donner / retirer les droits admin (pas sur soi-même).
+- 🗄️ **Données** (admin) : ⬇️ télécharger une **sauvegarde** du serveur (archive `.tar`, pièces jointes
+  incluses ou non ; le navigateur la télécharge, le client bureau l'enregistre dans « Téléchargements ») ;
+  🔑 **jetons de sauvegarde** : créer (le secret n'est affiché qu'une fois, avec un exemple `curl`), voir la
+  dernière utilisation (date, adresse), révoquer. Voir §10.5.
 - 🔌 **Connexion** (client bureau uniquement, voir §10.1).
 - *À venir* : 📊 **Boards** (gestion des boards personnalisés depuis les réglages).
 
@@ -685,8 +689,41 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
 - **Documentation de l'API** (`/docs`, `/redoc`, `/openapi.json`) réservée aux connectés : sinon redirection
   vers `/login?next=/docs` (401 pour le schéma JSON).
 - **Anti force brute par identifiant**, **journal des connexions**, **mots de passe de 12 caractères** : voir §3.
-- À venir (`TODO.md`) : export
-  de la base (admin, jeton de sauvegarde), restauration (`deploy/restore.sh`), guide Cloudflare (README).
+- **Sauvegarde** : voir §10.5.
+- À venir (`TODO.md`) : restauration (`deploy/restore.sh`), guide Cloudflare (README).
+
+### 10.5 🗄️ Sauvegarde
+
+`GET /api/v1/admin/backup` (`organizer/server/backup.py`, `server/api/admin.py`) renvoie une archive
+**`.tar` non compressée**, produite au fil de l'envoi (pas de copie complète sur le disque) :
+
+1. `organizer.db` : image **cohérente** de la base, prise sans arrêter le serveur par l'API de sauvegarde
+   de SQLite (une copie du fichier pourrait manquer ce qui est encore dans le journal WAL), en un seul
+   fichier (journal `DELETE`), vérifiée (`PRAGMA integrity_check`). L'image passe par un fichier temporaire
+   `.backup-*.db` du dossier des données, supprimé à la fin (même si le téléchargement est interrompu) ;
+2. `uploads/<id>` : pièces jointes (sauf `?uploads=false`) ; les envois en cours (`.part`) sont ignorés.
+   Un fichier envoyé n'est jamais modifié ni supprimé : toutes celles que l'image référence sont présentes ;
+3. `manifest.json`, **en dernier** (une archive tronquée n'en a pas) : `format` (`organizer-backup`),
+   `format_version` (1), `created_at`, `version`, `api_version`, `includes_uploads`, `counts` (nombre
+   d'utilisateurs, tâches, projets, tags, boards, pièces jointes) et `files` (nom, taille, SHA-256).
+
+Non compressée pour un outil qui **dédoublonne** (borg…) : d'un jour à l'autre, il retrouve les mêmes blocs
+et ne stocke que ce qui a changé, puis compresse lui-même. Nom proposé : `organizer-AAAAMMJJ-HHMMSS.tar`.
+
+**Accès** : une session d'administrateur (cookie ou jeton du client bureau), ou un **jeton de sauvegarde**
+(`Authorization: Bearer orgbk_…`, table `api_key`) :
+
+- créé par un administrateur (Réglages → 🗄️ Données, ou `POST /api/v1/admin/backup-keys`), secret affiché
+  **une seule fois** (seule son empreinte SHA-256 est stockée) ; sans expiration ; révocable
+  (`DELETE /api/v1/admin/backup-keys/{id}`) ; date et adresse de la dernière utilisation conservées ;
+- n'ouvre **que** cette route (jamais accepté comme session) ;
+- **réseau local seulement** (adresse de bouclage ou privée) : derrière Cloudflare Tunnel, un visiteur venu
+  d'Internet garde son adresse publique (même s'il prétend le contraire dans `X-Forwarded-For`), donc un
+  jeton qui aurait fuité y est refusé (403) ;
+- cesse de fonctionner si son créateur perd les droits admin ou est désactivé (et refonctionne s'il les
+  retrouve).
+
+Chaque sauvegarde et chaque jeton refusé sont écrits dans le journal (`organizer.backup`).
 
 ---
 
@@ -735,3 +772,4 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
 | 2026-11-08 | 1.12 | Mise en ligne, étapes 2b-2c : anti force brute par identifiant toutes adresses confondues (20 échecs / h, `LoginBlock`), journal des connexions (échecs, blocages, refus, réussites) ; journal du serveur enfin configuré (`configure_logging` : messages INFO d'Organizer dans `journalctl -u organizer`) ; 277 tests |
 | 2026-11-08 | 1.13 | Mise en ligne, étape 2d : option `--host` de `deploy/install.sh` (`ORGANIZER_HOST` écrit dans le service, retenue par `--reuse`, vérification finale sur la bonne adresse) ; 277 tests + installation en bac à sable avec `--host 127.0.0.1` |
 | 2026-11-08 | 1.14 | Mise en ligne, étape 2e : mots de passe de **12 caractères minimum** ; un ancien mot de passe plus court fonctionne toujours mais est repéré à la connexion (`security:weak_password`) → bandeau orange jusqu'au changement ; bandeaux généralisés (`UiContext.banners`, `Banner` : ton, action, cible) ; 282 tests + bandeau vérifié dans Firefox |
+| 2026-11-08 | 1.15 | Mise en ligne, étape 3 : **sauvegarde** (§10.5) — archive `.tar` non compressée produite au fil de l'envoi (image cohérente de la base par l'API de sauvegarde SQLite, pièces jointes, `manifest.json` avec empreintes), `GET /api/v1/admin/backup` (admin ou jeton), **jetons de sauvegarde** (table `api_key` : sans expiration, révocables, export seul, réseau local seulement, routes `/admin/backup-keys`), onglet ⚙️ Réglages → 🗄️ Données (web : téléchargement ; client bureau : dossier Téléchargements) ; 299 tests + téléchargement par `curl` vérifié sur un vrai serveur (30 Mo, réseau local, proxy) |

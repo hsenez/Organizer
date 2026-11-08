@@ -11,11 +11,13 @@ import copy
 import json as jsonlib
 import os
 from functools import cache
+from pathlib import Path
 from typing import Any
 
 import httpx
 from pydantic import TypeAdapter
 
+from organizer.client import system
 from organizer.core.errors import (
     Forbidden,
     InvalidOperation,
@@ -123,6 +125,35 @@ class ApiClient:
         if response.status_code >= 400:
             raise error_from(response)
         return response
+
+    def save(self, path: str, folder: Path, params: dict[str, Any] | None = None) -> Path:
+        """Télécharge ``GET path`` dans ``folder`` **au fil de l'eau** (gros fichiers), sous le nom donné par
+        le serveur (``Content-Disposition``) ; renvoie le chemin du fichier."""
+        headers = dict(self.extra_headers)
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        partial: Path | None = None
+        try:
+            with self.http.stream("GET", API_PREFIX + path, params=params, headers=headers) as response:
+                if response.status_code >= 400:
+                    response.read()
+                    raise error_from(response)
+                name = system.filename_from_disposition(response.headers.get("content-disposition", ""))
+                final = folder / system.safe_filename(name)
+                partial = final.with_name(final.name + ".part")
+                with partial.open("wb") as out:
+                    for chunk in response.iter_bytes():
+                        out.write(chunk)
+            partial.replace(final)
+            partial = None
+            return final
+        except httpx.TimeoutException as exc:
+            raise ServerUnreachable(f"⏱️ Le serveur {self.base_url} ne répond pas.") from exc
+        except httpx.HTTPError as exc:
+            raise ServerUnreachable(f"🔌 Téléchargement interrompu ({self.base_url}).") from exc
+        finally:
+            if partial is not None:
+                partial.unlink(missing_ok=True)
 
     def call(self, method: str, path: str, out: Any = None, **kwargs: Any) -> Any:
         """Requête JSON ; ``out`` : type attendu (modèle, ``list[...]``…), None si pas de résultat."""

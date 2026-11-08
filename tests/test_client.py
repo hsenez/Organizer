@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import os
+import tarfile
 from datetime import date, timedelta
 
 import pytest
@@ -40,6 +41,7 @@ from organizer.core.schemas import (
     TaskSort,
     UserCreateIn,
 )
+from organizer.core.services.account import AccountService
 from organizer.server.state import create_state
 from organizer.server.wiring import create_api_app
 
@@ -201,6 +203,42 @@ def test_account_and_prefs(remote, state):
     assert created.username == "carol"
 
 
+def test_backup_keys_and_download(remote, state, tmp_path):
+    """Jetons de sauvegarde et téléchargement de l'archive, comme en local (Alice est l'admin)."""
+    local_account = AccountService(state.users, state.auth, remote.user.id)
+    created = remote.account.create_backup_key("borg")
+    assert created.token.startswith("orgbk_")
+    assert remote.account.backup_keys() == local_account.backup_keys()
+    remote.account.revoke_backup_key(created.key.id)
+    assert remote.account.backup_keys() == []
+    with pytest.raises(NotFound):
+        remote.account.revoke_backup_key(created.key.id)
+
+    task = remote.tasks.create(TaskCreate(title="Facture"))
+    link = remote.attachments.upload(task.id, "f.pdf", io.BytesIO(b"%PDF"), "application/pdf")
+    folder = tmp_path / "Téléchargements"
+    folder.mkdir()
+    path = remote.save_backup(folder=folder)
+    assert path.parent == folder and path.name.startswith("organizer-") and path.suffix == ".tar"
+    with tarfile.open(path) as tar:
+        assert tar.getnames() == ["organizer.db", "uploads", f"uploads/{link.target}", "manifest.json"]
+    assert [p.name for p in folder.iterdir()] == [path.name]  # pas de fichier .part laissé
+    db_only = remote.save_backup(uploads=False, folder=folder)
+    with tarfile.open(db_only) as tar:
+        assert tar.getnames() == ["organizer.db", "manifest.json"]
+
+
+def test_backup_refused_to_non_admin(remote, state, http, tmp_path):
+    bob = remote.account.create_user(UserCreateIn(username="bob", password="motdepasse-12"))
+    token, _ = state.auth.create_session(bob.id, kind="api")
+    bob_remote = RemoteDataSource(ApiClient(SERVER, token, http=http))
+    with pytest.raises(Forbidden):
+        bob_remote.save_backup(folder=tmp_path)
+    with pytest.raises(Forbidden):
+        bob_remote.account.backup_keys()
+    assert list(tmp_path.glob("*.part")) == []
+
+
 def test_attachments_and_opening(remote, opened, tmp_path):
     task = remote.tasks.create(TaskCreate(title="Facture"))
     link = remote.attachments.upload(task.id, "facture été.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")
@@ -349,3 +387,20 @@ def test_system_helpers(tmp_path, monkeypatch):
     assert system.resolve_local_path("~/dossier avec espace/f.txt") == target
     monkeypatch.setenv("ORGANIZER_CLIENT_DIR", str(tmp_path / "c"))
     assert system.config_dir() == tmp_path / "c" and system.cache_dir() == tmp_path / "c" / "cache"
+    assert system.downloads_dir() == tmp_path / "c" / "downloads"
+    assert system.safe_filename("a/b:c?.tar") == "a_b_c_.tar" and system.safe_filename(" .. ") == "fichier"
+
+
+def test_xdg_downloads_dir(tmp_path, monkeypatch):
+    monkeypatch.delenv("ORGANIZER_CLIENT_DIR", raising=False)
+    monkeypatch.setattr(system.sys, "platform", "linux")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+    assert system.downloads_dir() == tmp_path / "Downloads"  # pas de user-dirs.dirs
+    (tmp_path / ".config").mkdir()
+    (tmp_path / ".config" / "user-dirs.dirs").write_text(
+        '# commentaire\nXDG_DESKTOP_DIR="$HOME/Bureau"\nXDG_DOWNLOAD_DIR="$HOME/Téléchargements"\n',
+        encoding="utf-8",
+    )
+    assert system.downloads_dir() == tmp_path / "Téléchargements"
+    assert (tmp_path / "Téléchargements").is_dir()

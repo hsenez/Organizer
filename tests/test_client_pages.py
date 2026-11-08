@@ -97,3 +97,22 @@ async def test_short_password_banner_on_desktop(server, user: User, monkeypatch)
     await user.should_see("Bonjour Alice")
     await user.should_see(marker="password-banner")
     await user.should_not_see(marker="version-banner")
+
+
+async def test_backup_saved_to_downloads_on_desktop(server, user: User, tmp_path):
+    """Client bureau : le bouton enregistre l'archive dans « Téléchargements » (ici le dossier du client)."""
+    import asyncio
+
+    server.users.create_user("alice", "motdepasse-12", "Alice")
+    await connect(user)
+    await user.should_see("Bonjour Alice")
+    await user.open("/settings?tab=data")
+    user.find(marker="backup-download").click()
+    folder = tmp_path / "client" / "downloads"
+    for _ in range(50):
+        if list(folder.glob("organizer-*.tar")):
+            break
+        await asyncio.sleep(0.05)
+    (archive,) = folder.glob("organizer-*.tar")
+    await user.should_see("Sauvegarde enregistrée")
+    assert archive.stat().st_size > 0 and not list(folder.glob("*.part"))
