@@ -115,7 +115,8 @@ run_client.py
 - **Comptes** : le **premier compte créé est admin** (écran d'initialisation au premier lancement). L'admin crée
   les autres comptes ; pas d'inscription libre.
 - **Connexion web** : identifiant + mot de passe, case « 🍪 Se souvenir de moi » → cookie de session
-  (HttpOnly, SameSite=Lax) valable **30 jours** ; sinon cookie de session de navigateur.
+  (HttpOnly, SameSite=Lax, et `Secure` quand le visiteur est en HTTPS) valable **30 jours** ; sinon cookie de
+  session de navigateur.
 - **Connexion client bureau** : adresse du serveur + identifiant + mot de passe → **jeton API** stocké dans le
   dossier de config utilisateur (jamais le mot de passe). Reconnexion automatique au lancement.
 - **Sessions** : visibles et révocables dans les réglages (« appareils connectés »).
@@ -143,7 +144,8 @@ run_client.py
   - être admin ne donne **pas** accès aux tâches privées des autres.
 - **Projets et tags** : chacun est **🌍 public** (visible et utilisable par tous) ou **🔒 privé** (visible
   uniquement par son créateur), au choix. Voir 4.5.
-- Réseau local uniquement, **HTTP simple** en v1 (pas de HTTPS).
+- **Accès** : réseau local en HTTP (`http://<pi>:2603`) et, en option, **depuis Internet** en HTTPS par un
+  proxy installé sur le Pi (Cloudflare Tunnel retenu, `https://organizer.blou.top`). Voir §10.4.
 
 ---
 
@@ -643,9 +645,31 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   nouvelles tables sont créées au démarrage (une nouvelle colonne demanderait une migration).
 - Ordre conseillé : **le serveur d'abord**, puis les postes (le bandeau les y invite).
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
-- **HTTPS** (facultatif) : `ORGANIZER_SSL_CERT` / `ORGANIZER_SSL_KEY` (fichiers PEM) ; le cookie de session
-  devient alors `Secure`. Certificat conseillé : autorité locale **mkcert** (son certificat racine est à
-  installer sur les téléphones) ; le client bureau la reconnaît avec `ORGANIZER_CA_FILE=<rootCA.pem>`.
+- **HTTPS par le serveur lui-même** (facultatif, réseau local) : `ORGANIZER_SSL_CERT` / `ORGANIZER_SSL_KEY`
+  (fichiers PEM). Certificat conseillé : autorité locale **mkcert** (son certificat racine est à installer sur
+  les téléphones) ; le client bureau la reconnaît avec `ORGANIZER_CA_FILE=<rootCA.pem>`. Inutile avec la mise
+  en ligne par Cloudflare Tunnel (§10.4), qui fournit un certificat reconnu partout.
+
+### 10.4 🌍 Mise en ligne (derrière un proxy)
+
+Choix retenu : **Cloudflare Tunnel**. `cloudflared`, installé **sur le Pi** (paquet, pas Docker), ouvre une
+connexion sortante vers Cloudflare : aucun port à ouvrir sur la box, pas de certificat à gérer. Cloudflare
+reçoit `https://organizer.blou.top` et transmet en HTTP à `http://localhost:2603`. ⚠️ Cloudflare voit le trafic
+en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès local direct conservé) ; passer
+à `127.0.0.1` restera possible (`ORGANIZER_HOST`).
+
+- **Visiteur réel** : uvicorn (`ProxyHeadersMiddleware`, actif par défaut) remplace l'adresse et le protocole
+  de la connexion par ceux des en-têtes `X-Forwarded-For` / `X-Forwarded-Proto`, **seulement** si la connexion
+  vient de 127.0.0.1 / ::1 (d'où `cloudflared` sur le Pi même ; sinon régler `FORWARDED_ALLOW_IPS`).
+  `request.client.host` (anti force brute) et `request.url.scheme` sont donc ceux du visiteur.
+- **Cookie `Secure`** dès que le visiteur est en HTTPS (`request.url.scheme`), que le HTTPS soit fait par le
+  serveur ou par le proxy ; pas en HTTP local (le navigateur ne renverrait pas un cookie `Secure`).
+- **En-têtes de sécurité** sur toutes les réponses (`SecurityHeadersMiddleware`, sans écraser ceux d'une
+  réponse, ex. pièces jointes) : `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
+  `Referrer-Policy: same-origin`, et `Strict-Transport-Security: max-age=31536000` (HSTS, 1 an) pour les
+  visiteurs en HTTPS uniquement.
+- À venir (`TODO.md`) : `/docs` réservé aux connectés, limite d'échecs de connexion par identifiant, export
+  de la base (admin, jeton de sauvegarde), restauration (`deploy/restore.sh`), guide Cloudflare (README).
 
 ---
 
@@ -689,3 +713,4 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.8.1 | **Version 0.8.0** du logiciel. Correction : **Ctrl+Alt+O** n'ouvrait pas Organizer sous KDE (raccourci posé sans le drapeau « présent », ignoré au clavier) ; l'installeur utilise `setShortcutKeys` et vérifie que la touche est bien attribuée. Relancer `install/linux/install.sh` (ou `--reuse`) sur les postes déjà installés |
 | 2026-11-08 | 1.9 | **Installation du serveur** : `deploy/install.sh` (venv, dépendances, service systemd généré pour l'utilisateur qui lance la commande — même sous sudo, jamais root —, `Restart=always`, démarrage au boot, vérification de la réponse, options retenues, `--print-service`, `--uninstall`) ; `deploy/update.sh` s'appuie dessus (`--reuse`) ; `deploy/organizer.service` (fixé sur l'utilisateur `pi`) supprimé ; 251 tests + installation, mise à jour et désinstallation déroulées dans un bac à sable |
 | 2026-11-08 | 1.9.1 | Bandeau de version du client bureau : détecte un client mis à jour sur le disque mais pas redémarré (« quittez puis relancez Organizer »), messages qui nomment qui doit être mis à jour (ce poste / le serveur), vérification toutes les 10 min ; version installée affichée dans 🔌 Connexion ; 254 tests |
+| 2026-11-08 | 1.10 | **Mise en ligne, étape 1** (Cloudflare Tunnel retenu, §10.4) : cookie `Secure` selon le protocole du visiteur (et non plus selon le certificat du serveur), en-têtes de sécurité sur toutes les réponses (HSTS en HTTPS seulement), vraie IP du visiteur derrière un proxy local vérifiée par des tests (`tests/test_proxy.py`), page « Serveur injoignable » de la PWA reformulée ; 264 tests |

@@ -59,8 +59,8 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - 📋 **Vue compacte** de la liste (une ligne par tâche, comme les résultats de Ctrl+K).
 - 🐍 Faire tourner les tests sous **Python 3.11** (version du Pi) — jamais exécutés dans cette version
   (sur le Pi : `.venv/bin/pip install pytest pytest-asyncio && .venv/bin/pytest`).
-- 📲 PWA jamais essayée sur un vrai téléphone (iPhone en HTTP, Android en HTTPS) ; HTTPS avec mkcert
-  jamais mis en place.
+- 📲 PWA jamais essayée sur un vrai téléphone (iPhone en HTTP, Android en HTTPS) : à faire une fois en ligne
+  par Cloudflare Tunnel (mkcert devient inutile, sauf pour du HTTPS local).
 - ✏️ Temps réel : si la tâche ouverte dans l'éditeur est modifiée ailleurs, l'éditeur ne se met pas à jour
   (volontairement : il ne doit pas changer sous les doigts) — afficher plutôt « modifiée ailleurs » ?
 - 🪟 Client bureau : jamais essayé sous **Windows** (WebView2, `os.startfile`, notifications WinRT).
@@ -92,10 +92,20 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 #### Support HTTPS & reverse proxy
 
 - mettre en ligne sur https://organizer.blou.top
-- suggestion : revers proxy sur nginx
-- certificat HTTPS en utilisant certbot
-- exposition à l'extérieur en passant par cloudflare
-- Mission pour Claude : me proposer des alternatives à cette proposition si il y a mieux en termes de simplicité, ou sécurité ou confidentialité.
+- **Décidé** : **Cloudflare Tunnel** (`cloudflared` sur le Pi, paquet et non Docker), sans nginx ni certbot ;
+  le serveur reste sur `0.0.0.0` pour l'instant (accès local direct conservé). Voir `specifications.md` §10.4.
+- Plan :
+  1. ✅ Derrière un proxy : cookie `Secure` selon le visiteur, en-têtes de sécurité (HSTS…), IP réelle testée.
+  2. Durcissement : `/docs` réservé aux connectés ; limite d'échecs de connexion par identifiant (toutes IP
+     confondues, ex. 20 / h) ; échecs écrits dans le journal ; option `--host` de `deploy/install.sh`.
+  3. Sauvegarde : `organizer/backup.py` (image cohérente par l'API de sauvegarde SQLite, `.tar` **non
+     compressé** trié = base + `uploads/` + `manifest.json`), jeton de sauvegarde (table `api_key`,
+     illimité, révocable, réservé à l'export), `GET /api/v1/admin/backup`, onglet 🗄️ Données (admin) dans
+     les réglages, version distante pour le client bureau. Script borg de l'utilisateur sur le Pi :
+     `curl … http://127.0.0.1:2603/api/v1/admin/backup | borg import-tar …`.
+  4. Restauration : `deploy/restore.sh <archive.tar>` (vérification, données actuelles mises de côté,
+     arrêt / redémarrage du service), `--db-only` ; exemples borg (`import-tar` / `export-tar`) dans le README.
+  5. Guide Cloudflare Tunnel pas à pas dans le README (intitulés du tableau de bord vérifiés et datés).
 
 #### Chantier important: Création d'événements. 
 

@@ -28,7 +28,7 @@ def complete(request: Request, ticket: str = "", next: str = "/"):
         data.user_id, kind="web", persistent=data.persistent, label=data.label
     )
     response = RedirectResponse(safe_next(next), status_code=303)
-    set_session_cookie(response, token, data.persistent, state.settings)
+    set_session_cookie(response, request, token, data.persistent)
     return response
 
 
@@ -38,5 +38,5 @@ def logout(request: Request):
     if request_auth(request) is not None and request.state.auth_token:
         state.auth.revoke_token(request.state.auth_token)
     response = RedirectResponse("/login", status_code=303)
-    clear_session_cookie(response)
+    clear_session_cookie(response, request)
     return response

@@ -69,7 +69,7 @@ const OFFLINE = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 background:#f6f7fb;color:#1f2330;text-align:center;padding:24px}button{font:inherit;padding:10px 18px;
 border-radius:10px;border:0;background:#5c7cfa;color:#fff}</style></head><body><div>
 <img src="/icons/organizer-192.png" width="96" height="96" alt=""><h1>Serveur injoignable</h1>
-<p>Organizer n'arrive pas à joindre le serveur. Vérifiez que vous êtes sur le réseau de la maison.</p>
+<p>Organizer n'arrive pas à joindre le serveur. Vérifiez votre connexion Internet (ou au réseau local).</p>
 <button onclick="location.reload()">Réessayer</button></div></body></html>`;
 
 self.addEventListener("install", () => self.skipWaiting());

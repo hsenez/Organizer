@@ -168,6 +168,11 @@ Ouvrir `http://<ip-du-pi>:2603` puis :
 
 ### HTTPS (facultatif)
 
+> 🌍 Pour un accès **depuis Internet**, la solution retenue est **Cloudflare Tunnel** (certificat reconnu
+> partout, rien à installer sur les téléphones) : guide pas à pas à venir. Le serveur est déjà prêt à
+> fonctionner derrière ce proxy (cookie `Secure`, en-têtes de sécurité, vraie IP des visiteurs).
+> mkcert reste utile pour du HTTPS **sur le réseau local seulement**.
+
 Avec [mkcert](https://github.com/FiloSottile/mkcert) (une autorité de certification locale) :
 
 ```bash

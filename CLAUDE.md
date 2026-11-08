@@ -252,6 +252,18 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Tests du temps réel : `tests/test_live.py` (vrai serveur uvicorn dans un fil pour le flux SSE) ; dans les
   tests de pages, `asyncio.sleep(0.6)` laisse passer le délai de `LiveRefresh`.
 
+## Mise en ligne (Cloudflare Tunnel)
+
+- `cloudflared` sur le Pi → `http://localhost:2603`. Uvicorn (`ProxyHeadersMiddleware`, actif par défaut,
+  confiance à 127.0.0.1 / ::1) réécrit `request.client.host` et `request.url.scheme` d'après
+  `X-Forwarded-For` / `-Proto` : **toujours** les utiliser pour l'IP et le protocole du visiteur, jamais
+  `settings.https` (qui dit seulement si uvicorn a lui-même un certificat). `security.is_https(request)`.
+- `SecurityHeadersMiddleware` (ASGI pur, pour laisser passer le SSE) : en-têtes ajoutés seulement s'ils sont
+  absents de la réponse. Tests : `tests/test_proxy.py` passe par `uvicorn.Config(...).load()` pour avoir la
+  même pile qu'en vrai (`TestClient(..., client=("127.0.0.1", port))` simule le proxy).
+- Avec `nosniff`, un script servi sous un mauvais type est bloqué : après une mise à jour de NiceGUI ou un
+  nouveau fichier statique, vérifier les `Content-Type` des ressources d'une page.
+
 ## Versions et mises à jour
 
 - `organizer/__init__.py` : `__version__` (`0.<étape>.<correctif>` jusqu'à 1.0.0) et `API_VERSION`.
@@ -305,7 +317,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 254 tests au total.
+- 264 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

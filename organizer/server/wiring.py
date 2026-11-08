@@ -10,13 +10,14 @@ from organizer import __version__
 from organizer.core.errors import OrganizerError
 from organizer.server import pwa, web_auth
 from organizer.server.api import api_router
-from organizer.server.security import AuthMiddleware
+from organizer.server.security import AuthMiddleware, SecurityHeadersMiddleware
 from organizer.server.state import AppState
 
 
 def install(app: FastAPI, state: AppState) -> None:
     app.state.organizer = state
     app.add_middleware(AuthMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)  # ajouté en dernier = le plus extérieur
 
     @app.exception_handler(OrganizerError)
     async def _organizer_error(_request: Request, exc: OrganizerError) -> JSONResponse:
