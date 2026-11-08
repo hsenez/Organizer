@@ -63,7 +63,12 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - 📋 **Vue compacte** de la liste (une ligne par tâche, comme les résultats de Ctrl+K).
 - 🧭 Recherche Ctrl+K : naviguer dans les résultats avec les flèches du clavier.
 - 🐍 Faire tourner les tests sous **Python 3.11** (version du Pi) — jamais exécutés dans cette version.
-- 🔔 Notifications système des rappels sur le client bureau (étape 7).
+- 🪟 Client bureau : jamais essayé sous **Windows** (WebView2, `os.startfile`, notifications WinRT).
+- 🖥️ Client bureau : glisser un fichier depuis l'explorateur sur une tâche pour l'ajouter en lien (pywebview
+  fournit le chemin complet : événement `drop` de NiceGUI natif) — rejoint le sujet des liens de fichiers.
+- 🔔 Si l'envoi d'une notification échoue (D-Bus absent…), la tâche est quand même notée « notifiée » pour
+  la journée (desktop-notifier ne signale pas l'échec).
+- 🖥️ Client bureau : icône de fenêtre / raccourci de lancement (fichier `.desktop`, raccourci Windows).
 - 🗄️ Outil de **migration du schéma** de la base (ajout de colonnes) le jour où ce sera nécessaire.
 - ⚙️ Le décalage de rappel par défaut modifié dans les réglages ne s'applique aux nouvelles tâches de la
   page ouverte qu'après rechargement.
@@ -74,3 +79,4 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   📋 dupliquer une tâche (étape 5).
 - 📊 Kanbans, 🎯 matrice, glisser-déposer souris / tactile et Ctrl+drop (étape 6).
 - 📊 Kanbans pleine page, colonnes repliables / redimensionnables, reclassement = urgence affinée (v1.4).
+- 🖥️ Client bureau : fenêtre native, connexion par jeton, liens et fichiers locaux, 🔔 notifications (étape 7).

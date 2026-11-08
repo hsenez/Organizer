@@ -1,6 +1,7 @@
 """⚙️ Réglages : profil, apparence, rappels, projets, tags, appareils connectés, utilisateurs (admin).
 
-Onglet initial choisi par ``?tab=`` (profile, appearance, reminders, projects, tags, devices, users).
+Onglet initial choisi par ``?tab=`` (profile, appearance, reminders, projects, tags, devices, users, et sur
+le client bureau connection).
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ def page(make_context):
                 ui.label("⚙️").classes("text-2xl")
                 ui.label("Réglages").classes("text-2xl font-bold")
             tabs_shown = {k: v for k, v in TABS.items() if k != "users" or ctx.user.is_admin}
+            tabs_shown |= {key: label for key, (label, _) in ctx.extra_settings.items()}
             initial = request.query_params.get("tab")
             initial = initial if initial in tabs_shown else "profile"
             with (
@@ -66,6 +68,7 @@ def page(make_context):
                     "tags": _tags,
                     "devices": _devices,
                     "users": _users,
+                    **{key: build for key, (_, build) in ctx.extra_settings.items()},
                 }
                 for key in tabs_shown:
                     with ui.tab_panel(key).classes("p-0 pt-2"):
@@ -213,9 +216,10 @@ def _reminders(ctx: UiContext) -> None:
             value=ctx.user.desktop_notifications,
             on_change=notifications_changed,
         )
-        ui.label("Les notifications arriveront avec le client bureau (étape 7).").classes(
-            "text-xs text-gray-500"
-        )
+        ui.label(
+            "Le client bureau affiche une notification quand la date de rappel d'un suivi est atteinte "
+            "(une fois par jour et par tâche)."
+        ).classes("text-xs text-gray-500")
 
 
 # ======================================================================================================

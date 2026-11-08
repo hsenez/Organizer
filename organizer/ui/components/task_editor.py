@@ -615,7 +615,7 @@ class TaskEditor:
         self._links()
 
     def _open_link(self, link) -> None:
-        open_link(link.kind, link.target, self.ds)
+        self.ctx.call(open_link, link.kind, link.target, self.ds)
 
     # --- notes ---
 
@@ -641,7 +641,7 @@ class TaskEditor:
         """Clic sur un lien des notes : une adresse reconnue comme web par le markdown est toujours ouverte ;
         sinon on devine (adresse web ou chemin de fichier)."""
         link_kind = LinkKind.URL if kind == "url" else rules.detect_link_kind(target)
-        open_link(link_kind, target, self.ds)
+        self.ctx.call(open_link, link_kind, target, self.ds)
 
     def _save_notes(self) -> None:
         """Enregistre les notes si elles ont changé (frappe : au plus toutes les 1,5 s ; sortie du champ)."""
@@ -688,12 +688,21 @@ def _link_action(kind: LinkKind, ds) -> str:
 
 
 def open_link(kind: LinkKind, target: str, ds) -> None:
+    """Ouvre un lien. Client bureau : navigateur / application par défaut du poste (pièce jointe téléchargée
+    puis ouverte) ; web : nouvel onglet, ou chemin copié dans le presse-papiers."""
+    if ds.is_desktop:
+        if kind is LinkKind.URL:
+            ds.open_url(rules.normalize_url(target))
+        elif kind is LinkKind.ATTACHMENT:
+            ds.open_attachment(target)
+            ui.notify("📎 Pièce jointe ouverte", position="top", timeout=1500)
+        else:
+            ds.open_path(target)
+        return
     if kind is LinkKind.URL:
         ui.navigate.to(rules.normalize_url(target), new_tab=True)
     elif kind is LinkKind.ATTACHMENT:
         ui.navigate.to(ds.attachment_url(target), new_tab=True)
-    elif ds.is_desktop:
-        ds.open_path(target)
     else:
         ui.clipboard.write(target)
         ui.notify("📋 Chemin copié dans le presse-papiers", position="top")

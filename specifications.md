@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 1.4 — 2026-11-08
+> Version : 1.5 — 2026-11-08
 
 ---
 
@@ -49,7 +49,7 @@ s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry P
 | Client HTTP (client bureau → API) | httpx | 0.28.1 |
 | Fenêtre native du client bureau | pywebview (+ PyGObject sous Linux) | 6.2.1 |
 | Éditeur markdown | CodeMirror 6 **fourni par NiceGUI** (paquet ESM `nicegui-codemirror`) + composant maison `markdown_editor.js` | 6.x |
-| Notifications système (client bureau) | desktop-notifier *(à installer à l'étape concernée)* | — |
+| Notifications système (client bureau) | desktop-notifier (D-Bus sous Linux, WinRT sous Windows ; `notify-send` en secours) | 6.2.0 |
 | Tests / lint | pytest, pytest-asyncio (tests des pages NiceGUI), ruff (`target-version = py311`) | — |
 
 Fichiers : `requirements.txt` (serveur), `requirements-client.txt` (client bureau), `requirements-dev.txt` (dev).
@@ -69,7 +69,7 @@ organizer/
     unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
     services/            # users, auth, account, labels (projets + tags), tasks, boards, attachments, undo ;
                          # façade `Services`
-    datasource.py        # interface DataSource + LocalDataSource (serveur) ; RemoteDataSource à l'étape 7
+    datasource.py        # interface DataSource + LocalDataSource (serveur)
   server/                # ✅ étape 2
     app.py               # point d'entrée serveur : build() + ui.run()
     state.py             # état global : base, services, anti force brute, tickets de connexion
@@ -78,10 +78,13 @@ organizer/
     web_auth.py          # /auth/complete (ticket → cookie), /auth/logout
     pages.py             # /login, /setup + branchement des pages de l'UI sur LocalDataSource
     api/                 # routes REST /api/v1 (auth, users, labels, tasks, undo) ; WebSocket à venir
-  client/
-    main.py              # point d'entrée client bureau (fenêtre native)
-    remote.py            # RemoteDataSource (httpx)
-    system.py            # ouverture de fichiers/liens, notifications
+  client/                # ✅ étape 7
+    app.py               # DesktopClient : /connect, pages sur RemoteDataSource, verrou de la fenêtre, main()
+    api.py               # ApiClient (httpx, jeton Bearer) ; erreurs HTTP → erreurs métier
+    remote.py            # RemoteDataSource : mêmes méthodes que les services, via l'API
+    config.py            # client.json (serveur, identifiant, jeton) ; adresse saisie → URL
+    system.py            # ouvrir fichiers / liens, dossiers de configuration et de cache
+    notifications.py     # rappels → notifications système (une fois par jour et par tâche)
   ui/                    # ✅ étape 3
     theme.py             # couleurs Quasar dérivées des enums (imp0…, urg0…, st0…), CSS des cartes, sombre
     context.py           # UiContext : source de données, rafraîchissement, Ctrl+Z, erreurs → toasts
@@ -509,7 +512,8 @@ Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders
   expiration ; déconnecter un appareil ou tous les autres.
 - 👥 **Utilisateurs** (admin) : créer un compte, réinitialiser un mot de passe, désactiver / réactiver,
   donner / retirer les droits admin (pas sur soi-même).
-- *À venir* : 📊 **Boards** (étape 6), 🔌 **Connexion** du client bureau (étape 7).
+- 🔌 **Connexion** (client bureau uniquement, voir §10.1).
+- *À venir* : 📊 **Boards** (gestion des boards personnalisés depuis les réglages).
 
 Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 
@@ -530,7 +534,34 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 - **Serveur** : Raspberry Pi 5, Python 3.11, écoute sur `0.0.0.0:2603`. Données dans `data/`
   (`organizer.db`, `uploads/`), chemin configurable par variable d'environnement.
 - **Service systemd** fourni (`deploy/organizer.service`) : démarrage automatique, redémarrage en cas d'erreur.
-- **Client bureau** : Linux (GTK/WebKit) et Windows (Edge WebView2), lancé par `run_client.py`.
+- **Client bureau** : Linux (GTK/WebKit) et Windows (Edge WebView2), lancé par `run_client.py`
+  (`--browser` : dans le navigateur au lieu d'une fenêtre). Voir §10.1.
+
+### 10.1 🖥️ Client bureau (✅ étape 7)
+
+- **Principe** : la même interface que le site (pages `organizer/ui`), servie **localement** sur
+  `127.0.0.1` (port libre) et affichée dans une fenêtre native pywebview (GTK forcé sous Linux) ; les
+  données passent par l'API REST du serveur (`RemoteDataSource` : mêmes méthodes, mêmes erreurs que les
+  services locaux).
+- **Connexion** (`/connect`) : adresse du serveur (`raspberrypi.local` ou `192.168.1.20` suffit : `http://`
+  et le port 2603 sont ajoutés), identifiant, mot de passe → **jeton API** (90 jours glissants) enregistré
+  dans `client.json` (lisible par l'utilisateur seul ; jamais le mot de passe). Reconnexion automatique ;
+  jeton expiré ou révoqué → retour à `/connect` avec un message ; serveur injoignable → message et
+  « 🔄 Réessayer ». Un serveur sans compte renvoie vers `/setup` dans un navigateur.
+- **Dossier de configuration** : `~/.config/organizer/` (Linux), `%APPDATA%\Organizer\` (Windows) ; cache des
+  pièces jointes ouvertes : `~/.cache/organizer/` ; `ORGANIZER_CLIENT_DIR` remplace les deux.
+- **Verrou de la fenêtre** : le serveur local n'accepte que la fenêtre lancée (secret aléatoire par lancement,
+  passé dans l'URL de départ puis gardé en cookie) ; un autre programme du poste reçoit « 🔒 Accès réservé ».
+- **Liens** (§4.4) : adresse web → navigateur par défaut ; chemin local (`~`, variables d'environnement,
+  `file://`) → application par défaut du système (« 📁 Introuvable sur ce poste » sinon) ; pièce jointe →
+  téléchargée dans le cache puis ouverte.
+- **🔔 Rappels** : toutes les 5 minutes, les suivis dont le rappel est atteint sont notifiés (notification
+  système, une fois par jour et par tâche, regroupées au-delà de 3) si l'option des réglages est active ; un
+  clic ouvre la tâche dans la fenêtre.
+- **Réglages → 🔌 Connexion** : serveur, compte, appareil, emplacement de la configuration ; ouvrir le site
+  dans le navigateur, tester une notification, se déconnecter / changer de serveur.
+- Pas de mode hors ligne ; les modifications faites ailleurs apparaissent au prochain affichage (temps réel :
+  étape 8).
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
 
 ---
@@ -545,7 +576,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 4 | ✅ Éditeur markdown CodeMirror (live preview, listes, cases, liens cliquables) |
 | 5 | ✅ Modules : liste (filtres, tri, regroupement mémorisés), recherche Ctrl+K, réglages, dupliquer, heure d'échéance |
 | 6 | ✅ Kanbans (prédéfinis + personnalisés, partage), matrice 2×2 / 4×4, glisser-déposer souris et tactile, Ctrl+drop |
-| 7 | Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
+| 7 | ✅ Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
 | 8 | Temps réel, PWA, finitions |
 
 ---
@@ -568,3 +599,4 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.2 | Tags affichés dans leur couleur partout (pastille + fond teinté) : cartes, sélecteur de l'éditeur et filtre « Tags » (puces et liste déroulante), puces légèrement espacées du libellé du champ |
 | 2026-11-08 | 1.3 | **Étape 6 livrée** : boards personnalisés (tables `board`, `board_column`, `board_card`, `board_share` ; `BoardService` ; partage = accès aux tâches posées), pages Kanbans (4 boards prédéfinis + personnalisés, filtres et masquage des terminées par board) et Matrice (2×2, 4×4), glisser-déposer maison souris / tactile avec Ctrl+drop et maintien au doigt pour rattacher ; API : routes `/boards` (45 chemins, 63 opérations) ; 182 tests + tests interactifs dans Firefox |
 | 2026-11-08 | 1.4 | Kanbans : pleine largeur et pleine hauteur, colonnes plus étroites, repliables et redimensionnables (mémorisé par board) ; reclassement dans une colonne avec repère d'insertion, qui ajuste l'urgence et un rang manuel (table `task_rank`, `TaskService.move`, API `POST /tasks/{id}/move` : 46 chemins, 64 opérations) ; tri « Urgence » départagé par ce rang ; 190 tests + vérification dans Firefox |
+| 2026-11-08 | 1.5 | **Étape 7 livrée** : client bureau (`organizer/client`, `run_client.py`) — fenêtre native pywebview, connexion par jeton (`/connect`), `RemoteDataSource` (contrat identique aux services, vérifié par les tests), verrou de la fenêtre, ouverture des liens / fichiers locaux / pièces jointes, notifications des rappels (desktop-notifier 6.2.0), onglet de réglages 🔌 Connexion ; 206 tests + parcours vérifié dans Firefox et dans la fenêtre native |

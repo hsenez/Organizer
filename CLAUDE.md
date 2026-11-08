@@ -181,6 +181,31 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `trigger("attach", {...})`. Le geste réel se vérifie dans Firefox (BiDi, `input.performActions` souris et
   `pointerType: "touch"`) ; ne pas faire défiler la page entre la mesure des positions et le geste.
 
+## Étape 7 : client bureau
+
+- `organizer/client/` : **aucune** dépendance au serveur (`organizer.server`) hors tests. `app.py`
+  (`DesktopClient` : `/connect`, `context()` = fabrique des pages sur `RemoteDataSource`, onglet de
+  réglages via `UiContext.extra_settings`, `LaunchGuard`, notifier, `main()`), `api.py` (`ApiClient`,
+  `error_from` : code HTTP → erreur métier ; `ServerUnreachable` / `NotAuthenticated` dans `core/errors.py`),
+  `remote.py`, `config.py`, `system.py`, `notifications.py`.
+- **Contrat** : chaque méthode de service utilisée par l'UI doit exister dans `remote.py` avec la même
+  signature. Ajouter une méthode de service utilisée par l'UI = ajouter sa route API **et** sa version
+  distante **et** un test dans `tests/test_client.py` (comparaison avec le service local quand c'est possible).
+  Liste des appels de l'UI : `grep -rhoE "ds\.[a-z_]+\.[a-z_]+" organizer/ui | sort -u`.
+- Envoi : `_sent()` = `exclude_unset` (patchs partiels, héritage des sous-tâches) ; `ApiClient.call(...,
+  json=None)` envoie `null` (``NO_BODY`` = pas de corps).
+- Liens côté bureau : `open_link` (task_editor) délègue à `ds.open_url / open_path / open_attachment` quand
+  `ds.is_desktop` ; erreurs (fichier absent) → toast via `ctx.call`.
+- Fenêtre native : NiceGUI lance pywebview dans un **sous-processus qui réimporte** `run_client.py`
+  (garde `__main__` / `__mp_main__`) ; secret et port passent par l'environnement (`ORGANIZER_CLIENT_LAUNCH`,
+  `ORGANIZER_CLIENT_PORT`) pour être identiques ; `app.native.window_args["url"]` = URL de départ avec le
+  secret ; GTK forcé sous Linux (`start_args["gui"]`), sinon pywebview tente Qt.
+- Tests des pages du client : `tests/test_client_pages.py` (marqueur `nicegui_main_file("tests/client_main.py")`,
+  serveur de test en mémoire passé par `tests/client_harness.HTTP`, `ORGANIZER_CLIENT_DIR` fixé par une
+  fixture autouse **avant** le simulateur).
+- Essais manuels sans rien ouvrir sur le bureau : `PATH=<faux xdg-open>:$PATH BROWSER="<script> %s"`
+  `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent ORGANIZER_CLIENT_DIR=<dossier> run_client.py --browser`.
+
 ## Tests
 
 - `tests/test_*.py` : services (base SQLite temporaire, date du jour figée au mercredi 4/11/2026).
@@ -195,7 +220,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
 python3 -m venv .venv                          # création du venv (déjà fait)
 .venv/bin/pip install -r requirements-dev.txt  # dépendances dev (serveur + client + outils)
 .venv/bin/python run_server.py                 # serveur sur http://0.0.0.0:2603 (doc API : /docs)
-.venv/bin/python run_client.py                 # client bureau                    (à venir)
+.venv/bin/python run_client.py                 # client bureau (fenêtre native ; --browser : navigateur)
 .venv/bin/pytest                               # tests
 .venv/bin/ruff format .                        # mise en forme (110 colonnes)
 .venv/bin/python scripts/demo.py               # démo terminal (base data/demo.db, recréée)
@@ -210,14 +235,15 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 190 tests au total.
+- 206 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
 - ✅ Étape 6 : boards personnalisés, pages `/kanban` et `/matrix`, glisser-déposer souris / tactile,
   Ctrl+drop ; puis kanbans pleine page, colonnes repliables / redimensionnables, reclassement (urgence +
   rang).
-- ⏭️ Étape 7 : client bureau (fenêtre native, `RemoteDataSource` via l'API, ouverture des fichiers locaux,
-  notifications des rappels).
+- ✅ Étape 7 : client bureau (fenêtre native, `RemoteDataSource` via l'API, connexion par jeton, ouverture
+  des fichiers locaux, notifications des rappels). Vérifié sous Linux (GTK) ; **Windows jamais essayé**.
+- ⏭️ Étape 8 : temps réel (WebSocket), PWA, finitions.
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.
 - Feuille de route complète : `specifications.md` §11.

@@ -3,3 +3,5 @@
 pywebview==6.2.1
 # Linux uniquement : backend GTK de pywebview (nécessite webkit2gtk-4.1 côté système)
 PyGObject==3.58.1 ; sys_platform == "linux"
+# Notifications système des rappels (D-Bus sous Linux, WinRT sous Windows)
+desktop-notifier==6.2.0

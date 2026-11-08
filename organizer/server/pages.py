@@ -16,10 +16,9 @@ from organizer.server.api.auth import check_credentials
 from organizer.server.security import client_ip, describe_user_agent, request_auth
 from organizer.server.state import AppState
 from organizer.server.web_auth import safe_next
+from organizer.ui.auth_shell import auth_shell as _auth_shell
 from organizer.ui.context import UiContext
 from organizer.ui.pages import register_app_pages
-
-PRIMARY = "#5c7cfa"
 
 
 def _state() -> AppState:
@@ -34,24 +33,6 @@ def guard(request: Request) -> RedirectResponse | None:
         target = request.url.path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
     return None
-
-
-def _auth_shell(subtitle: str):
-    """Fond dégradé + carte centrée ; renvoie la colonne où placer le formulaire."""
-    ui.colors(primary=PRIMARY)
-    ui.query("body").classes(
-        "bg-gradient-to-br from-indigo-100 via-white to-sky-100 "
-        "dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950"
-    )
-    with ui.column().classes("w-full min-h-screen items-center justify-center p-4"):
-        card = ui.card().classes("w-full max-w-sm p-6 gap-4 rounded-2xl shadow-xl")
-        with card:
-            with ui.column().classes("w-full items-center gap-1"):
-                ui.label("📋").classes("text-5xl")
-                ui.label("Organizer").classes("text-2xl font-bold")
-                ui.label(subtitle).classes("text-sm text-gray-500 text-center")
-            body = ui.column().classes("w-full gap-3")
-    return body
 
 
 def login_page(request: Request, next: str = "/", expired: int = 0):

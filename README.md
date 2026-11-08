@@ -11,9 +11,9 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 
 Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau local.
 
-> 🚧 **Projet en cours de construction** — étapes 1 à 6 sur 8 : cœur métier, serveur, API, interface (accueil,
-> liste filtrable, recherche, réglages, éditeur, notes markdown façon Obsidian), kanbans, matrice d'Eisenhower
-> et glisser-déposer. À venir : client bureau (étape 7), temps réel et finitions (étape 8).
+> 🚧 **Projet en cours de construction** — étapes 1 à 7 sur 8 : cœur métier, serveur, API, interface (accueil,
+> liste filtrable, recherche, réglages, éditeur, notes markdown façon Obsidian), kanbans, matrice d'Eisenhower,
+> glisser-déposer et client bureau. À venir : temps réel et finitions (étape 8).
 > Détails fonctionnels : [`specifications.md`](specifications.md).
 
 ## Prérequis
@@ -52,12 +52,24 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 
 ```bash
 .venv/bin/python run_server.py   # serveur → http://<ip-du-pi>:2603
-.venv/bin/python run_client.py   # client bureau (à venir)
+.venv/bin/python run_client.py   # client bureau (fenêtre native)
+.venv/bin/python run_client.py --browser   # client bureau dans le navigateur
 ```
 
 - **Premier lancement** : ouvrir `http://<ip>:2603` → page de création du compte administrateur.
 - Ensuite : page de connexion, avec « 🍪 Se souvenir de moi » (30 jours).
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs`.
+
+**🖥️ Client bureau** : au premier lancement, indiquer l'adresse du Pi (`raspberrypi.local` ou son IP : le
+port 2603 est ajouté tout seul), l'identifiant et le mot de passe. Seul un **jeton** est conservé
+(`~/.config/organizer/client.json`, ou `%APPDATA%\Organizer\` sous Windows) : les lancements suivants
+ouvrent directement l'application. Par rapport au site :
+
+- les **chemins de fichiers** s'ouvrent avec l'application par défaut du poste (au lieu d'être copiés), les
+  liens web dans le navigateur, les pièces jointes sont téléchargées puis ouvertes ;
+- 🔔 **notifications système** quand la date de rappel d'un suivi est atteinte (une fois par jour ;
+  désactivables dans Réglages → 🔔 Rappels ; bouton de test dans Réglages → 🔌 Connexion) ;
+- Réglages → 🔌 **Connexion** : se déconnecter ou changer de serveur.
 - Depuis un téléphone : même adresse dans le navigateur (interface adaptée, menu ☰).
 - Raccourcis : **N** nouvelle tâche, **Ctrl+K** rechercher, **Ctrl+Z** annuler, **Ctrl+Maj+Z** / **Ctrl+Y**
   rétablir.

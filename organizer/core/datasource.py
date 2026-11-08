@@ -3,7 +3,9 @@
 L'interface (``organizer/ui``) ne manipule **que** un objet :class:`DataSource`. Deux implémentations :
 
 - :class:`LocalDataSource` (serveur) : appelle directement les services, donc la base SQLite ;
-- ``RemoteDataSource`` (client bureau, étape 7) : mêmes méthodes, mais via l'API REST du serveur.
+- :class:`organizer.client.remote.RemoteDataSource` (client bureau) : mêmes méthodes, via l'API REST du
+  serveur ; elle sait en plus ouvrir liens, fichiers locaux et pièces jointes sur le poste (``open_url``,
+  ``open_path``, ``open_attachment``), utilisés quand ``is_desktop`` est vrai.
 
 Les sous-objets (``tasks``, ``projects``…) exposent les mêmes méthodes, avec les mêmes signatures, que les
 services de :mod:`organizer.core.services` : c'est ce contrat que la version distante doit respecter.

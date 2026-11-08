@@ -26,6 +26,8 @@ class UiContext:
         self.dark: Any = None  # ui.dark_mode de la page (créé par le layout)
         # Dépôt d'une carte dans une zone de la page : fonction (task_id, zone, index) fournie par la page.
         self.drop_handler: Callable[[int, str, int | None], None] | None = None
+        # Onglets de réglages propres à la plateforme (bureau : 🔌 Connexion) : clé → (libellé, builder).
+        self.extra_settings: dict[str, tuple[str, Callable[[UiContext], None]]] = {}
 
     @property
     def user(self):
@@ -92,6 +94,9 @@ class UiContext:
         except UndoConflict as exc:
             ui.notify(exc.message, type="warning", position="top", multi_line=True, timeout=8000)
             self.refresh()
+            return
+        except OrganizerError as exc:  # client bureau : serveur injoignable…
+            ui.notify(exc.message, type="negative", position="top")
             return
         if result is None:
             ui.notify(nothing, position="top", timeout=1500)
