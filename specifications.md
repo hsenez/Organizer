@@ -127,7 +127,14 @@ run_client.py
   - connexion web en deux temps : la page `/login` vérifie le mot de passe côté serveur et émet un **ticket**
     à usage unique (60 s) ; le navigateur est redirigé vers `/auth/complete?ticket=…`, dont la réponse HTTP pose
     le cookie `organizer_session` (HttpOnly, SameSite=Lax). Le mot de passe ne transite jamais par du JS ;
-  - **anti force brute** : 5 échecs en 10 min pour un couple (adresse IP, identifiant) → blocage temporaire ;
+  - **anti force brute** à deux niveaux : 5 échecs en 10 min pour un couple (adresse IP, identifiant) →
+    blocage temporaire de ce visiteur (remis à zéro par une connexion réussie) ; **20 échecs en 1 h pour un
+    identifiant, toutes adresses confondues** → nouvelles connexions à ce compte refusées jusqu'à ce que les
+    échecs sortent de la fenêtre (les appareils déjà connectés le restent ; pas remis à zéro par une
+    connexion réussie). Les compteurs portent sur l'identifiant tapé, existant ou non. Seuils réglables
+    (`Settings.login_*`) ;
+  - **journal** : chaque échec, blocage, refus et connexion réussie est écrit (logger `organizer.auth`,
+    identifiant + IP du visiteur) dans la sortie du service → `journalctl -u organizer` ;
   - changer son mot de passe déconnecte les autres appareils ; désactiver un compte ou réinitialiser son
     mot de passe (admin) le déconnecte partout ;
   - les redirections après connexion n'acceptent que des chemins internes (pas de redirection ouverte).
@@ -670,7 +677,8 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
   visiteurs en HTTPS uniquement.
 - **Documentation de l'API** (`/docs`, `/redoc`, `/openapi.json`) réservée aux connectés : sinon redirection
   vers `/login?next=/docs` (401 pour le schéma JSON).
-- À venir (`TODO.md`) : limite d'échecs de connexion par identifiant, export
+- **Anti force brute par identifiant** et **journal des connexions** : voir §3.
+- À venir (`TODO.md`) : export
   de la base (admin, jeton de sauvegarde), restauration (`deploy/restore.sh`), guide Cloudflare (README).
 
 ---
@@ -717,3 +725,4 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
 | 2026-11-08 | 1.9.1 | Bandeau de version du client bureau : détecte un client mis à jour sur le disque mais pas redémarré (« quittez puis relancez Organizer »), messages qui nomment qui doit être mis à jour (ce poste / le serveur), vérification toutes les 10 min ; version installée affichée dans 🔌 Connexion ; 254 tests |
 | 2026-11-08 | 1.10 | **Mise en ligne, étape 1** (Cloudflare Tunnel retenu, §10.4) : cookie `Secure` selon le protocole du visiteur (et non plus selon le certificat du serveur), en-têtes de sécurité sur toutes les réponses (HSTS en HTTPS seulement), vraie IP du visiteur derrière un proxy local vérifiée par des tests (`tests/test_proxy.py`), page « Serveur injoignable » de la PWA reformulée ; 264 tests |
 | 2026-11-08 | 1.11 | Mise en ligne, étape 2a : documentation de l'API (`/docs`, `/redoc`, `/openapi.json`) réservée aux utilisateurs connectés ; 270 tests |
+| 2026-11-08 | 1.12 | Mise en ligne, étapes 2b-2c : anti force brute par identifiant toutes adresses confondues (20 échecs / h, `LoginBlock`), journal des connexions (échecs, blocages, refus, réussites) ; journal du serveur enfin configuré (`configure_logging` : messages INFO d'Organizer dans `journalctl -u organizer`) ; 277 tests |

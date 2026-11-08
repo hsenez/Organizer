@@ -146,21 +146,60 @@ class AuthService:
             return result.rowcount or 0
 
 
-class LoginThrottle:
-    """Anti force brute en mémoire : trop d'échecs pour un couple (IP, identifiant) → blocage temporaire."""
+@dataclass(frozen=True)
+class LoginBlock:
+    """Blocage en cours : secondes restantes et portée (``"ip"`` : ce visiteur ; ``"account"`` : compte)."""
 
-    def __init__(self, max_failures: int, window_seconds: float, clock=time.monotonic):
+    seconds: float
+    scope: str
+
+
+class LoginThrottle:
+    """Anti force brute en mémoire, à deux niveaux.
+
+    - Par couple (adresse IP, identifiant) : peu d'échecs tolérés (5 en 10 min par défaut). Une connexion
+      réussie remet ce compteur à zéro.
+    - Par identifiant, **toutes adresses confondues** (20 en 1 h par défaut) : arrête un attaquant qui change
+      d'adresse à chaque essai. Une connexion réussie ne le remet **pas** à zéro (sinon l'attaquant n'aurait
+      qu'à attendre que le propriétaire se connecte). Un compte bloqué refuse seulement les **nouvelles**
+      connexions : les appareils déjà connectés le restent. ``account_max_failures=0`` : niveau désactivé.
+
+    Les compteurs portent sur l'identifiant tapé, qu'il existe ou non : la réponse ne révèle donc pas
+    l'existence d'un compte.
+    """
+
+    MAX_KEYS = 10_000  # au-delà, ménage des entrées expirées (identifiants inventés en masse)
+
+    def __init__(
+        self,
+        max_failures: int,
+        window_seconds: float,
+        account_max_failures: int = 0,
+        account_window_seconds: float = 0.0,
+        clock=time.monotonic,
+    ):
         self.max_failures = max_failures
         self.window = window_seconds
+        self.account_max_failures = account_max_failures
+        self.account_window = account_window_seconds
         self.clock = clock
-        self._failures: dict[tuple[str, str], list[float]] = defaultdict(list)
+        self._failures: dict[tuple[str, ...], list[float]] = defaultdict(list)
         self._lock = threading.Lock()
 
-    def _key(self, ip: str, username: str) -> tuple[str, str]:
-        return ip, username.strip().lower()
+    @staticmethod
+    def _name(username: str) -> str:
+        return username.strip().lower()
 
-    def _recent(self, key: tuple[str, str]) -> list[float]:
-        cutoff = self.clock() - self.window
+    def _keys(self, ip: str, username: str) -> list[tuple[tuple[str, ...], int, float]]:
+        """(clé, échecs tolérés, fenêtre) de chaque niveau actif."""
+        name = self._name(username)
+        levels = [(("ip", ip, name), self.max_failures, self.window)]
+        if self.account_max_failures > 0:
+            levels.append((("account", name), self.account_max_failures, self.account_window))
+        return levels
+
+    def _recent(self, key: tuple[str, ...], window: float) -> list[float]:
+        cutoff = self.clock() - window
         recent = [t for t in self._failures.get(key, []) if t > cutoff]
         if recent:
             self._failures[key] = recent
@@ -168,20 +207,37 @@ class LoginThrottle:
             self._failures.pop(key, None)
         return recent
 
+    def block(self, ip: str, username: str) -> LoginBlock | None:
+        """Blocage en cours pour cette tentative (le plus long des deux niveaux), ou None."""
+        with self._lock:
+            found: LoginBlock | None = None
+            for key, limit, window in self._keys(ip, username):
+                recent = self._recent(key, window)
+                if len(recent) >= limit:
+                    # Libéré quand le plus ancien des ``limit`` derniers échecs sort de la fenêtre.
+                    wait = max(0.0, recent[-limit] + window - self.clock())
+                    if found is None or wait > found.seconds:
+                        found = LoginBlock(wait, key[0])
+            return found
+
     def retry_after(self, ip: str, username: str) -> float:
         """Secondes à attendre avant de pouvoir réessayer (0 = autorisé)."""
-        with self._lock:
-            recent = self._recent(self._key(ip, username))
-            if len(recent) < self.max_failures:
-                return 0.0
-            return max(0.0, recent[0] + self.window - self.clock())
+        found = self.block(ip, username)
+        return found.seconds if found else 0.0
 
     def failure(self, ip: str, username: str) -> None:
         with self._lock:
-            key = self._key(ip, username)
-            self._recent(key)
-            self._failures[key].append(self.clock())
+            if len(self._failures) > self.MAX_KEYS:
+                self._purge()
+            for key, _limit, window in self._keys(ip, username):
+                self._recent(key, window)
+                self._failures[key].append(self.clock())
 
     def success(self, ip: str, username: str) -> None:
+        """Remet à zéro le compteur de ce visiteur (pas celui du compte)."""
         with self._lock:
-            self._failures.pop(self._key(ip, username), None)
+            self._failures.pop(("ip", ip, self._name(username)), None)
+
+    def _purge(self) -> None:
+        for key in list(self._failures):
+            self._recent(key, self.window if key[0] == "ip" else self.account_window)

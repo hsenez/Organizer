@@ -27,7 +27,21 @@ def build(settings: Settings | None = None) -> AppState:
     return state
 
 
+def configure_logging() -> None:
+    """Messages d'Organizer (niveau INFO et plus) sur la sortie d'erreur, que systemd range dans le journal
+    du service (``journalctl -u organizer``). Sans cela, seuls les avertissements apparaîtraient."""
+    logger = logging.getLogger("organizer")
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s : %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
 def main() -> None:
+    configure_logging()
     state = build()
     ui.run(
         host=state.settings.host,

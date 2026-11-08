@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 
 from organizer.config import Settings
 from organizer.core.models import AuthSession, utcnow
-from organizer.core.services.auth import AuthService, LoginThrottle, hash_token
+from organizer.core.services.auth import AuthService, LoginBlock, LoginThrottle, hash_token
 from organizer.server.state import TicketStore
 
 
@@ -103,6 +103,57 @@ def test_throttle_success_resets():
     throttle.success("ip", "alice")
     throttle.failure("ip", "alice")
     assert throttle.retry_after("ip", "alice") == 0
+
+
+def test_throttle_account_level_across_addresses():
+    clock = FakeClock()
+    throttle = LoginThrottle(
+        max_failures=3, window_seconds=600, account_max_failures=5, account_window_seconds=3600, clock=clock
+    )
+    for i in range(5):
+        assert throttle.block(f"10.0.0.{i}", "alice") is None
+        throttle.failure(f"10.0.0.{i}", "alice")
+        clock.now += 60
+    # Toute nouvelle adresse est refusée pour ce compte, jusqu'à ce que le 1er échec sorte de la fenêtre.
+    assert throttle.block("10.9.9.9", "ALICE ") == LoginBlock(3600 - 300, "account")
+    assert throttle.block("10.9.9.9", "bob") is None  # les autres comptes ne sont pas touchés
+    clock.now += 3600 - 300 + 1
+    assert throttle.block("10.9.9.9", "alice") is None
+
+
+def test_throttle_success_does_not_reset_account_level():
+    throttle = LoginThrottle(2, 600, account_max_failures=3, account_window_seconds=3600, clock=FakeClock())
+    throttle.failure("1.1.1.1", "alice")
+    throttle.failure("2.2.2.2", "alice")
+    throttle.success("3.3.3.3", "alice")  # le propriétaire se connecte depuis chez lui
+    throttle.failure("4.4.4.4", "alice")
+    assert throttle.block("5.5.5.5", "alice").scope == "account"
+
+
+def test_throttle_reports_longest_block():
+    clock = FakeClock()
+    throttle = LoginThrottle(2, 600, account_max_failures=2, account_window_seconds=3600, clock=clock)
+    throttle.failure("ip", "alice")
+    throttle.failure("ip", "alice")
+    assert throttle.block("ip", "alice") == LoginBlock(3600, "account")
+
+
+def test_throttle_account_level_disabled_by_default():
+    throttle = LoginThrottle(max_failures=2, window_seconds=600, clock=FakeClock())
+    for i in range(50):
+        throttle.failure(f"10.0.{i}.1", "alice")
+    assert throttle.block("10.9.9.9", "alice") is None
+
+
+def test_throttle_purges_expired_entries():
+    clock = FakeClock()
+    throttle = LoginThrottle(2, 600, account_max_failures=20, account_window_seconds=3600, clock=clock)
+    throttle.MAX_KEYS = 10
+    for i in range(10):
+        throttle.failure("ip", f"inventé{i}")
+    clock.now += 3601
+    throttle.failure("ip", "alice")
+    assert len(throttle._failures) == 2  # seules restent les entrées d'alice (adresse + compte)
 
 
 def test_tickets_single_use_and_expire():

@@ -145,7 +145,8 @@ d'afficher les adresses à ouvrir. Première visite : création du compte admini
 | `--uninstall` | arrête et retire le service (code et données conservés) |
 
 Les options sont retenues (`deploy/server.conf`). Suivi : `systemctl status organizer`,
-`journalctl -u organizer -f`.
+`journalctl -u organizer -f`. Le journal contient aussi chaque tentative de connexion (identifiant, adresse
+IP, échec / blocage / réussite) : `journalctl -u organizer | grep organizer.auth`.
 
 Les données (base `organizer.db` et pièces jointes `uploads/`) sont dans le dossier des données : c'est lui
 qu'il faut sauvegarder.

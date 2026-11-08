@@ -83,5 +83,10 @@ def create_state(settings: Settings | None = None) -> AppState:
         engine=engine,
         auth=AuthService(engine, settings),
         users=UserService(engine),
-        throttle=LoginThrottle(settings.login_max_failures, settings.login_failure_window_minutes * 60),
+        throttle=LoginThrottle(
+            settings.login_max_failures,
+            settings.login_failure_window_minutes * 60,
+            settings.login_account_max_failures,
+            settings.login_account_window_minutes * 60,
+        ),
     )

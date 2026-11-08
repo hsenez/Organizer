@@ -36,9 +36,12 @@ class Settings:
     web_session_hours: int = 24
     # Jeton du client bureau (prolongé à chaque utilisation).
     api_token_days: int = 90
-    # Anti force brute : nombre d'échecs de connexion tolérés par (adresse IP, identifiant) et fenêtre.
+    # Anti force brute : échecs de connexion tolérés par (adresse IP, identifiant) et fenêtre.
     login_max_failures: int = 5
     login_failure_window_minutes: int = 10
+    # Second niveau : échecs tolérés pour un identifiant, toutes adresses IP confondues, et fenêtre.
+    login_account_max_failures: int = 20
+    login_account_window_minutes: int = 60
     # Taille maximale d'une pièce jointe (Mo).
     max_upload_mb: int = 50
     # HTTPS (facultatif) : certificat et clé au format PEM. Nécessaire pour installer l'application sur un

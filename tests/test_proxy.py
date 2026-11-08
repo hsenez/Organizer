@@ -23,7 +23,7 @@ LAN = ("192.168.1.50", 40000)  # une machine du réseau local qui se connecte di
 
 @pytest.fixture
 def state(tmp_path):
-    st = create_state(Settings(data_dir=tmp_path, login_max_failures=3))
+    st = create_state(Settings(data_dir=tmp_path, login_max_failures=3, login_account_max_failures=5))
     yield st
     st.engine.dispose()
 
@@ -70,6 +70,39 @@ def test_failures_are_counted_per_visitor_behind_proxy(uvicorn_app, admin):
     owner = via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"})
     r = owner.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"})
     assert r.status_code == 200
+
+
+def test_account_blocked_after_failures_from_many_addresses(state, uvicorn_app, admin):
+    """Un attaquant qui change d'adresse à chaque essai finit par bloquer les **nouvelles** connexions au
+    compte ; un appareil déjà connecté le reste."""
+    connected = via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"})
+    token = connected.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"}).json()
+    for i in range(5):
+        assert _fail(via(uvicorn_app, PROXY, **{"X-Forwarded-For": f"203.0.113.{i}"})) == 401
+    owner = via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"})
+    r = owner.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"})
+    assert r.status_code == 429 and "sur ce compte" in r.json()["detail"]
+    me = connected.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {token['token']}"})
+    assert me.status_code == 200
+
+
+def test_login_attempts_are_logged(uvicorn_app, admin, caplog):
+    caplog.set_level("INFO", logger="organizer.auth")
+    client = via(uvicorn_app, PROXY, **{"X-Forwarded-For": "203.0.113.9"})
+    for _ in range(4):
+        _fail(client)
+    client.post(f"{API}/auth/login", json={"username": "alice\nfaux", "password": "x"})
+    via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"}).post(
+        f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"}
+    )
+    lines = [r.getMessage() for r in caplog.records if r.name == "organizer.auth"]
+    assert lines[0] == "Échec de connexion : identifiant 'alice' depuis 203.0.113.9"
+    assert any(
+        line.startswith("Blocage pendant 10 min (trop d'échecs depuis cette adresse)") for line in lines
+    )
+    assert any(line.startswith("Connexion refusée (trop d'échecs depuis cette adresse)") for line in lines)
+    assert "Échec de connexion : identifiant 'alice\\nfaux' depuis 203.0.113.9" in lines  # une seule ligne
+    assert lines[-1] == "Connexion de 'alice' depuis 86.245.12.7"
 
 
 def test_forwarded_headers_ignored_from_untrusted_peer(uvicorn_app, admin):

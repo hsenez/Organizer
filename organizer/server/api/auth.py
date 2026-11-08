@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -14,6 +15,8 @@ from organizer.core.services.auth import ResolvedSession
 from organizer.server.api.deps import get_account, get_auth, get_state
 from organizer.server.security import client_ip
 from organizer.server.state import AppState
+
+log = logging.getLogger("organizer.auth")
 
 router = APIRouter(tags=["Authentification"])
 
@@ -90,19 +93,44 @@ def revoke_others(account: AccountService = Depends(get_account)):
 # --- utilitaires partagés avec les pages web -------------------------------------------------------------
 
 
+_BLOCK_REASONS = {
+    "ip": ("trop d'échecs depuis cette adresse", "Trop de tentatives. Réessayez dans {} min."),
+    "account": (
+        "trop d'échecs sur ce compte, toutes adresses confondues",
+        "Trop de tentatives sur ce compte. Réessayez dans {} min.",
+    ),
+}
+
+
 def check_credentials(state: AppState, ip: str, username: str, password: str) -> UserOut:
-    """Vérifie identifiant / mot de passe avec protection anti force brute ; lève HTTPException sinon."""
-    wait = state.throttle.retry_after(ip, username)
-    if wait > 0:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Trop de tentatives. Réessayez dans {math.ceil(wait / 60)} min.",
+    """Vérifie identifiant / mot de passe avec protection anti force brute ; lève HTTPException sinon.
+
+    Chaque tentative est écrite dans le journal du serveur (``journalctl -u organizer``).
+    """
+    shown = username[:80]  # %r ci-dessous : guillemets, retours à la ligne neutralisés
+    block = state.throttle.block(ip, username)
+    if block is not None:
+        minutes = math.ceil(block.seconds / 60)
+        reason, message = _BLOCK_REASONS[block.scope]
+        log.warning(
+            "Connexion refusée (%s) : identifiant %r depuis %s, encore %d min", reason, shown, ip, minutes
         )
+        raise HTTPException(status_code=429, detail=message.format(minutes))
     user = state.users.authenticate(username, password)
     if user is None:
         state.throttle.failure(ip, username)
+        log.warning("Échec de connexion : identifiant %r depuis %s", shown, ip)
+        now_blocked = state.throttle.block(ip, username)
+        if now_blocked is not None:
+            log.warning(
+                "Blocage pendant %d min (%s) : identifiant %r",
+                math.ceil(now_blocked.seconds / 60),
+                _BLOCK_REASONS[now_blocked.scope][0],
+                shown,
+            )
         raise HTTPException(status_code=401, detail="Identifiant ou mot de passe incorrect.")
     state.throttle.success(ip, username)
+    log.info("Connexion de %r depuis %s", user.username, ip)
     return user
 
 

@@ -263,6 +263,11 @@ Référence fonctionnelle complète : **`specifications.md`**.
   même pile qu'en vrai (`TestClient(..., client=("127.0.0.1", port))` simule le proxy).
 - Documentation de l'API refusée aux non connectés dans `AuthMiddleware` (`is_api_docs` lit `docs_url`,
   `redoc_url`, `openapi_url` sur l'application : NiceGUI les fixe dans `ui.run(fastapi_docs=True)`).
+- Anti force brute (`LoginThrottle`) : niveau (IP, identifiant) remis à zéro par une réussite, niveau
+  identifiant seul (toutes IP) **jamais** remis à zéro par une réussite. `check_credentials`
+  (`server/api/auth.py`, partagé par l'API et la page /login) écrit chaque tentative dans le journal.
+- Journal du serveur : `configure_logging()` (dans `main()` seulement, pas dans `build()` : les tests
+  utilisent `caplog`) ; loggers `organizer.*`.
 - Avec `nosniff`, un script servi sous un mauvais type est bloqué : après une mise à jour de NiceGUI ou un
   nouveau fichier statique, vérifier les `Content-Type` des ressources d'une page.
 
