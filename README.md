@@ -123,25 +123,36 @@ options et relance le client. Le client affiche un bandeau quand le serveur a un
 
 ## Déploiement sur le Raspberry Pi
 
-```bash
-# Sur le Pi (Raspberry Pi OS, Python 3.11)
-git clone <dépôt> /home/pi/organizer && cd /home/pi/organizer
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+Sur le Pi (Raspberry Pi OS, Python 3.11), depuis **votre compte** (pas besoin d'un utilisateur `pi`) :
 
-# Service systemd (démarrage automatique) — adapter User / chemins dans le fichier si besoin
-sudo cp deploy/organizer.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now organizer
-systemctl status organizer          # état
-journalctl -u organizer -f          # journaux
+```bash
+sudo apt install git python3-venv                   # si besoin
+git clone <dépôt> ~/organizer && cd ~/organizer
+deploy/install.sh                                    # (sudo deploy/install.sh revient au même)
 ```
 
-Les données (base `organizer.db` et pièces jointes `uploads/`) sont dans `data/` : c'est ce dossier à
-sauvegarder.
+Le script crée l'environnement Python, installe les dépendances, puis **génère et active un service
+systemd** `organizer`, qui tourne sous le compte qui a lancé la commande (même avec `sudo` : jamais en
+root). Il démarre avec le Pi, se relance s'il s'arrête, et le script vérifie que le serveur répond avant
+d'afficher les adresses à ouvrir. Première visite : création du compte administrateur.
 
-**Mise à jour du serveur** : `deploy/update.sh` sur le Pi (`git pull`, dépendances, redémarrage du service,
-vérification de la version). Mettre à jour le serveur **avant** les postes.
+| Option | Effet |
+|---|---|
+| `--port 2603` | port d'écoute |
+| `--data-dir <dossier>` | dossier des données (par défaut `data/` du projet) |
+| `--ssl-cert <pem> --ssl-key <pem>` / `--no-https` | HTTPS (voir plus bas) / retour au HTTP |
+| `--print-service` | affiche le service qui serait installé, sans rien changer |
+| `--uninstall` | arrête et retire le service (code et données conservés) |
+
+Les options sont retenues (`deploy/server.conf`). Suivi : `systemctl status organizer`,
+`journalctl -u organizer -f`.
+
+Les données (base `organizer.db` et pièces jointes `uploads/`) sont dans le dossier des données : c'est lui
+qu'il faut sauvegarder.
+
+**Mise à jour du serveur** : `deploy/update.sh` (`git pull`, puis l'installeur avec les mêmes options :
+dépendances, service régénéré s'il a changé, redémarrage, vérification de la version). Mettre à jour le
+serveur **avant** les postes.
 
 **Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.8.0** ; 1.0.0 une fois validé sur le Pi et les téléphones),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
@@ -162,9 +173,8 @@ Avec [mkcert](https://github.com/FiloSottile/mkcert) (une autorité de certifica
 ```bash
 mkcert -install                                   # sur le PC : crée l'autorité locale
 mkcert -cert-file organizer.pem -key-file organizer-key.pem raspberrypi.local 192.168.1.20
-# copier les deux fichiers sur le Pi (ex. /home/pi/organizer/certs/), puis dans deploy/organizer.service :
-#   Environment=ORGANIZER_SSL_CERT=/home/pi/organizer/certs/organizer.pem
-#   Environment=ORGANIZER_SSL_KEY=/home/pi/organizer/certs/organizer-key.pem
+# copier les deux fichiers sur le Pi (ex. ~/organizer/certs/), puis sur le Pi :
+#   deploy/install.sh --ssl-cert certs/organizer.pem --ssl-key certs/organizer-key.pem
 mkcert -CAROOT                                    # dossier du certificat racine rootCA.pem
 ```
 

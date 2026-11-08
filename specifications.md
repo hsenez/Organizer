@@ -1,7 +1,7 @@
 # 📋 Organizer — Spécifications
 
 > Document de référence fonctionnel et technique. **Mis à jour à chaque changement.**
-> Version : 1.8.1 — 2026-11-08
+> Version : 1.9 — 2026-11-08
 
 ---
 
@@ -103,7 +103,7 @@ organizer/
   assets/                # icônes (SVG source, PNG, ICO, maskable, apple-touch) — scripts/make_icons.sh
 tests/
 scripts/demo.py          # démo terminal + données d'exemple (base data/demo.db)
-deploy/organizer.service # service systemd pour le Raspberry Pi
+deploy/                 # install.sh (serveur : venv + service systemd généré), update.sh, common.sh
 run_server.py
 run_client.py
 ```
@@ -547,7 +547,15 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 
 - **Serveur** : Raspberry Pi 5, Python 3.11, écoute sur `0.0.0.0:2603`. Données dans `data/`
   (`organizer.db`, `uploads/`), chemin configurable par variable d'environnement.
-- **Service systemd** fourni (`deploy/organizer.service`) : démarrage automatique, redémarrage en cas d'erreur.
+- **Installation du serveur** : `deploy/install.sh`, lancé depuis le compte de l'utilisateur (avec ou sans
+  `sudo`). Il vérifie Python ≥ 3.11, crée `.venv`, installe `requirements.txt`, puis **génère** le service
+  systemd `organizer` (`/etc/systemd/system/organizer.service`) : `User=` = celui qui lance la commande —
+  `SUDO_USER` sous sudo, **jamais root** (lancé directement en root, le script refuse) —,
+  `WorkingDirectory` = dossier du projet, `ORGANIZER_DATA_DIR` / `ORGANIZER_PORT` / HTTPS selon les options,
+  `Restart=always`, `WantedBy=multi-user.target` (démarrage avec la machine). Le service est activé et
+  (re)démarré, et le script attend la réponse de `/api/v1/version` avant d'afficher les adresses. Options
+  retenues dans `deploy/server.conf` (non versionné) ; `--print-service`, `--uninstall`. Les étapes
+  utilisateur (venv, pip, git) tournent sous ce compte, seules les étapes système passent par sudo.
 - **Client bureau** : Linux (GTK/WebKit) et Windows (Edge WebView2), lancé par `run_client.py`
   (`--browser` : dans le navigateur au lieu d'une fenêtre). Voir §10.1.
 
@@ -627,8 +635,9 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   client, `git pull --ff-only`, relance l'installeur avec les options retenues (dépendances, lanceur,
   icônes, raccourcis), relance le client en arrière-plan s'il tournait. Un simple `git pull` suffit pour du
   code seul, à condition de redémarrer le client (⏻ Quitter puis relancer).
-- **Mettre à jour le serveur** (Pi) : `deploy/update.sh` — `git pull`, `requirements.txt`, redémarrage du
-  service systemd, vérification de `/api/v1/version`. Les données (`data/`) ne sont pas touchées ; les
+- **Mettre à jour le serveur** (Pi) : `deploy/update.sh` — `git pull` (sous le compte de l'utilisateur),
+  puis `deploy/install.sh --reuse` : dépendances, service régénéré et `daemon-reload` s'il a changé,
+  redémarrage, vérification de `/api/v1/version`. Les données (`data/`) ne sont pas touchées ; les
   nouvelles tables sont créées au démarrage (une nouvelle colonne demanderait une migration).
 - Ordre conseillé : **le serveur d'abord**, puis les postes (le bandeau les y invite).
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
@@ -676,3 +685,4 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 | 2026-11-08 | 1.7 | **Versions** : `organizer.__version__` = 0.7.0 et `API_VERSION` = 1, route publique `GET /api/v1/version`, bandeau « mise à jour disponible » sur le client bureau ; scripts de mise à jour `install/linux/update.sh`, `install/windows/update.bat`, `deploy/update.sh` (Pi) ; options d'installation retenues (`--reuse`) ; 233 tests + mise à jour complète simulée |
 | 2026-11-08 | 1.8 | **Étape 8** : temps réel (bus `core/events.py`, pages web abonnées, flux SSE `/api/v1/events` pour le client bureau, origine des modifications, attente pendant un glisser), PWA (manifeste, icônes maskable / apple-touch, service worker, raccourcis), HTTPS facultatif (`ORGANIZER_SSL_*`, `ORGANIZER_CA_FILE`), favicon = icône Post-it ; finitions : « 🌳 Rattacher à… » dans le menu des cartes, ↑ ↓ dans Ctrl+K, défilement automatique pendant un glisser, décalage de rappel par défaut lu au moment de créer, compteur « Filtres (n) » relatif aux filtres par défaut de la vue ; 246 tests + vérifications dans Firefox (temps réel entre onglets et client bureau, défilement) |
 | 2026-11-08 | 1.8.1 | **Version 0.8.0** du logiciel. Correction : **Ctrl+Alt+O** n'ouvrait pas Organizer sous KDE (raccourci posé sans le drapeau « présent », ignoré au clavier) ; l'installeur utilise `setShortcutKeys` et vérifie que la touche est bien attribuée. Relancer `install/linux/install.sh` (ou `--reuse`) sur les postes déjà installés |
+| 2026-11-08 | 1.9 | **Installation du serveur** : `deploy/install.sh` (venv, dépendances, service systemd généré pour l'utilisateur qui lance la commande — même sous sudo, jamais root —, `Restart=always`, démarrage au boot, vérification de la réponse, options retenues, `--print-service`, `--uninstall`) ; `deploy/update.sh` s'appuie dessus (`--reuse`) ; `deploy/organizer.service` (fixé sur l'utilisateur `pi`) supprimé ; 251 tests + installation, mise à jour et désinstallation déroulées dans un bac à sable |

@@ -9,3 +9,5 @@ data/
 *.sqlite3
 .env
 .nicegui/
+# Options du serveur retenues par deploy/install.sh
+deploy/server.conf

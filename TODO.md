@@ -68,7 +68,9 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   fournit le chemin complet : événement `drop` de NiceGUI natif) — rejoint le sujet des liens de fichiers.
 - 🔔 Si l'envoi d'une notification échoue (D-Bus absent…), la tâche est quand même notée « notifiée » pour
   la journée (desktop-notifier ne signale pas l'échec).
-- 🔄 Scripts de mise à jour Windows (`update.ps1`) jamais exécutés ; `deploy/update.sh` à essayer sur le Pi.
+- 🔄 Scripts de mise à jour Windows (`update.ps1`) jamais exécutés.
+- 🍓 `deploy/install.sh` et `deploy/update.sh` déroulés dans un bac à sable (faux sudo / systemctl) mais
+  jamais sur un vrai Pi.
 - 🧺 Client bureau : icône dans la zone de notification (« tray ») avec Ouvrir / Nouvelle tâche / Quitter —
   demanderait une dépendance (pystray + AppIndicator sous Linux).
 - ⌨️ Raccourcis globaux GNOME (gsettings) écrits mais jamais essayés (poste de dev sous KDE).

@@ -261,6 +261,13 @@ Référence fonctionnelle complète : **`specifications.md`**.
   incompatible) — préférer des changements compatibles (champs ajoutés avec valeur par défaut).
 - Comparaison et messages : `organizer/versioning.py` ; route publique `GET /api/v1/version` ; bandeau du
   client : `DesktopClient.version_check` → `UiContext.banner` → `app_frame`.
+- **Serveur** : `deploy/install.sh` (+ `deploy/common.sh` : `org_target_user` = `SUDO_USER` sous sudo, sinon
+  `id -un`, refus en root direct ; `org_as_user` / `org_as_root`). Le service systemd est **généré**
+  (`--print-service` pour le voir), plus de fichier statique. Tests : `tests/test_deploy.py`
+  (`ORG_EUID=0` simule sudo, `ORG_UNIT_PATH` déplace le fichier de service). Essai complet sans droits
+  administrateur : faux `sudo` / `systemctl` en tête du `PATH` (le faux `systemctl restart` lance le serveur
+  d'après le fichier généré). ⚠️ Pour arrêter un serveur de test, viser le **programme** python
+  (`ps -eo pid,args | awk '$2 ~ /python/ && /motif/'`), jamais `pkill -f motif` (tue son propre shell).
 - Scripts : `install/linux/update.sh`, `install/windows/update.ps1` (+ `.bat`), `deploy/update.sh` (Pi). Les
   scripts bash sont enveloppés dans une fonction `main` (git pull peut les modifier pendant leur exécution).
   L'installeur retient ses options (`install.json`, `--reuse`).
@@ -295,7 +302,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 246 tests au total.
+- 251 tests au total.
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
