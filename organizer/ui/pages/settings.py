@@ -22,6 +22,7 @@ from organizer.core.schemas import (
     TagPatch,
     UserCreateIn,
 )
+from organizer.core.services.users import MIN_PASSWORD_LENGTH
 from organizer.ui import format as fmt
 from organizer.ui.context import UiContext
 from organizer.ui.layout import THEMES, app_frame, empty_state
@@ -142,7 +143,11 @@ def _profile(ctx: UiContext) -> None:
             ui.input("Mot de passe actuel", password=True).props("outlined dense").classes("w-full max-w-md")
         )
         new = (
-            ui.input("Nouveau mot de passe", password=True, password_toggle_button=True)
+            ui.input(
+                f"Nouveau mot de passe ({MIN_PASSWORD_LENGTH} caractères min.)",
+                password=True,
+                password_toggle_button=True,
+            )
             .props("outlined dense")
             .classes("w-full max-w-md")
         )
@@ -158,8 +163,13 @@ def _profile(ctx: UiContext) -> None:
             if _try(lambda: ctx.ds.account.change_password(change), "🔑 Mot de passe changé"):
                 for field in (old, new, confirm):
                     field.set_value("")
+                banner = ctx.banner_rows.pop("password-banner", None)  # « mot de passe trop court »
+                if banner is not None:
+                    banner.delete()
 
-        ui.button("Changer le mot de passe", on_click=change).props("unelevated no-caps")
+        ui.button("Changer le mot de passe", on_click=change).props("unelevated no-caps").mark(
+            "change-password"
+        )
 
 
 def _appearance(ctx: UiContext) -> None:
@@ -584,7 +594,11 @@ def _new_user_dialog(ctx: UiContext, on_saved) -> None:
         display = ui.input("Nom affiché").props("outlined dense autofocus").classes("w-full")
         username = ui.input("Identifiant de connexion").props("outlined dense").classes("w-full")
         password = (
-            ui.input("Mot de passe (6 caractères min.)", password=True, password_toggle_button=True)
+            ui.input(
+                f"Mot de passe ({MIN_PASSWORD_LENGTH} caractères min.)",
+                password=True,
+                password_toggle_button=True,
+            )
             .props("outlined dense")
             .classes("w-full")
         )
@@ -616,7 +630,11 @@ def _password_dialog(ctx: UiContext, user) -> None:
         ui.label(f"🔑 Nouveau mot de passe pour {user.display_name}").classes("text-lg font-semibold")
         ui.label("La personne sera déconnectée de tous ses appareils.").classes("text-sm text-gray-500")
         password = (
-            ui.input("Nouveau mot de passe", password=True, password_toggle_button=True)
+            ui.input(
+                f"Nouveau mot de passe ({MIN_PASSWORD_LENGTH} caractères min.)",
+                password=True,
+                password_toggle_button=True,
+            )
             .props("outlined dense autofocus")
             .classes("w-full")
         )

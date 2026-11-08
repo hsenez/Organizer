@@ -96,8 +96,8 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   le serveur reste sur `0.0.0.0` pour l'instant (accès local direct conservé). Voir `specifications.md` §10.4.
 - Plan :
   1. ✅ Derrière un proxy : cookie `Secure` selon le visiteur, en-têtes de sécurité (HSTS…), IP réelle testée.
-  2. Durcissement : `/docs` réservé aux connectés ; limite d'échecs de connexion par identifiant (toutes IP
-     confondues, ex. 20 / h) ; échecs écrits dans le journal ; option `--host` de `deploy/install.sh`.
+  2. ✅ Durcissement : `/docs` réservé aux connectés, limite d'échecs par identifiant (20 / h toutes IP),
+     journal des connexions, option `--host` de `deploy/install.sh`, mots de passe de 12 caractères.
   3. Sauvegarde : `organizer/backup.py` (image cohérente par l'API de sauvegarde SQLite, `.tar` **non
      compressé** trié = base + `uploads/` + `manifest.json`), jeton de sauvegarde (table `api_key`,
      illimité, révocable, réservé à l'export), `GET /api/v1/admin/backup`, onglet 🗄️ Données (admin) dans

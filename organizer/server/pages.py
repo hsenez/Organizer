@@ -14,6 +14,7 @@ from organizer import FAVICON
 from organizer.core.datasource import LocalDataSource
 from organizer.core.errors import OrganizerError
 from organizer.core.services.account import AccountService
+from organizer.core.services.users import MIN_PASSWORD_LENGTH
 from organizer.server.api.auth import check_credentials
 from organizer.server.security import client_ip, describe_user_agent, request_auth
 from organizer.server.state import AppState
@@ -93,7 +94,11 @@ def setup_page(request: Request):
             ui.input("👤 Identifiant de connexion").props("outlined autocomplete=username").classes("w-full")
         )
         password = (
-            ui.input("🔑 Mot de passe", password=True, password_toggle_button=True)
+            ui.input(
+                f"🔑 Mot de passe ({MIN_PASSWORD_LENGTH} caractères min.)",
+                password=True,
+                password_toggle_button=True,
+            )
             .props("outlined autocomplete=new-password")
             .classes("w-full")
         )

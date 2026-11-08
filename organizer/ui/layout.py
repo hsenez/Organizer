@@ -11,10 +11,11 @@ from dataclasses import dataclass
 
 from nicegui import events, ui
 
+from organizer.core.services.users import MIN_PASSWORD_LENGTH, WEAK_PASSWORD_PREF
 from organizer.ui.components.dnd import DragDrop
 from organizer.ui.components.search_dialog import SearchDialog
 from organizer.ui.components.task_editor import TaskEditor
-from organizer.ui.context import UiContext
+from organizer.ui.context import Banner, UiContext
 from organizer.ui.theme import apply_theme
 
 # Thème choisi dans les réglages → valeur de ui.dark_mode (None = suivre le système).
@@ -154,19 +155,43 @@ def app_frame(
     else:
         classes = "w-full max-w-6xl mx-auto p-3 sm:p-6 gap-5 pb-24"
     with ui.column().classes(classes) as content:
-        if ctx.banner is not None:
-            text, blocking = ctx.banner
+        for banner in page_banners(ctx):
             with (
                 ui.row()
                 .classes("w-full items-center gap-3 rounded-xl px-4 py-2 no-wrap")
-                .style(f"background: {'rgba(250, 82, 82, .12)' if blocking else 'rgba(92, 124, 250, .12)'}")
-                .mark("version-banner")
+                .style(f"background: {_BANNER_COLORS.get(banner.tone, _BANNER_COLORS['info'])}")
+                .mark(banner.mark) as row
             ):
-                ui.label(text).classes("text-sm flex-1")
-                ui.button("Détails", on_click=lambda: ui.navigate.to("/settings?tab=connection")).props(
+                ctx.banner_rows[banner.mark] = row
+                ui.label(banner.text).classes("text-sm flex-1")
+                ui.button(banner.action, on_click=lambda b=banner: ui.navigate.to(b.target)).props(
                     "flat dense no-caps"
                 )
         yield content
+
+
+_BANNER_COLORS = {
+    "info": "rgba(92, 124, 250, .12)",
+    "warning": "rgba(253, 126, 20, .16)",
+    "error": "rgba(250, 82, 82, .12)",
+}
+
+
+def page_banners(ctx: UiContext) -> list[Banner]:
+    """Bandeaux de la page : ceux du contexte (bureau : version) + mot de passe trop court."""
+    banners = list(ctx.banners)
+    if ctx.ds.account.get_pref(WEAK_PASSWORD_PREF):
+        banners.append(
+            Banner(
+                f"⚠️ Votre mot de passe est court pour un accès depuis Internet : choisissez-en un d'au moins "
+                f"{MIN_PASSWORD_LENGTH} caractères.",
+                tone="warning",
+                action="Changer",
+                target="/settings?tab=profile",
+                mark="password-banner",
+            )
+        )
+    return banners
 
 
 def card_grid() -> ui.element:

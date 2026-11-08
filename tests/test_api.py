@@ -32,7 +32,7 @@ def bearer(token: str) -> dict[str, str]:
 @pytest.fixture
 def admin_token(client):
     r = client.post(
-        f"{API}/setup", json={"username": "alice", "password": "motdepasse", "display_name": "Alice"}
+        f"{API}/setup", json={"username": "alice", "password": "motdepasse-12", "display_name": "Alice"}
     )
     assert r.status_code == 201
     return r.json()["token"]
@@ -41,10 +41,10 @@ def admin_token(client):
 @pytest.fixture
 def bob_token(client, admin_token):
     r = client.post(
-        f"{API}/users", json={"username": "bob", "password": "motdepasse"}, headers=bearer(admin_token)
+        f"{API}/users", json={"username": "bob", "password": "motdepasse-12"}, headers=bearer(admin_token)
     )
     assert r.status_code == 201
-    return client.post(f"{API}/auth/login", json={"username": "bob", "password": "motdepasse"}).json()[
+    return client.post(f"{API}/auth/login", json={"username": "bob", "password": "motdepasse-12"}).json()[
         "token"
     ]
 
@@ -54,16 +54,16 @@ def bob_token(client, admin_token):
 
 def test_setup_only_once(client):
     assert client.get(f"{API}/setup").json() == {"needs_setup": True}
-    r = client.post(f"{API}/setup", json={"username": "alice", "password": "motdepasse"})
+    r = client.post(f"{API}/setup", json={"username": "alice", "password": "motdepasse-12"})
     assert r.status_code == 201 and r.json()["user"]["is_admin"]
     assert client.get(f"{API}/setup").json() == {"needs_setup": False}
-    again = client.post(f"{API}/setup", json={"username": "pirate", "password": "motdepasse"})
+    again = client.post(f"{API}/setup", json={"username": "pirate", "password": "motdepasse-12"})
     assert again.status_code == 409
 
 
 def test_login_me_logout(client, admin_token):
     r = client.post(
-        f"{API}/auth/login", json={"username": "ALICE", "password": "motdepasse", "device_name": "PC"}
+        f"{API}/auth/login", json={"username": "ALICE", "password": "motdepasse-12", "device_name": "PC"}
     )
     assert r.status_code == 200
     token = r.json()["token"]
@@ -82,13 +82,13 @@ def test_bad_password_and_throttling(client, admin_token):
     for _ in range(3):
         r = client.post(f"{API}/auth/login", json={"username": "alice", "password": "mauvais"})
         assert r.status_code == 401
-    blocked = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"})
+    blocked = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"})
     assert blocked.status_code == 429
     assert "Réessayez" in blocked.json()["detail"]
 
 
 def test_sessions_list_and_revoke(client, admin_token):
-    other = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"}).json()
+    other = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"}).json()
     sessions = client.get(f"{API}/auth/sessions", headers=bearer(admin_token)).json()
     assert len(sessions) == 2
     assert sum(s["current"] for s in sessions) == 1
@@ -98,12 +98,12 @@ def test_sessions_list_and_revoke(client, admin_token):
 
 
 def test_password_change_revokes_other_sessions(client, admin_token):
-    other = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"}).json()[
+    other = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"}).json()[
         "token"
     ]
     r = client.post(
         f"{API}/users/me/password",
-        json={"old_password": "motdepasse", "new_password": "nouveau-mdp"},
+        json={"old_password": "motdepasse-12", "new_password": "nouveau-mdp-12"},
         headers=bearer(admin_token),
     )
     assert r.status_code == 204
@@ -111,7 +111,7 @@ def test_password_change_revokes_other_sessions(client, admin_token):
     assert client.get(f"{API}/auth/me", headers=bearer(other)).status_code == 401
     wrong = client.post(
         f"{API}/users/me/password",
-        json={"old_password": "faux", "new_password": "encore-un"},
+        json={"old_password": "faux", "new_password": "encore-un-autre"},
         headers=bearer(admin_token),
     )
     assert wrong.status_code == 422
@@ -121,7 +121,7 @@ def test_admin_rights(client, admin_token, bob_token):
     assert client.get(f"{API}/users/all", headers=bearer(bob_token)).status_code == 403
     assert (
         client.post(
-            f"{API}/users", json={"username": "c", "password": "motdepasse"}, headers=bearer(bob_token)
+            f"{API}/users", json={"username": "c", "password": "motdepasse-12"}, headers=bearer(bob_token)
         ).status_code
         == 403
     )
@@ -133,7 +133,7 @@ def test_admin_rights(client, admin_token, bob_token):
     assert r.status_code == 200 and not r.json()["is_active"]
     assert client.get(f"{API}/auth/me", headers=bearer(bob_token)).status_code == 401
     assert (
-        client.post(f"{API}/auth/login", json={"username": "bob", "password": "motdepasse"}).status_code
+        client.post(f"{API}/auth/login", json={"username": "bob", "password": "motdepasse-12"}).status_code
         == 401
     )
 

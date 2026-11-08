@@ -38,7 +38,7 @@ def uvicorn_app(state):
 @pytest.fixture
 def admin(state):
     client = TestClient(create_api_app(state))
-    r = client.post(f"{API}/setup", json={"username": "alice", "password": "motdepasse"})
+    r = client.post(f"{API}/setup", json={"username": "alice", "password": "motdepasse-12"})
     return r.json()["user"]
 
 
@@ -68,7 +68,7 @@ def test_failures_are_counted_per_visitor_behind_proxy(uvicorn_app, admin):
     assert [_fail(attacker) for _ in range(4)] == [401, 401, 401, 429]
     # Un autre visiteur passant par le même proxy n'est pas bloqué : le compte reste utilisable.
     owner = via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"})
-    r = owner.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"})
+    r = owner.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"})
     assert r.status_code == 200
 
 
@@ -76,11 +76,13 @@ def test_account_blocked_after_failures_from_many_addresses(state, uvicorn_app, 
     """Un attaquant qui change d'adresse à chaque essai finit par bloquer les **nouvelles** connexions au
     compte ; un appareil déjà connecté le reste."""
     connected = via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"})
-    token = connected.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"}).json()
+    token = connected.post(
+        f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"}
+    ).json()
     for i in range(5):
         assert _fail(via(uvicorn_app, PROXY, **{"X-Forwarded-For": f"203.0.113.{i}"})) == 401
     owner = via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"})
-    r = owner.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"})
+    r = owner.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"})
     assert r.status_code == 429 and "sur ce compte" in r.json()["detail"]
     me = connected.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {token['token']}"})
     assert me.status_code == 200
@@ -93,7 +95,7 @@ def test_login_attempts_are_logged(uvicorn_app, admin, caplog):
         _fail(client)
     client.post(f"{API}/auth/login", json={"username": "alice\nfaux", "password": "x"})
     via(uvicorn_app, PROXY, **{"X-Forwarded-For": "86.245.12.7"}).post(
-        f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"}
+        f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"}
     )
     lines = [r.getMessage() for r in caplog.records if r.name == "organizer.auth"]
     assert lines[0] == "Échec de connexion : identifiant 'alice' depuis 203.0.113.9"
@@ -167,7 +169,7 @@ def test_hsts_only_for_https_visitors(uvicorn_app):
 def test_response_headers_not_overridden(state, admin):
     """Une réponse qui fixe déjà un en-tête (ex. pièces jointes) garde le sien, sans doublon."""
     client = TestClient(create_api_app(state))
-    token = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse"}).json()
+    token = client.post(f"{API}/auth/login", json={"username": "alice", "password": "motdepasse-12"}).json()
     h = {"Authorization": f"Bearer {token['token']}"}
     task = client.post(f"{API}/tasks", json={"title": "Facture"}, headers=h).json()
     up = client.post(

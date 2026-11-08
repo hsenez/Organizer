@@ -26,7 +26,7 @@ def _age_session(
 
 
 def test_token_is_stored_hashed(engine, users, tmp_path):
-    user = users.create_user("alice", "motdepasse")
+    user = users.create_user("alice", "motdepasse-12")
     auth = AuthService(engine, Settings(data_dir=tmp_path))
     token, _ = auth.create_session(user.id)
     with Session(engine) as s:
@@ -35,7 +35,7 @@ def test_token_is_stored_hashed(engine, users, tmp_path):
 
 
 def test_sliding_expiration(engine, users, tmp_path):
-    user = users.create_user("alice", "motdepasse")
+    user = users.create_user("alice", "motdepasse-12")
     auth = AuthService(engine, Settings(data_dir=tmp_path, remember_me_days=30))
     token, created = auth.create_session(user.id, persistent=True)
     first = auth.resolve(token)
@@ -47,7 +47,7 @@ def test_sliding_expiration(engine, users, tmp_path):
 
 
 def test_expired_and_disabled(engine, users, tmp_path):
-    user = users.create_user("alice", "motdepasse")
+    user = users.create_user("alice", "motdepasse-12")
     auth = AuthService(engine, Settings(data_dir=tmp_path))
     token, _ = auth.create_session(user.id)
     _age_session(engine, token, expires_in=timedelta(seconds=-1))
@@ -57,7 +57,7 @@ def test_expired_and_disabled(engine, users, tmp_path):
 
 
 def test_web_session_durations(engine, users, tmp_path):
-    user = users.create_user("alice", "motdepasse")
+    user = users.create_user("alice", "motdepasse-12")
     auth = AuthService(engine, Settings(data_dir=tmp_path, web_session_hours=24, api_token_days=90))
     _, web = auth.create_session(user.id, kind="web", persistent=False)
     _, api = auth.create_session(user.id, kind="api")
@@ -66,8 +66,8 @@ def test_web_session_durations(engine, users, tmp_path):
 
 
 def test_revoke_only_own_sessions(engine, users, tmp_path):
-    alice = users.create_user("alice", "motdepasse")
-    bob = users.create_user("bob", "motdepasse", by=users.actor_for(alice.id))
+    alice = users.create_user("alice", "motdepasse-12")
+    bob = users.create_user("bob", "motdepasse-12", by=users.actor_for(alice.id))
     auth = AuthService(engine, Settings(data_dir=tmp_path))
     _, bob_session = auth.create_session(bob.id)
     try:

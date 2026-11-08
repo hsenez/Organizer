@@ -140,8 +140,8 @@ def build() -> tuple[Services, Services]:
     init_db(engine)
     settings = Settings(undo_merge_window_seconds=0)
     users = UserService(engine)
-    a = users.create_user("alice", "motdepasse", "Alice")
-    b = users.create_user("bob", "motdepasse", "Bob", by=users.actor_for(a.id))
+    a = users.create_user("alice", "motdepasse-12", "Alice")
+    b = users.create_user("bob", "motdepasse-12", "Bob", by=users.actor_for(a.id))
     return Services.for_user(engine, a.id, settings=settings), Services.for_user(
         engine, b.id, settings=settings
     )

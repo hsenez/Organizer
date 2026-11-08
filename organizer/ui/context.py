@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date
 from typing import Any, TypeVar
 
@@ -12,6 +13,17 @@ from organizer.core.datasource import DataSource
 from organizer.core.errors import OrganizerError, UndoConflict
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class Banner:
+    """Avertissement affiché en haut des pages, avec un bouton qui mène où agir."""
+
+    text: str
+    tone: str = "info"  # "info" (bleu), "warning" (orange), "error" (rouge)
+    action: str = "Détails"
+    target: str = "/settings"
+    mark: str = "banner"  # marqueur pour les tests
 
 
 class UiContext:
@@ -30,8 +42,10 @@ class UiContext:
         self.extra_settings: dict[str, tuple[str, Callable[[UiContext], None]]] = {}
         # Client bureau : arrêter vraiment l'application (fermer la fenêtre ne fait que la cacher).
         self.quit: Callable[[], None] | None = None
-        # Avertissement en haut des pages (bureau : mise à jour disponible) : (texte, bloquant).
-        self.banner: tuple[str, bool] | None = None
+        # Avertissements en haut des pages (bureau : mise à jour disponible). Le cadre y ajoute ceux qui
+        # valent partout (mot de passe trop court).
+        self.banners: list[Banner] = []
+        self.banner_rows: dict[str, Any] = {}  # bandeaux affichés, par marqueur (pour en retirer un)
         # Temps réel (``ui/live.py``) : rafraîchissement quand les données changent ailleurs.
         self.live: Any = None
         self.dragging = False  # glisser-déposer en cours : le rafraîchissement attend la fin du geste

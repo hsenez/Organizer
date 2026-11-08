@@ -59,6 +59,8 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 
 - **Premier lancement** : ouvrir `http://<ip>:2603` → page de création du compte administrateur.
 - Ensuite : page de connexion, avec « 🍪 Se souvenir de moi » (30 jours).
+- **Mots de passe** : 12 caractères minimum. Un compte créé avant cette règle avec un mot de passe plus court
+  fonctionne toujours, mais un bandeau orange invite à le changer (Réglages → Profil).
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs` (une fois connecté).
 
 **🖥️ Client bureau** : au premier lancement, indiquer l'adresse du Pi (`raspberrypi.local` ou son IP : le

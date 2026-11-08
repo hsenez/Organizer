@@ -50,11 +50,11 @@ def users(engine) -> UserService:
 
 @pytest.fixture
 def alice(engine, users, settings, clock) -> Services:
-    user = users.create_user("alice", "motdepasse", "Alice")
+    user = users.create_user("alice", "motdepasse-12", "Alice")
     return Services.for_user(engine, user.id, settings=settings, today=clock)
 
 
 @pytest.fixture
 def bob(engine, users, alice, settings, clock) -> Services:
-    user = users.create_user("bob", "motdepasse", "Bob", by=alice.actor)
+    user = users.create_user("bob", "motdepasse-12", "Bob", by=alice.actor)
     return Services.for_user(engine, user.id, settings=settings, today=clock)

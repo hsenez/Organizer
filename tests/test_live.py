@@ -33,7 +33,7 @@ def received(bus):
 
 
 def test_services_publish_changes(engine, users, settings, bus, received):
-    user = users.create_user("alice", "motdepasse", "Alice")
+    user = users.create_user("alice", "motdepasse-12", "Alice")
     sv = Services.for_user(engine, user.id, settings=settings, events=bus, origin="page-1")
     task = sv.tasks.create(TaskCreate(title="T"))
     assert received == [ChangeEvent(("task",), user.id, "page-1")]
@@ -63,7 +63,9 @@ def test_unsubscribe_and_failing_subscriber(bus):
 def test_api_passes_origin(tmp_path):
     state = create_state(Settings(data_dir=tmp_path))
     http = TestClient(create_api_app(state))
-    token = http.post("/api/v1/setup", json={"username": "alice", "password": "motdepasse"}).json()["token"]
+    token = http.post("/api/v1/setup", json={"username": "alice", "password": "motdepasse-12"}).json()[
+        "token"
+    ]
     events: list[ChangeEvent] = []
     state.events.subscribe(events.append)
     headers = {"Authorization": f"Bearer {token}", ORIGIN_HEADER: "fenetre-42"}
@@ -127,7 +129,7 @@ def _wait(predicate, timeout=5.0):
 
 def test_desktop_listener_receives_changes(live_server):
     state, url = live_server
-    alice = state.users.create_user("alice", "motdepasse", "Alice")
+    alice = state.users.create_user("alice", "motdepasse-12", "Alice")
     token, _ = state.auth.create_session(alice.id, kind="api", label="test")
     api = ApiClient(url, token)
     got: list[ChangeEvent | None] = []

@@ -21,12 +21,26 @@ from organizer.core.services.base import Actor
 
 _hasher = PasswordHasher()
 
-MIN_PASSWORD_LENGTH = 6
+# Minimum pour tout nouveau mot de passe (accès possible depuis Internet). Un compte dont le mot de passe
+# date d'avant (plus court) fonctionne toujours, mais un bandeau invite à le changer (WEAK_PASSWORD_PREF).
+MIN_PASSWORD_LENGTH = 12
+# Préférence posée à la connexion quand le mot de passe tapé est plus court que le minimum (le serveur ne
+# peut le mesurer qu'à ce moment-là : la base ne garde que son empreinte) ; retirée quand il change.
+WEAK_PASSWORD_PREF = "security:weak_password"
 
 
 def _check_password(password: str) -> None:
     if len(password) < MIN_PASSWORD_LENGTH:
         raise InvalidOperation(f"Le mot de passe doit faire au moins {MIN_PASSWORD_LENGTH} caractères.")
+
+
+def _mark_weak_password(s: Session, user_id: int, weak: bool) -> None:
+    """Pose ou retire :data:`WEAK_PASSWORD_PREF` (sans écriture si rien ne change)."""
+    row = s.get(UserPref, (user_id, WEAK_PASSWORD_PREF))
+    if weak and row is None:
+        s.add(UserPref(user_id=user_id, key=WEAK_PASSWORD_PREF, value="true"))
+    elif not weak and row is not None:
+        s.delete(row)
 
 
 class UserService:
@@ -81,8 +95,9 @@ class UserService:
             if _hasher.check_needs_rehash(user.password_hash):
                 user.password_hash = _hasher.hash(password)
                 s.add(user)
-                s.commit()
-                s.refresh(user)
+            _mark_weak_password(s, user.id, len(password) < MIN_PASSWORD_LENGTH)
+            s.commit()
+            s.refresh(user)
             return UserOut.model_validate(user)
 
     def get(self, user_id: int) -> UserOut:
@@ -146,6 +161,7 @@ class UserService:
                 raise InvalidOperation("L'ancien mot de passe est incorrect.") from None
             user.password_hash = _hasher.hash(change.new_password)
             s.add(user)
+            _mark_weak_password(s, user.id, False)
             s.commit()
 
     def admin_update(self, by: Actor, user_id: int, patch: AdminUserPatch) -> UserOut:
@@ -168,6 +184,7 @@ class UserService:
             if fields.get("new_password"):
                 _check_password(fields["new_password"])
                 user.password_hash = _hasher.hash(fields["new_password"])
+                _mark_weak_password(s, user.id, False)
             s.add(user)
             s.commit()
             s.refresh(user)

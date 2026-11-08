@@ -40,10 +40,10 @@ def open_menu(user: User, marker: str) -> None:
 async def login(user: User, name: str = "alice"):
     """Crée le compte (le premier est admin), se connecte, renvoie les services de l'utilisateur."""
     await user.open("/login")  # initialise l'application
-    account = state().users.create_user(name, "motdepasse", name.capitalize())
+    account = state().users.create_user(name, "motdepasse-12", name.capitalize())
     await user.open("/login")
     fill(user, "Identifiant", name)
-    fill(user, "Mot de passe", "motdepasse")
+    fill(user, "Mot de passe", "motdepasse-12")
     user.find("Se connecter").click()
     await user.should_see(f"Bonjour {name.capitalize()}")
     return state().services_for(account)
@@ -57,8 +57,8 @@ async def test_first_visit_goes_to_setup_and_creates_admin(user: User):
     await user.should_see("Créez le compte administrateur")
     fill(user, "Votre nom", "Alice")
     fill(user, "Identifiant de connexion", "alice")
-    fill(user, "🔑 Mot de passe", "motdepasse")
-    fill(user, "Confirmer le mot de passe", "motdepasse")
+    fill(user, "🔑 Mot de passe", "motdepasse-12")
+    fill(user, "Confirmer le mot de passe", "motdepasse-12")
     user.find("🚀 Créer mon compte").click()
     await user.should_see("Bonjour Alice")
     assert state().users.get(1).is_admin
@@ -67,7 +67,7 @@ async def test_first_visit_goes_to_setup_and_creates_admin(user: User):
 async def test_setup_rejects_mismatched_passwords(user: User):
     await user.open("/setup")
     fill(user, "Identifiant de connexion", "alice")
-    fill(user, "🔑 Mot de passe", "motdepasse")
+    fill(user, "🔑 Mot de passe", "motdepasse-12")
     fill(user, "Confirmer le mot de passe", "autre-chose")
     user.find("🚀 Créer mon compte").click()
     await user.should_see("ne correspondent pas")
@@ -76,14 +76,14 @@ async def test_setup_rejects_mismatched_passwords(user: User):
 
 async def test_login_wrong_then_right_password(user: User):
     await user.open("/login")
-    state().users.create_user("alice", "motdepasse", "Alice")
+    state().users.create_user("alice", "motdepasse-12", "Alice")
     await user.open("/tasks")
     await user.should_see("Connectez-vous")
     fill(user, "Identifiant", "alice")
     fill(user, "Mot de passe", "mauvais")
     user.find("Se connecter").click()
     await user.should_see("Identifiant ou mot de passe incorrect")
-    fill(user, "Mot de passe", "motdepasse")
+    fill(user, "Mot de passe", "motdepasse-12")
     user.find("Se connecter").click()
     await user.should_see(marker="list-sort")  # redirigé vers la page demandée au départ (/tasks)
 
@@ -95,6 +95,40 @@ async def test_logout(user: User):
     await user.should_see("Connectez-vous")
     await user.open("/")
     await user.should_see("Connectez-vous")  # le cookie a bien été révoqué
+
+
+async def test_short_password_banner_until_changed(user: User, monkeypatch):
+    """Un compte dont le mot de passe date d'avant le minimum de 12 caractères : connexion possible, bandeau
+    jusqu'au changement."""
+    from organizer.core.services import users as users_module
+
+    await user.open("/login")
+    monkeypatch.setattr(users_module, "MIN_PASSWORD_LENGTH", 6)
+    state().users.create_user("alice", "ancien", "Alice")
+    monkeypatch.undo()
+    await user.open("/login")
+    fill(user, "Identifiant", "alice")
+    fill(user, "Mot de passe", "ancien")
+    user.find("Se connecter").click()
+    await user.should_see("Bonjour Alice")
+    await user.should_see(marker="password-banner")
+    await user.should_see("au moins 12 caractères")
+
+    await user.open("/settings?tab=profile")
+    fill(user, "Mot de passe actuel", "ancien")
+    fill(user, "Nouveau mot de passe", "un-mot-de-passe-long")
+    fill(user, "Confirmer", "un-mot-de-passe-long")
+    user.find(marker="change-password").click()
+    await user.should_not_see(marker="password-banner")  # retiré tout de suite de la page affichée
+    assert state().users.get_pref(1, "security:weak_password") is None
+    await user.open("/")
+    await user.should_see("Bonjour Alice")
+    await user.should_not_see(marker="password-banner")
+
+
+async def test_no_password_banner_for_long_password(user: User):
+    await login(user)
+    await user.should_not_see(marker="password-banner")
 
 
 # --- accueil et cartes ------------------------------------------------------------------------------------
@@ -395,7 +429,7 @@ async def test_settings_theme_devices_and_users(user: User):
     user.find(marker="new-user").click()
     with user.scope(marker="user-dialog"):
         fill(user, "Identifiant de connexion", "bob")
-        fill(user, "Mot de passe", "motdepasse")
+        fill(user, "Mot de passe", "motdepasse-12")
     user.find(marker="user-save").click()
     assert sorted(u.username for u in state().users.list()) == ["alice", "bob"]
 

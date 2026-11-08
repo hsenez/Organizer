@@ -114,6 +114,12 @@ run_client.py
 
 - **Comptes** : le **premier compte créé est admin** (écran d'initialisation au premier lancement). L'admin crée
   les autres comptes ; pas d'inscription libre.
+- **Mots de passe** : **12 caractères minimum** pour tout nouveau mot de passe (création, changement,
+  réinitialisation par l'admin). Un compte dont le mot de passe est plus ancien et plus court se connecte
+  toujours, mais la connexion le repère (seul moment où le serveur voit le mot de passe : la base ne garde
+  que son empreinte) et pose la préférence `security:weak_password` → **bandeau orange** « ⚠️ Votre mot de
+  passe est court… » en haut des pages (web et client bureau), bouton « Changer » vers Réglages → Profil ;
+  retirée dès que le mot de passe change.
 - **Connexion web** : identifiant + mot de passe, case « 🍪 Se souvenir de moi » → cookie de session
   (HttpOnly, SameSite=Lax, et `Secure` quand le visiteur est en HTTPS) valable **30 jours** ; sinon cookie de
   session de navigateur.
@@ -516,7 +522,8 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 
 Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders|projects|tags|devices|users`) :
 
-- 👤 **Profil** : nom affiché ; changement de mot de passe (déconnecte les autres appareils).
+- 👤 **Profil** : nom affiché ; changement de mot de passe (12 caractères minimum ; déconnecte les autres
+  appareils).
 - 🎨 **Apparence** : thème 🖥️ comme le système / ☀️ clair / 🌙 sombre, appliqué immédiatement et mémorisé
   pour le compte.
 - 🔔 **Rappels** : décalage par défaut (jours avant l'échéance), notifications bureau oui/non.
@@ -677,7 +684,7 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
   visiteurs en HTTPS uniquement.
 - **Documentation de l'API** (`/docs`, `/redoc`, `/openapi.json`) réservée aux connectés : sinon redirection
   vers `/login?next=/docs` (401 pour le schéma JSON).
-- **Anti force brute par identifiant** et **journal des connexions** : voir §3.
+- **Anti force brute par identifiant**, **journal des connexions**, **mots de passe de 12 caractères** : voir §3.
 - À venir (`TODO.md`) : export
   de la base (admin, jeton de sauvegarde), restauration (`deploy/restore.sh`), guide Cloudflare (README).
 
@@ -727,3 +734,4 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
 | 2026-11-08 | 1.11 | Mise en ligne, étape 2a : documentation de l'API (`/docs`, `/redoc`, `/openapi.json`) réservée aux utilisateurs connectés ; 270 tests |
 | 2026-11-08 | 1.12 | Mise en ligne, étapes 2b-2c : anti force brute par identifiant toutes adresses confondues (20 échecs / h, `LoginBlock`), journal des connexions (échecs, blocages, refus, réussites) ; journal du serveur enfin configuré (`configure_logging` : messages INFO d'Organizer dans `journalctl -u organizer`) ; 277 tests |
 | 2026-11-08 | 1.13 | Mise en ligne, étape 2d : option `--host` de `deploy/install.sh` (`ORGANIZER_HOST` écrit dans le service, retenue par `--reuse`, vérification finale sur la bonne adresse) ; 277 tests + installation en bac à sable avec `--host 127.0.0.1` |
+| 2026-11-08 | 1.14 | Mise en ligne, étape 2e : mots de passe de **12 caractères minimum** ; un ancien mot de passe plus court fonctionne toujours mais est repéré à la connexion (`security:weak_password`) → bandeau orange jusqu'au changement ; bandeaux généralisés (`UiContext.banners`, `Banner` : ton, action, cible) ; 282 tests + bandeau vérifié dans Firefox |

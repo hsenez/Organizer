@@ -60,7 +60,7 @@ def http(state):
 
 @pytest.fixture
 def alice_user(state):
-    return state.users.create_user("alice", "motdepasse", "Alice")
+    return state.users.create_user("alice", "motdepasse-12", "Alice")
 
 
 @pytest.fixture
@@ -136,7 +136,7 @@ def test_subtasks_links_shares_and_errors(remote, state, local):
     remote.tasks.remove_link(link.id)
     assert remote.tasks.get(a.id).links == []
 
-    bob = state.users.create_user("bob", "motdepasse", "Bob", by=state.users.actor_for(local.actor.id))
+    bob = state.users.create_user("bob", "motdepasse-12", "Bob", by=state.users.actor_for(local.actor.id))
     assert remote.tasks.set_shares(a.id, [bob.id]).shared_with == [bob.id]
     assert {u.username for u in remote.users_public()} == {"alice", "bob"}
     secret = state.services_for(bob).tasks.create(TaskCreate(title="Secret de Bob"))
@@ -179,7 +179,7 @@ def test_labels_boards_undo_and_reminders(remote, local):
 
 
 def test_undo_conflict_is_mapped(remote, state, local):
-    bob = state.users.create_user("bob", "motdepasse", "Bob", by=state.users.actor_for(local.actor.id))
+    bob = state.users.create_user("bob", "motdepasse-12", "Bob", by=state.users.actor_for(local.actor.id))
     task = remote.tasks.create(TaskCreate(title="v1"))
     remote.tasks.set_shares(task.id, [bob.id])
     remote.tasks.update(task.id, TaskPatch(title="v2"))
@@ -195,7 +195,7 @@ def test_account_and_prefs(remote, state):
     remote.account.set_pref("view:x", None)
     assert remote.account.get_pref("view:x", "rien") == "rien"
     assert remote.account.update_profile(ProfilePatch(display_name="Alice B.")).display_name == "Alice B."
-    created = remote.account.create_user(UserCreateIn(username="carol", password="motdepasse"))
+    created = remote.account.create_user(UserCreateIn(username="carol", password="motdepasse-12"))
     assert "carol" in {u.username for u in remote.account.all_users()}
     assert any(s.current for s in remote.account.sessions())
     assert created.username == "carol"
@@ -262,14 +262,14 @@ def test_config_store_roundtrip(tmp_path):
 def test_desktop_client_login_flow(state, http, tmp_path):
     client = DesktopClient(ConfigStore(tmp_path / "conf"), http_factory=lambda _server: http)
     with pytest.raises(InvalidOperation, match="aucun compte"):
-        client.login("pi", "alice", "motdepasse")
-    state.users.create_user("alice", "motdepasse", "Alice")
+        client.login("pi", "alice", "motdepasse-12")
+    state.users.create_user("alice", "motdepasse-12", "Alice")
     with pytest.raises(Exception, match="incorrect"):
         client.login("pi", "alice", "mauvais")
-    user = client.login("pi", "alice", "motdepasse")
+    user = client.login("pi", "alice", "motdepasse-12")
     assert user.username == "alice"
     saved = client.store.path.read_text()
-    assert "motdepasse" not in saved and client.store.load().server == "http://pi:2603"
+    assert "motdepasse-12" not in saved and client.store.load().server == "http://pi:2603"
     assert client.api is not None and client.api.call("GET", "/auth/me") is None  # appel authentifié ok
     assert any("Client bureau" in s.label for s in state.auth.list_sessions(user.id))
     client.forget_token()

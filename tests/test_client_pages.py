@@ -36,7 +36,7 @@ def fill(user: User, marker: str, text: str) -> None:
     user.find(kind=ui.input, marker=marker).type(text)
 
 
-async def connect(user: User, password: str = "motdepasse") -> None:
+async def connect(user: User, password: str = "motdepasse-12") -> None:
     await user.open("/")
     await user.should_see(marker="connect-server")
     fill(user, "connect-server", "pi")
@@ -46,7 +46,7 @@ async def connect(user: User, password: str = "motdepasse") -> None:
 
 
 async def test_connect_use_and_logout(server, user: User):
-    account = server.users.create_user("alice", "motdepasse", "Alice")
+    account = server.users.create_user("alice", "motdepasse-12", "Alice")
     sv = server.services_for(account)
     task = sv.tasks.create(TaskCreate(title="Tâche du Pi"))
 
@@ -78,9 +78,22 @@ async def test_version_banner(server, user: User, monkeypatch):
     from organizer.server.api import auth as auth_routes
 
     monkeypatch.setattr(auth_routes, "__version__", "9.0.0")  # le serveur a été mis à jour
-    server.users.create_user("alice", "motdepasse", "Alice")
+    server.users.create_user("alice", "motdepasse-12", "Alice")
     await connect(user)
     await user.should_see(marker="version-banner")
     await user.should_see("Ce poste est en retard")
     await user.open("/settings?tab=connection")
     await user.should_see("serveur 9.0.0")
+
+
+async def test_short_password_banner_on_desktop(server, user: User, monkeypatch):
+    """Client bureau connecté (par l'API) avec un ancien mot de passe court : même bandeau que le web."""
+    from organizer.core.services import users as users_module
+
+    monkeypatch.setattr(users_module, "MIN_PASSWORD_LENGTH", 6)
+    server.users.create_user("alice", "ancien", "Alice")
+    monkeypatch.undo()
+    await connect(user, "ancien")
+    await user.should_see("Bonjour Alice")
+    await user.should_see(marker="password-banner")
+    await user.should_not_see(marker="version-banner")

@@ -268,6 +268,10 @@ Référence fonctionnelle complète : **`specifications.md`**.
   (`server/api/auth.py`, partagé par l'API et la page /login) écrit chaque tentative dans le journal.
 - Journal du serveur : `configure_logging()` (dans `main()` seulement, pas dans `build()` : les tests
   utilisent `caplog`) ; loggers `organizer.*`.
+- Mots de passe : `MIN_PASSWORD_LENGTH = 12` (`core/services/users.py`). `authenticate` pose / retire la
+  préférence `WEAK_PASSWORD_PREF` ; changement ou réinitialisation la retire. Bandeaux : `ctx.banners`
+  (`Banner(text, tone, action, target, mark)`) + ceux calculés par `layout.page_banners` (mot de passe court,
+  lu par `ds.account.get_pref` : marche aussi sur le client bureau) ; `ctx.banner_rows` pour en retirer un.
 - Avec `nosniff`, un script servi sous un mauvais type est bloqué : après une mise à jour de NiceGUI ou un
   nouveau fichier statique, vérifier les `Content-Type` des ressources d'une page.
 
@@ -279,7 +283,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
   seulement si un client plus ancien ne peut plus fonctionner (route supprimée / modifiée de façon
   incompatible) — préférer des changements compatibles (champs ajoutés avec valeur par défaut).
 - Comparaison et messages : `organizer/versioning.py` ; route publique `GET /api/v1/version` ; bandeau du
-  client : `DesktopClient.version_check` (cache 10 min) → `UiContext.banner` → `app_frame`. Le client
+  client : `DesktopClient.version_check` (cache 10 min) → `UiContext.banners` → `app_frame`. Le client
   compare aussi la version **sur le disque** (`installed_version()`, lue dans `organizer/__init__.py`) à
   celle **en mémoire** : un client qui tourne depuis avant un `git pull` affiche « quittez puis relancez »
   (cas rencontré : bandeau trompeur après la mise à jour du Pi).

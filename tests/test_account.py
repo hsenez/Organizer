@@ -26,11 +26,11 @@ def test_profile_and_password(alice, users, auth):
     other, _ = auth.create_session(alice.actor.id)
     updated = account.update_profile(ProfilePatch(display_name="Alice B.", theme="dark"))
     assert (updated.display_name, updated.theme) == ("Alice B.", "dark")
-    account.change_password(PasswordChange(old_password="motdepasse", new_password="nouveau-mdp"))
+    account.change_password(PasswordChange(old_password="motdepasse-12", new_password="nouveau-mdp-12"))
     assert auth.resolve(current) is not None  # appareil courant conservé
     assert auth.resolve(other) is None  # les autres sont déconnectés
     with pytest.raises(InvalidOperation):
-        account.change_password(PasswordChange(old_password="faux", new_password="encore-un"))
+        account.change_password(PasswordChange(old_password="faux", new_password="encore-un-autre"))
 
 
 def test_sessions(alice, users, auth):
@@ -48,8 +48,8 @@ def test_admin_operations(alice, bob, users, auth):
     with pytest.raises(Forbidden):
         plain.all_users()
     with pytest.raises(Forbidden):
-        plain.create_user(UserCreateIn(username="carol", password="motdepasse"))
-    carol = admin.create_user(UserCreateIn(username="carol", password="motdepasse", display_name="Carol"))
+        plain.create_user(UserCreateIn(username="carol", password="motdepasse-12"))
+    carol = admin.create_user(UserCreateIn(username="carol", password="motdepasse-12", display_name="Carol"))
     assert {u.username for u in admin.all_users()} == {"alice", "bob", "carol"}
     carol_token, _ = auth.create_session(carol.id)
     admin.admin_update(carol.id, AdminUserPatch(is_active=False))

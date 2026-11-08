@@ -54,7 +54,7 @@ from organizer.core.errors import (
 from organizer.core.events import ChangeEvent
 from organizer.core.schemas import LoginOut, TaskOut, UserOut
 from organizer.ui.auth_shell import auth_shell
-from organizer.ui.context import UiContext
+from organizer.ui.context import Banner, UiContext
 from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
 
@@ -192,7 +192,14 @@ class DesktopClient:
         ctx.quit = self.quit
         result = self.version_check()
         if result is not None and not result.ok:
-            ctx.banner = (versioning.message(result, sys.platform), result.blocking)
+            ctx.banners.append(
+                Banner(
+                    versioning.message(result, sys.platform),
+                    tone="error" if result.blocking else "info",
+                    target="/settings?tab=connection",
+                    mark="version-banner",
+                )
+            )
         self._pages = [(c, x) for c, x in self._pages if c.id in Client.instances]
         self._pages.append((ui.context.client, ctx))
         return ctx
