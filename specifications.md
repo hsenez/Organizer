@@ -700,7 +700,10 @@ en clair (choix assumé). Le serveur continue d'écouter sur `0.0.0.0` (accès l
   vers `/login?next=/docs` (401 pour le schéma JSON).
 - **Anti force brute par identifiant**, **journal des connexions**, **mots de passe de 12 caractères** : voir §3.
 - **Sauvegarde et restauration** : voir §10.5.
-- À venir (`TODO.md`) : guide Cloudflare (README).
+- **Guide de mise en place** (domaine, `cloudflared` en paquet, tunnel créé dans le tableau de bord, route
+  `organizer.blou.top` → `http://127.0.0.1:2603` — pas `localhost`, qui peut désigner `::1` —, Always Use
+  HTTPS, WebSockets, Bot fight mode désactivé pour le client bureau, vérifications) : README, section
+  « Accès depuis Internet ».
 
 ### 10.5 🗄️ Sauvegarde
 
@@ -806,3 +809,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-08 | 1.16 | Mise en ligne, étape 4 : **restauration** — `deploy/restore.sh` (vérification complète sans arrêter le serveur, lecture en flux depuis `borg export-tar … -`, confirmation, données actuelles mises de côté, redémarrage vérifié ; `--db-only`, `--force`, `--yes`, `--no-service`), `organizer/server/restore.py` (`prepare` / `swap`) ; `deploy/common.sh` : `org_probe_address`, `org_load_conf`, `ORG_WAIT_TRIES` ; script borg quotidien dans le README ; 318 tests + circuit complet essayé avec borg 1.4 et un vrai serveur (sauvegarde, dédoublonnage, restauration, cas d'échec) |
 | 2026-11-08 | 1.16.1 | Correction : « 📎 Joindre un fichier » n'ouvrait pas le sélecteur dans la fenêtre du client bureau (WebKitGTK ; probablement aussi Safari et Chrome) — l'ordre faisait un aller-retour par le serveur et perdait le geste de l'utilisateur ; ouvert désormais directement dans le navigateur. Ajouts : plusieurs fichiers à la fois, **dépôt de fichiers** sur l'éditeur ou sur la carte d'une tâche (`components/file_drop.*`), repli par adresses `file://` lues par le client bureau, même fichier joignable deux fois ; 324 tests + vérifié dans WebKitGTK (sélecteur, dépôt, repli), Vivaldi (vrai glisser de fichier par CDP) et Firefox |
 | 2026-11-08 | 1.16.2 | Dépôt de fichiers depuis Dolphin dans la fenêtre du client bureau : WebKitGTK masque fichiers et adresses à la page (constaté dans le journal de diagnostic) → adresses captées côté GTK et relayées à la page, fichiers lus sur le poste. **Redémarrage du serveur** : il attendait la fin du flux temps réel des clients bureau (jamais) jusqu'à l'arrêt forcé par systemd après 90 s → attente limitée à 3 s (`timeout_graceful_shutdown`) ; 326 tests |
+| 2026-11-08 | 1.17 | **Version 0.9.0** du logiciel. Mise en ligne, étape 5 : guide **Cloudflare Tunnel** pas à pas dans le README (intitulés du tableau de bord vérifiés en novembre 2026 : Networking → Tunnels, Routes → Published application), réglages du domaine, vérifications, téléphones et client bureau par l'adresse publique. Chantier « mise en ligne » terminé |

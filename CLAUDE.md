@@ -284,6 +284,10 @@ Référence fonctionnelle complète : **`specifications.md`**.
 
 ## Mise en ligne (Cloudflare Tunnel)
 
+- Guide utilisateur : README, section « Accès depuis Internet » (tableau de bord vérifié en novembre 2026 ;
+  à revérifier si Cloudflare change ses menus). Route du tunnel vers `http://127.0.0.1:2603`, jamais
+  `localhost` (peut être `::1`, où le serveur n'écoute pas). Bot fight mode bloquerait le client bureau.
+
 - `cloudflared` sur le Pi → `http://localhost:2603`. Uvicorn (`ProxyHeadersMiddleware`, actif par défaut,
   confiance à 127.0.0.1 / ::1) réécrit `request.client.host` et `request.url.scheme` d'après
   `X-Forwarded-For` / `-Proto` : **toujours** les utiliser pour l'IP et le protocole du visiteur, jamais
@@ -400,6 +404,9 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
   Puis : arrière-plan, instance unique, raccourcis globaux, installeurs, icône « Post-it en vrac »
   (source : `organizer/assets/organizer.svg`).
 - ✅ Étape 8 : temps réel (SSE), PWA, HTTPS facultatif, finitions. Feuille de route terminée.
+- ✅ Mise en ligne (version 0.9.0) : derrière Cloudflare Tunnel (cookie `Secure`, en-têtes, vraie IP),
+  durcissement (docs, anti force brute par identifiant, journal, `--host`, mots de passe de 12), sauvegarde
+  / restauration (borg), guide dans le README. Pièces jointes : sélecteur réparé, dépôt de fichiers.
 - ⚠️ Toujours jamais exécuté sous **Python 3.11** (le téléchargement d'un interpréteur 3.11 a été refusé
   par les garde-fous de l'outil) : à valider sur le Pi (`pytest`) ou avec un Python 3.11 local.
 - ⚠️ Jamais exécuté sous Python 3.11 à ce jour (seulement la syntaxe vérifiée par ruff) : à valider sur le Pi.

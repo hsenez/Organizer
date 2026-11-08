@@ -101,7 +101,7 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   3. ✅ Sauvegarde : `GET /api/v1/admin/backup` (`.tar` non compressé : base cohérente + `uploads/` +
      `manifest.json`), jetons de sauvegarde (table `api_key`, réseau local seulement), onglet 🗄️ Données.
   4. ✅ Restauration : `deploy/restore.sh` (archive ou flux `borg export-tar … -`), script borg dans le README.
-  5. Guide Cloudflare Tunnel pas à pas dans le README (intitulés du tableau de bord vérifiés et datés).
+  5. ✅ Guide Cloudflare Tunnel pas à pas dans le README (section « Accès depuis Internet »).
 
 #### Chantier important: Création d'événements. 
 

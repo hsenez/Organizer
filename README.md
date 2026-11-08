@@ -241,7 +241,7 @@ jeton créé depuis n'existera plus.
 dépendances, service régénéré s'il a changé, redémarrage, vérification de la version). Mettre à jour le
 serveur **avant** les postes.
 
-**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.8.0** ; 1.0.0 une fois validé sur le Pi et les téléphones),
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.9.0** ; 1.0.0 une fois validé sur le Pi et les téléphones),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
 
 ## 📲 Sur le téléphone
@@ -251,14 +251,135 @@ Ouvrir `http://<ip-du-pi>:2603` puis :
 - **iPhone** : Safari → Partager → **« Sur l'écran d'accueil »** : Organizer s'ouvre en plein écran, comme
   une application (appui long sur l'icône : « Nouvelle tâche », « Kanbans »).
 - **Android** : Chrome → ⋮ → « Ajouter à l'écran d'accueil ». En HTTP, c'est un raccourci qui s'ouvre dans
-  Chrome ; pour le vrai mode application, il faut le HTTPS (ci-dessous).
+  Chrome ; pour le vrai mode application, il faut le HTTPS : passer par l'adresse publique
+  (`https://organizer.blou.top`, voir ci-dessous).
 
-### HTTPS (facultatif)
+## 🌍 Accès depuis Internet (Cloudflare Tunnel)
 
-> 🌍 Pour un accès **depuis Internet**, la solution retenue est **Cloudflare Tunnel** (certificat reconnu
-> partout, rien à installer sur les téléphones) : guide pas à pas à venir. Le serveur est déjà prêt à
-> fonctionner derrière ce proxy (cookie `Secure`, en-têtes de sécurité, vraie IP des visiteurs).
-> mkcert reste utile pour du HTTPS **sur le réseau local seulement**.
+Objectif : `https://organizer.blou.top` partout (téléphone en 4G, client bureau hors de la maison), avec un
+certificat reconnu, **sans ouvrir de port** sur la box. `cloudflared`, installé sur le Pi, ouvre lui-même une
+connexion sortante vers Cloudflare ; Cloudflare reçoit les visiteurs en HTTPS et les transmet par ce tunnel
+à `http://127.0.0.1:2603`. Gratuit. ⚠️ Cloudflare voit passer le trafic en clair (choix assumé).
+
+Le serveur Organizer n'a rien à changer : il reconnaît le vrai visiteur derrière le tunnel (adresse IP pour
+l'anti force brute et le journal, HTTPS pour le cookie `Secure` et HSTS), refuse `/docs` aux non connectés
+et le jeton de sauvegarde depuis Internet.
+
+> Intitulés du tableau de bord Cloudflare vérifiés en **novembre 2026** (documentation Cloudflare du
+> 23/06/2026). Cloudflare les change régulièrement : si un menu a bougé, chercher le même mot (« Tunnels »,
+> « Edge Certificates »…) dans la barre de recherche du tableau de bord.
+
+> 💡 **Un tunnel existe déjà sur le Pi** (pour d'autres services) ? Inutile d'en créer un second : un
+> tunnel est le lien entre **une machine** et Cloudflare, et il dessert autant d'adresses (routes) qu'on
+> veut. Sauter les étapes 2 et 3 et ajouter seulement la route de l'étape 4 à ce tunnel. Si son
+> `cloudflared` tourne dans **Docker**, `127.0.0.1` y désigne le conteneur et non le Pi, et Organizer ne
+> croirait pas l'adresse des visiteurs transmise par le conteneur (tous paraîtraient venir de la même
+> adresse) : lancer ce conteneur avec `network_mode: host` et garder `http://127.0.0.1:2603`.
+
+### 1. Le domaine sur Cloudflare (une fois)
+
+Si `blou.top` n'est pas encore géré par Cloudflare : [dash.cloudflare.com](https://dash.cloudflare.com) →
+**Add a domain** (formule *Free*), puis, chez le bureau d'enregistrement du domaine, remplacer ses serveurs
+DNS (*nameservers*) par les deux que Cloudflare indique. Attendre que le domaine passe à l'état **Active**
+(de quelques minutes à quelques heures). Les enregistrements DNS existants sont repris.
+
+### 2. Installer `cloudflared` sur le Pi
+
+Paquet officiel de Cloudflare (dépôt « any » : toute Debian, dont Raspberry Pi OS) ; il sera ensuite mis à jour
+par `sudo apt upgrade` comme le reste du système :
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' \
+    | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+### 3. Créer le tunnel (tableau de bord)
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → menu de gauche **Networking** → **Tunnels** →
+   **Create a tunnel**.
+2. Nom : `organizer-pi` → **Create Tunnel**.
+3. Système : **Debian** (architecture **arm64** pour un Pi 4 / 5 en 64 bits). La page affiche des commandes
+   d'installation : `cloudflared` étant déjà installé (étape 2), ne copier que la **dernière**, de la forme
+   `sudo cloudflared service install eyJh…` (le long texte est le **jeton du tunnel** : secret, à ne pas
+   partager). La lancer sur le Pi : elle crée et démarre le service systemd `cloudflared`.
+4. Le connecteur apparaît en bas de la page (état **Connected**) → **Continue**.
+
+### 4. Publier Organizer
+
+Dans le tunnel (**Networking** → **Tunnels** → `organizer-pi`), onglet **Routes** → **Add route** →
+**Published application** :
+
+| Champ | Valeur |
+|---|---|
+| Subdomain | `organizer` |
+| Domain | `blou.top` |
+| Path | *(vide)* |
+| Service URL | `http://127.0.0.1:2603` |
+
+→ **Add route**. Cloudflare crée lui-même l'enregistrement DNS `organizer.blou.top`.
+
+⚠️ Écrire `127.0.0.1` et **pas** `localhost` : `localhost` peut désigner l'adresse IPv6 `::1`, où Organizer
+n'écoute pas (il écoute en IPv4). En HTTPS local (mkcert, voir plus bas), mettre
+`https://127.0.0.1:2603` et activer **No TLS Verify** dans les réglages TLS de la route (le certificat est
+émis pour le nom du Pi, pas pour 127.0.0.1).
+
+### 5. Réglages du domaine
+
+Dans [dash.cloudflare.com](https://dash.cloudflare.com), choisir le domaine `blou.top`, puis :
+
+- **SSL/TLS** → **Edge Certificates** → **Always Use HTTPS** : **activé** (un visiteur qui tape
+  `http://organizer.blou.top` est redirigé en HTTPS). Si l'option n'apparaît pas : dans **SSL/TLS** →
+  **Overview**, le mode de chiffrement ne doit pas être *Off*.
+- Laisser **HSTS** désactivé dans Cloudflare : Organizer envoie déjà son propre en-tête HSTS aux visiteurs en
+  HTTPS.
+- **Network** → **WebSockets** : **activé** (c'est la valeur par défaut). L'interface en a besoin.
+- **Security** → **Settings** (filtre *Bot traffic*) → **Bot fight mode** : **désactivé** (valeur par
+  défaut). Activé, il bloque les clients qui ne sont pas des navigateurs : le client bureau, `curl`…
+
+### 6. Vérifier
+
+```bash
+systemctl status cloudflared          # sur le Pi : « active (running) »
+curl -sI https://organizer.blou.top/api/v1/version | grep -i -E "^HTTP|strict-transport"
+#   HTTP/2 200  +  strict-transport-security: max-age=31536000
+curl -sI http://organizer.blou.top/ | head -1      # 301 : redirigé vers https
+```
+
+- Le tunnel est **Healthy** dans **Networking** → **Tunnels**.
+- Depuis le téléphone **en 4G** (Wi-Fi coupé) : `https://organizer.blou.top` → page de connexion avec le
+  cadenas. Après connexion, `journalctl -u organizer | grep organizer.auth | tail -1` sur le Pi doit montrer
+  l'**adresse publique** du téléphone, pas `127.0.0.1` (sinon, la vraie adresse des visiteurs n'arrive pas :
+  vérifier la *Service URL*).
+- `https://organizer.blou.top/docs` sans être connecté → renvoie à la page de connexion.
+
+### 7. Ensuite
+
+- **Téléphones** : ouvrir `https://organizer.blou.top` et installer l'application (iPhone : Partager → Sur
+  l'écran d'accueil ; **Android** : Chrome → ⋮ → **Installer l'application**, enfin en vrai mode
+  application). Une icône installée depuis `http://<ip-du-pi>:2603` est une autre adresse : la supprimer et
+  réinstaller depuis l'adresse publique (il faut aussi se reconnecter).
+- **Client bureau** (utilisable hors de la maison) : Réglages → 🔌 Connexion → changer de serveur → taper
+  l'adresse **avec** `https://` : `https://organizer.blou.top` (sans `https://`, le client suppose une
+  adresse locale en HTTP et ajoute le port 2603).
+- **Réseau local** : `http://<ip-du-pi>:2603` continue de fonctionner (le serveur écoute toujours sur
+  `0.0.0.0`). Pour n'autoriser **que** le tunnel : `deploy/install.sh --reuse --host 127.0.0.1` (les appareils
+  de la maison passent alors eux aussi par `https://organizer.blou.top`). La sauvegarde par jeton marche
+  dans les deux cas (elle se fait sur le Pi, par `127.0.0.1`).
+- Mots de passe : 12 caractères minimum ; un compte avec un ancien mot de passe court voit un bandeau orange
+  tant qu'il ne l'a pas changé. Tentatives de connexion : `journalctl -u organizer | grep organizer.auth`.
+- Limites de Cloudflare (formule gratuite) sans effet ici : envoi de 100 Mo max par requête (les pièces
+  jointes sont limitées à 50 Mo) ; une requête sans réponse au bout de 100 s est coupée (le flux temps réel
+  envoie un signe de vie toutes les 20 s).
+- **Couper l'accès Internet** : `sudo systemctl stop cloudflared` (et `disable` pour qu'il ne redémarre pas)
+  ; ou supprimer la route dans le tableau de bord.
+
+### HTTPS sur le réseau local seulement (mkcert, facultatif)
+
+Inutile avec Cloudflare Tunnel. Pour du HTTPS sans passer par Internet :
 
 Avec [mkcert](https://github.com/FiloSottile/mkcert) (une autorité de certification locale) :
 
