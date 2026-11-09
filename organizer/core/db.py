@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from sqlalchemy import Engine, event
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import create_engine
 
 from organizer.core import models  # noqa: F401  (enregistre les tables)
 
@@ -26,6 +26,9 @@ def make_engine(db_path: Path | str) -> Engine:
     return engine
 
 
-def init_db(engine: Engine) -> None:
-    """Crée les tables manquantes."""
-    SQLModel.metadata.create_all(engine)
+def init_db(engine: Engine) -> int:
+    """Base prête à l'emploi : créée au dernier schéma si elle est neuve, sinon mise à jour par les
+    migrations (voir :mod:`organizer.core.migrations`). Renvoie le numéro de schéma."""
+    from organizer.core.migrations import migrate
+
+    return migrate(engine)

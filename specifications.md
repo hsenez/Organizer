@@ -672,7 +672,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 ### 10.3 🏷️ Versions et mises à jour
 
 - **Version du logiciel** `MAJEUR.MINEUR.CORRECTIF` (`organizer.__version__`) : `0.<étape>.<correctif>`
-  pendant le développement (0.7.0 = étape 7, 0.8.0 = étape 8), **1.0.0** une fois validé sur le Pi et les téléphones ; ensuite MINEUR pour une
+  pendant le développement (0.7.0 = étape 7, 0.8.0 = étape 8), **1.0.0** le 9/11/2026 (validé sur le Pi et sous Windows) ; ensuite MINEUR pour une
   nouveauté, CORRECTIF pour une correction, MAJEUR pour un changement qui casse la compatibilité. Une
   étiquette git `v<version>` marque chaque version publiée.
 - **Version de l'API** (`organizer.API_VERSION`, entier) : augmentée seulement quand un client plus ancien
@@ -691,7 +691,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 - **Mettre à jour le serveur** (Pi) : `deploy/update.sh` — `git pull` (sous le compte de l'utilisateur),
   puis `deploy/install.sh --reuse` : dépendances, service régénéré et `daemon-reload` s'il a changé,
   redémarrage, vérification de `/api/v1/version`. Les données (`data/`) ne sont pas touchées ; les
-  nouvelles tables sont créées au démarrage (une nouvelle colonne demanderait une migration).
+  évolutions de la base sont appliquées au démarrage (migrations, §10.6).
 - Ordre conseillé : **le serveur d'abord**, puis les postes (le bandeau les y invite).
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
 - **HTTPS par le serveur lui-même** (facultatif, réseau local) : `ORGANIZER_SSL_CERT` / `ORGANIZER_SSL_KEY`
@@ -781,6 +781,27 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 
 ---
 
+### 10.6 🧬 Évolutions de la base (migrations)
+
+`organizer/core/migrations.py`, appelé au démarrage du serveur (`init_db` → `migrate`) :
+
+- **Numéro de schéma** dans l'en-tête de la base SQLite (`PRAGMA user_version`) : il voyage avec la base
+  (sauvegardes, restaurations) et figure dans le `manifest.json` des sauvegardes (`schema_version`).
+  0 = base antérieure à la 1.0.0 ; **1 = schéma de la 1.0.0** (point de départ, aucune modification).
+- **Base neuve** : créée directement au dernier schéma. **Base existante** : tables nouvelles créées, puis
+  chaque étape manquante, dans l'ordre, **chacune dans sa transaction avec la mise à jour du numéro**
+  (changements de structure compris : connexion dédiée qui émet `BEGIN` elle-même, le pilote `sqlite3` ne
+  le faisant pas avant un `ALTER TABLE`) ; une étape qui échoue est annulée entièrement et le serveur ne
+  démarre pas. **Copie de sécurité** de la base (`organizer.db.avant-migration-v<n>-<date>`, à côté d'elle)
+  avant toute étape qui touche aux données.
+- **Base plus récente** que le code (retour à une ancienne version d'Organizer) : refusée au démarrage
+  (« mettez Organizer à jour »), rien n'est modifié.
+- Ajouter une étape : modifier le modèle, puis ajouter à la fin de `MIGRATIONS` une étape de numéro suivant
+  faisant le même changement sur une base existante (`add_column(conn, table, colonne, "TYPE DEFAULT …")`,
+  sans effet si la colonne existe). Ne jamais modifier une étape publiée. Garde-fou : une base créée par
+  la version 0.9.0 (`tests/fixtures/organizer-0.9.0.db`) doit arriver exactement au schéma d'une base neuve,
+  données intactes.
+
 ## 11. Feuille de route
 
 | Étape | Contenu |
@@ -793,6 +814,7 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 6 | ✅ Kanbans (prédéfinis + personnalisés, partage), matrice 2×2 / 4×4, glisser-déposer souris et tactile, Ctrl+drop |
 | 7 | ✅ Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
 | 8 | ✅ Temps réel (SSE), PWA, HTTPS facultatif, finitions (Rattacher à…, flèches dans Ctrl+K, défilement automatique, rappel par défaut à jour, compteur de filtres) |
+| 1.0.0 | ✅ Mise en ligne (Cloudflare Tunnel, durcissement), sauvegarde / restauration, pièces jointes par glisser-déposer, client bureau plus rapide et réseau local automatique, Windows, migrations de la base |
 
 ---
 
@@ -839,3 +861,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-09 | 1.18.4 | **Version 0.9.3**. Client bureau : une adresse saisie sans protocole qui est un nom de domaine public (`organizer.blou.top`) devient `https://…` au lieu de `http://…:2603` (que Cloudflare ne sert pas : « ne répond pas » au premier essai sous Windows) ; adresses locales inchangées ; message « ne répond pas » adapté (réseau local / Internet). `is_local_host` partagé par `config.py` et `lan.py` |
 | 2026-11-09 | 1.18.5 | **Version 0.9.4**. Suite de tests lancée sous **Windows** (Python 3.13) : 341 réussis, 10 sautés. Liens `file://` vers un disque Windows acceptés sous toutes leurs formes (`file:///C:/…`, mais aussi `file://C:/…` ou `file://C:\…`) ; tests rendus portables (`Path.as_uri()`, `USERPROFILE`), test des fichiers `.desktop` réservé à Linux |
 | 2026-11-09 | 1.18.6 | **Version 0.9.5**. Client bureau sous **Windows** : raccourcis globaux captés par Organizer (`RegisterHotKey`, `winshell.py`) au lieu des `.lnk` du menu Démarrer (appuis perdus une fois sur deux : premier plan refusé par Windows) ; **icône dans la zone de notification** (clic : ouvrir ; clic droit : nouvelle tâche, quitter) ; mise au premier plan par `SetForegroundWindow` ; icône d'Organizer (et non de Python) dans les notifications ; 343 tests |
+| 2026-11-09 | 1.19 | **🎉 Version 1.0.0**. Migrations de la base (§10.6) : numéro de schéma dans l'en-tête SQLite, étapes transactionnelles (structure comprise), copie de sécurité avant migration, base trop récente refusée, schéma 1 = point de départ ; numéro de schéma dans le manifeste des sauvegardes ; base créée par la 0.9.0 gardée comme référence de test (`tests/fixtures/organizer-0.9.0.db`) ; essai sur des copies des bases existantes du poste de développement ; 361 tests (+1 réservé à Windows) |

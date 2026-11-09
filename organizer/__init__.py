@@ -10,7 +10,7 @@ Versions (voir ``organizer/versioning.py``) :
 
 from pathlib import Path
 
-__version__ = "0.9.5"
+__version__ = "1.0.0"
 API_VERSION = 1
 
 # Icônes de l'application (générées par scripts/make_icons.sh) : fenêtre, lanceurs, favicon, PWA.

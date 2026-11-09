@@ -43,6 +43,7 @@ CHUNK = 1024 * 1024
 BLOCK = tarfile.BLOCKSIZE  # 512 octets
 # Tables dont le nombre de lignes figure dans le manifeste (aperçu avant une restauration).
 COUNTED_TABLES = ("user", "task", "project", "tag", "board", "attachment")
+SCHEMA_KEY = "_schema"  # numéro de schéma, rangé avec les comptes le temps de construire le manifeste
 
 
 class BackupError(OrganizerError):
@@ -69,11 +70,13 @@ def snapshot_database(db_path: Path, dest: Path) -> dict[str, int]:
         if check != "ok":
             raise BackupError(f"La copie de la base est abîmée ({check}).")
         tables = {row[0] for row in target.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-        return {
+        counts = {
             name: target.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
             for name in COUNTED_TABLES
             if name in tables
         }
+        counts[SCHEMA_KEY] = target.execute("PRAGMA user_version").fetchone()[0]
+        return counts
     finally:
         target.close()
         source.close()
@@ -149,7 +152,8 @@ class BackupArchive:
             "version": __version__,
             "api_version": API_VERSION,
             "includes_uploads": self.include_uploads,
-            "counts": self.counts,
+            "schema_version": self.counts.get(SCHEMA_KEY, 0),  # schéma de la base (migrations)
+            "counts": {k: v for k, v in self.counts.items() if k != SCHEMA_KEY},
             "files": files,
         }
 

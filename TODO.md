@@ -82,7 +82,6 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - ⌨️ Raccourcis globaux GNOME (gsettings) écrits mais jamais essayés (poste de dev sous KDE).
 - 🪟 Wayland : le jeton d'activation du lanceur est transmis pour ramener la fenêtre au premier plan ; à
   confirmer à l'usage (KDE peut se contenter de la faire clignoter dans la barre des tâches).
-- 🗄️ Outil de **migration du schéma** de la base (ajout de colonnes) le jour où ce sera nécessaire.
 
 
 ### Ajoutés Manuellement
@@ -94,6 +93,7 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - Taches récurrentes
 - Travail sur l'accueil pour display plus "straight to the point"
 - Possibilité d'éditer la liste des emojis proposés dans la création de projets
+- Dans les réglages une référence à la base de donnée utilisée (admin seulement)
 
 #### Support HTTPS & reverse proxy
 
@@ -107,6 +107,9 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   3. ✅ Sauvegarde : `GET /api/v1/admin/backup` (`.tar` non compressé : base cohérente + `uploads/` +
      `manifest.json`), jetons de sauvegarde (table `api_key`, réseau local seulement), onglet 🗄️ Données.
   4. ✅ Restauration : `deploy/restore.sh` (archive ou flux `borg export-tar … -`), script borg dans le README.
+     ⚠️ **À tester en vrai (Hubert, plus tard)** : créer le jeton de sauvegarde, installer le script borg
+     quotidien du README sur le Pi (cron), vérifier les archives (`borg list`), puis faire un **exercice
+     de restauration** (`borg export-tar … - | deploy/restore.sh -`) et contrôler que tout est revenu.
   5. ✅ Guide Cloudflare Tunnel pas à pas dans le README (section « Accès depuis Internet »).
 
 #### Chantier important: Création d'événements. 
@@ -118,7 +121,6 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   - Il affiche les événements, et optionnellement les dates critiques des taches (par défaut désactivé mais facilement ajoutable)
   - L'interface permet facilement d'éditer le début et la fin d'un événement (tiravec la souris)
   - Les événements et taches publics ou partagées spécifiquement avec moi sont potentiellement visibles aussi mais on peut filtrer poru ne pas les voir
-
 
 #### Chantier : client bureau plus fluide et mode hors connexion (demandé, « un jour »)
 
@@ -143,6 +145,9 @@ un mode **hors connexion** (coupure réseau) et une **synchronisation** au retou
   (3) interface Qt seulement si ce n'est pas assez fluide, en s'appuyant sur cette copie locale.
 
 ### ✅ Faits récemment
+
+- 🧬 **Migrations de la base** (version 1.0.0) : numéro de schéma, étapes transactionnelles, copie avant
+  migration, base trop récente refusée.
 
 - ⚡ Temps réel (web + client bureau), 📲 PWA, HTTPS facultatif, 🌳 « Rattacher à… », ↑ ↓ dans Ctrl+K,
   défilement automatique pendant un glisser, rappel par défaut à jour, compteur de filtres (étape 8).

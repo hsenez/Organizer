@@ -6,6 +6,8 @@ __pycache__/
 # Données locales (base SQLite, pièces jointes, config client)
 data/
 *.db
+# … sauf les bases de référence des tests (migrations : base créée par une ancienne version)
+!tests/fixtures/*.db
 *.sqlite3
 .env
 .nicegui/

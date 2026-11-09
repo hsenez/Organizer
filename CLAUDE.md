@@ -158,9 +158,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - **Préférences d'affichage** : table `user_pref` (clé, valeur JSON) — ex. `view:tasks`, `view:search`
   (`{"filter", "sort", "group"}`). Lire avec tolérance (`_validate` dans `task_list.py`) : une préférence
   enregistrée par une ancienne version ne doit jamais casser la page.
-- **Schéma de la base** : `create_all` crée les **nouvelles tables** dans une base existante, mais n'ajoute
-  pas de **colonne** à une table existante → préférer une nouvelle table ; sinon prévoir une migration
-  (aucun outil de migration en place pour l'instant).
+- **Schéma de la base** : `create_all` crée les **nouvelles tables** ; une **colonne** ajoutée à une table
+  existante passe par une **migration** (`core/migrations.py`, voir « Migrations » plus bas).
 - `FilterBar` (`components/filter_bar.py`) et `TaskListView` (`components/task_list.py`) sont réutilisables
   (kanbans / matrice à l'étape 6).
 - Ctrl+K : `preventDefault` posé par un petit script (`app_frame`) car Firefox l'utilise pour sa barre de
@@ -378,9 +377,28 @@ Référence fonctionnelle complète : **`specifications.md`**.
   propre ligne, pas `cd … && nohup … &`, dont `$!` est un sous-shell) ; sinon « stop » ne l'arrête pas et
   l'ancien serveur continue de servir les fichiers déplacés (faux échec de restauration constaté).
 
+## Migrations de la base (1.0.0)
+
+- `organizer/core/migrations.py` : `init_db(engine)` → `migrate(engine)`. Numéro de schéma = `PRAGMA
+  user_version` (0 = avant 1.0.0, 1 = 1.0.0, point de départ `_baseline`). Base neuve : `create_all` +
+  dernier numéro. Base existante : `create_all` (tables nouvelles), copie de sécurité si une étape a
+  `changes_data`, puis chaque étape dans **sa** transaction avec le numéro. `SchemaTooNew` si la base est
+  plus récente que le code.
+- ⚠️ Le pilote `sqlite3` n'ouvre pas de transaction avant un `ALTER TABLE` : un `engine.begin()` ordinaire
+  ne l'annule **pas** (constaté par `test_failed_step_is_rolled_back`). Les étapes passent donc par
+  `_transactional_engine` (`isolation_level = None` + `BEGIN` émis sur l'événement `begin`, recette de la
+  documentation de SQLAlchemy), réservé aux migrations.
+- Ajouter une colonne : modèle + `Migration(n + 1, "…", lambda conn: add_column(conn, "task", "x", "DATE"))`
+  à la fin de `MIGRATIONS` ; `NOT NULL` exige un `DEFAULT` en SQL. Ne jamais modifier une étape publiée ;
+  une étape doit tolérer une table déjà au dernier schéma.
+- Garde-fou : `tests/fixtures/organizer-0.9.0.db`, créée par le **vrai code de la v0.9.0** (`git worktree`
+  sur l'étiquette, script hors dépôt) ; `test_old_database_reaches_the_current_schema` compare son schéma
+  migré (`table_columns`) à celui d'une base neuve. Ne jamais modifier ce fichier.
+
 ## Versions et mises à jour
 
-- `organizer/__init__.py` : `__version__` (`0.<étape>.<correctif>` jusqu'à 1.0.0) et `API_VERSION`.
+- `organizer/__init__.py` : `__version__` (**1.0.0** depuis le 9/11/2026 ; ensuite MINEUR = nouveauté,
+  CORRECTIF = correction, MAJEUR = incompatibilité) et `API_VERSION`.
   **À chaque version livrée** (commit confirmé par l'utilisateur) : augmenter `__version__`, l'indiquer dans
   l'historique de `specifications.md`, proposer l'étiquette git `v<version>`. Augmenter `API_VERSION`
   seulement si un client plus ancien ne peut plus fonctionner (route supprimée / modifiée de façon
@@ -431,7 +449,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 350 tests au total.
+- 361 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.
@@ -452,4 +470,6 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
   `PYTHONUTF8=1` dans le service généré et dans `restore.sh` (+ `PYTHONIOENCODING=utf-8`),
   `restore._utf8_output()`, et les tests du script lancés avec `PYTHONIOENCODING=latin-1`. Tout nouveau
   programme Python lancé en ligne de commande sur le Pi doit en faire autant.
+- ✅ **Version 1.0.0** (9/11/2026) : migrations de la base en place ; client bureau validé sous Linux et
+  Windows. Reste à faire par l'utilisateur : essai réel de la sauvegarde borg et d'une restauration (TODO).
 - Feuille de route complète : `specifications.md` §11.

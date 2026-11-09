@@ -259,9 +259,13 @@ jeton créé depuis n'existera plus.
 
 **Mise à jour du serveur** : `deploy/update.sh` (`git pull`, puis l'installeur avec les mêmes options :
 dépendances, service régénéré s'il a changé, redémarrage, vérification de la version). Mettre à jour le
-serveur **avant** les postes.
+serveur **avant** les postes. Si la nouvelle version fait évoluer la base, elle le fait toute seule au
+démarrage, après en avoir gardé une copie à côté d'elle (`organizer.db.avant-migration-v<n>-<date>` dans
+le dossier des données) ; en cas d'échec, rien n'est modifié et le serveur ne démarre pas
+(`journalctl -u organizer`). Revenir à une version plus ancienne d'Organizer après une telle évolution est
+refusé : restaurer plutôt une sauvegarde.
 
-**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **0.9.2** ; 1.0.0 une fois validé sur le Pi et les téléphones),
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **1.0.0** ; notes de version : [`CHANGELOG.md`](CHANGELOG.md)),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
 
 ## 📲 Sur le téléphone
