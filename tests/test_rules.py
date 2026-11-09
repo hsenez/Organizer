@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 
@@ -272,3 +272,48 @@ def test_month_grid_exact_weeks():
     assert len(weeks) == 4
     assert weeks[0][0] == date(2027, 2, 1)
     assert weeks[-1][-1] == date(2027, 2, 28)
+
+
+@dataclass
+class Dated:
+    title: str
+    due_date: date | None
+    urgency: int = 2
+    status: Status = Status.NOT_STARTED
+    due_time: time | None = None
+
+
+def test_calendar_days_places_overdue_tasks_today():
+    today = date(2026, 11, 4)
+    late_old = Dated("Vieux retard", date(2026, 10, 1), urgency=1)
+    late = Dated("Retard", date(2026, 11, 2), urgency=4)
+    done_past = Dated("Faite", date(2026, 11, 2), status=Status.DONE)
+    cancelled = Dated("Annulée", date(2026, 11, 5), status=Status.CANCELLED)
+    undated = Dated("Sans date", None)
+    today_low = Dated("Aujourd'hui", today, urgency=1)
+    today_high = Dated("Urgente", today, urgency=4)
+    later_timed = Dated("B à 9 h", date(2026, 11, 6), due_time=time(9, 0))
+    later_untimed = Dated("A sans heure", date(2026, 11, 6))
+    later_early = Dated("C à 8 h", date(2026, 11, 6), due_time=time(8, 0))
+    days = rules.calendar_days(
+        [
+            late,
+            today_low,
+            done_past,
+            cancelled,
+            undated,
+            later_timed,
+            late_old,
+            today_high,
+            later_untimed,
+            later_early,
+        ],
+        today,
+    )
+    # Retards en tête (le plus ancien d'abord, quelle que soit l'urgence), puis par urgence.
+    assert days[today] == [late_old, late, today_high, today_low]
+    assert days[date(2026, 11, 2)] == [done_past]  # finie : reste à son échéance
+    assert days[date(2026, 11, 6)] == [later_early, later_timed, later_untimed]  # heure, puis sans heure
+    assert date(2026, 10, 1) not in days and date(2026, 11, 5) not in days
+    assert rules.is_overdue(late, today) and not rules.is_overdue(done_past, today)
+    assert not rules.is_overdue(today_low, today)

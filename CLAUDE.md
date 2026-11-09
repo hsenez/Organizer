@@ -219,8 +219,19 @@ Référence fonctionnelle complète : **`specifications.md`**.
   (7 colonnes, lignes `minmax(0, 1fr)` → la grille remplit la hauteur, `page-fill-grow`), styles dans
   `theme.py`. Grille calculée par `rules.month_grid(year, month)` (semaines complètes lundi → dimanche),
   navigation par `rules.shift_month`. Mois initial : `?month=AAAA-MM` (`parse_month`), sinon `ctx.today()`.
+- Contenu des cases : `rules.calendar_days(tasks, today)` (jour d'affichage : échéance, ou **aujourd'hui**
+  pour une tâche en retard — `rules.is_overdue` ; annulées exclues ; ordre retards / urgence / heure /
+  titre). Pastilles `calendar-chip` (fond = `Urgency.meta.color`, texte `theme.readable_text`),
+  `calendar-chip-overdue`, `calendar-chip-done`. Filtres : préférence `view:calendar`
+  `{"tasks": bool, "scope": "all|mine|shared"}` lue par `read_prefs` (tolérante).
+- Sélection : `select(day)` change les classes sans reconstruire la grille (`self.cells`). Case agrandie :
+  `ui.dialog` `maximized` + transition `scale` ; `ZOOM_ORIGIN_JS` (js_handler du `dblclick`) pose
+  `--calendar-zoom-x/y` sur `<html>` → `transform-origin` de `.q-dialog__inner` : l'agrandissement part de
+  la case. Contenu `ui.refreshable`, relu par `ctx.on_refresh` s'il est ouvert.
 - Marqueurs de test : `calendar-prev`, `calendar-next`, `calendar-today`, `calendar-title`,
-  `calendar-day-<AAAA-MM-JJ>` (une case par jour affiché).
+  `calendar-day-<AAAA-MM-JJ>` (une case par jour affiché), `calendar-task-<id>` (pastille),
+  `calendar-scope`, `calendar-show-tasks`, `calendar-zoom`, `calendar-zoom-close`. La pastille écoute
+  `dblclick.stop` : dans le simulateur, `trigger("dblclick.stop")` (nom exact de l'écouteur).
 - Noms des jours / mois : `ui/format.py` (`DAYS`, `MONTHS` abrégés ; `DAY_NAMES`, `MONTH_NAMES` complets).
 
 ## Étape 7 : client bureau
@@ -467,7 +478,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 372 tests au total (+1 réservé à Windows).
+- 375 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

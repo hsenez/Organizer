@@ -38,6 +38,21 @@ def hex_to_rgba(hex_color: str, alpha: float) -> str:
     return f"rgba({r}, {g}, {b}, {alpha})"
 
 
+def readable_text(hex_color: str) -> str:
+    """Couleur du texte posé sur un fond ``#rrggbb`` : presque noir sur un fond clair, blanc sur un fond
+    foncé (luminance relative WCAG)."""
+    h = hex_color.lstrip("#")
+
+    def linear(channel: str) -> float:
+        c = int(channel, 16) / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (linear(h[i : i + 2]) for i in (0, 2, 4))
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    # Contraste avec le noir (L + 0.05) / 0.05 contre le blanc 1.05 / (L + 0.05) : égaux vers L ≈ 0,18.
+    return "#1f2328" if luminance > 0.18 else "#ffffff"
+
+
 def _status_css() -> str:
     rules = []
     for status in Status:
@@ -136,7 +151,7 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .calendar-cell.calendar-weekend, .calendar-head.calendar-weekend { background: #f4f6fb; }
 .calendar-outside { color: #adb5bd; }
 .calendar-outside.calendar-cell { background: #fafbfc; }
-.calendar-day-number { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6rem;
+.calendar-day-number { align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; min-width: 1.6rem;
     height: 1.6rem; padding: 0 4px; border-radius: 999px; font-size: .85rem; font-weight: 600; }
 .calendar-today .calendar-day-number { background: #5c7cfa; color: #fff; }
 .calendar-today { box-shadow: inset 0 0 0 2px rgba(92, 124, 250, .55); }
@@ -146,7 +161,38 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .body--dark .calendar-cell.calendar-weekend, .body--dark .calendar-head.calendar-weekend { background: #1f2330; }
 .body--dark .calendar-outside { color: #4b5563; }
 .body--dark .calendar-outside.calendar-cell { background: #15181f; }
-@media (max-width: 599px) { .calendar-cell { min-height: 52px; padding: 2px; } }
+.calendar-cell { display: flex; flex-direction: column; gap: 2px; cursor: default; user-select: none; }
+.calendar-selected { box-shadow: inset 0 0 0 2px #5c7cfa !important; background: rgba(92, 124, 250, .07) !important; }
+.calendar-alarm { box-shadow: inset 0 0 0 2px #e03131; background: #fff5f5 !important; }
+.calendar-alarm.calendar-selected { box-shadow: inset 0 0 0 2px #e03131, inset 0 0 0 4px #5c7cfa !important; }
+.body--dark .calendar-alarm { background: #2c1517 !important; }
+.calendar-chips { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto;
+    scrollbar-width: thin; }
+/* Pastille d'échéance : ellipse de la couleur de l'urgence, titre coupé par « … ». */
+.calendar-chip { display: block; flex: none; max-width: 100%; padding: 1px 8px; border-radius: 999px;
+    font-size: .75rem; line-height: 1.15rem; font-weight: 500; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; cursor: pointer; }
+.calendar-chip:hover { filter: brightness(.94); }
+.calendar-chip-done { text-decoration: line-through; opacity: .7; color: inherit; }
+@keyframes calendar-alarm { 0%, 100% { box-shadow: 0 0 0 0 rgba(224, 49, 49, .55); }
+    50% { box-shadow: 0 0 0 4px rgba(224, 49, 49, 0); } }
+.calendar-chip-overdue { color: #fff; font-weight: 700; text-shadow: 0 1px 1px rgba(0, 0, 0, .35);
+    background: repeating-linear-gradient(-45deg, #a61e1e 0 6px, #c92a2a 6px 12px);
+    animation: calendar-alarm 1.4s ease-in-out infinite; }
+.calendar-legend { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem;
+    height: 1.1rem; border-radius: 999px; font-size: .7rem; }
+/* Case agrandie : la vue « grandit » depuis la case double-cliquée (centre mémorisé par le navigateur). */
+.calendar-zoom .q-dialog__inner { transform-origin: var(--calendar-zoom-x, 50%) var(--calendar-zoom-y, 50%); }
+.calendar-zoom-card { display: flex; flex-direction: column; border-radius: 0 !important; }
+.calendar-zoom-head { border-bottom: 1px solid rgba(120, 130, 150, .25); }
+.calendar-zoom-number { font-size: 1.1rem; min-width: 2.2rem; height: 2.2rem; }
+.calendar-today-number { background: #5c7cfa; color: #fff; }
+/* Infobulles sur plusieurs lignes (texte avec retours à la ligne). */
+.q-tooltip { white-space: pre-line; }
+@media (max-width: 599px) {
+    .calendar-cell { min-height: 52px; padding: 2px; }
+    .calendar-chip { padding: 0 4px; font-size: .65rem; line-height: 1rem; }
+}
 
 /* --- Kanbans ------------------------------------------------------------------------------------- */
 .kanban { scroll-padding-left: 4px; align-items: stretch !important; }

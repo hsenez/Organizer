@@ -180,6 +180,92 @@ async def test_calendar_month_navigation(user: User):
     await user.should_not_see(marker="calendar-day-2027-02-01")
 
 
+def cell_of(user: User, marker: str):
+    """Case du calendrier qui contient l'élément marqué ``marker`` (pastille)."""
+    element = next(iter(user.find(marker=marker).elements))
+    while not any(m.startswith("calendar-day-") for m in element._markers):
+        element = element.parent_slot.parent
+    return next(m for m in element._markers if m.startswith("calendar-day-"))
+
+
+async def test_calendar_shows_due_dates_overdue_today_and_filters(user: User):
+    from datetime import date, timedelta
+
+    sv = await login(user)
+    bob = state().users.create_user("bob", "motdepasse-12", "Bob", by=sv.actor)
+    today = date.today()
+    soon = today + timedelta(days=1) if today.day < 28 else today  # reste dans le mois affiché
+    mine = sv.tasks.create(TaskCreate(title="Dossier", due_date=soon, urgency=Urgency.IMMEDIATE))
+    late = sv.tasks.create(TaskCreate(title="Facture", due_date=today - timedelta(days=40)))
+    done = sv.tasks.create(TaskCreate(title="Fini", due_date=soon, status=Status.DONE))
+    cancelled = sv.tasks.create(TaskCreate(title="Annulé", due_date=soon, status=Status.CANCELLED))
+    undated = sv.tasks.create(TaskCreate(title="Sans date"))
+    bob_sv = state().services_for(bob)
+    theirs = bob_sv.tasks.create(TaskCreate(title="De Bob", due_date=soon))
+    bob_sv.tasks.set_shares(theirs.id, [sv.actor.id])
+
+    await user.open("/calendar")
+    assert cell_of(user, f"calendar-task-{mine.id}") == f"calendar-day-{soon.isoformat()}"
+    assert cell_of(user, f"calendar-task-{late.id}") == f"calendar-day-{today.isoformat()}"  # en retard
+    chip = next(iter(user.find(marker=f"calendar-task-{late.id}").elements))
+    assert "calendar-chip-overdue" in chip.classes and chip.text.startswith("⚠️")
+    assert (
+        "calendar-alarm" in next(iter(user.find(marker=f"calendar-day-{today.isoformat()}").elements)).classes
+    )
+    await user.should_see(marker=f"calendar-task-{done.id}")
+    await user.should_see(marker=f"calendar-task-{theirs.id}")
+    for hidden in (cancelled, undated):
+        await user.should_not_see(marker=f"calendar-task-{hidden.id}")
+
+    # Tâches de qui ? (mémorisé)
+    select_value(user, "calendar-scope", "mine")
+    await settle()
+    await user.should_not_see(marker=f"calendar-task-{theirs.id}")
+    await user.should_see(marker=f"calendar-task-{mine.id}")
+    select_value(user, "calendar-scope", "shared")
+    await settle()
+    await user.should_see(marker=f"calendar-task-{theirs.id}")
+    await user.should_not_see(marker=f"calendar-task-{mine.id}")
+    assert sv.users.get_pref(sv.actor.id, "view:calendar") == {"tasks": True, "scope": "shared"}
+    # Tâches masquées.
+    select_value(user, "calendar-show-tasks", False)
+    await settle()
+    await user.should_not_see(marker=f"calendar-task-{theirs.id}")
+    await user.open("/calendar")
+    await user.should_not_see(marker=f"calendar-task-{theirs.id}")
+    select_value(user, "calendar-show-tasks", True)
+    select_value(user, "calendar-scope", "all")
+    await settle()
+    await user.should_see(marker=f"calendar-task-{mine.id}")
+
+
+async def test_calendar_select_zoom_and_open_editor(user: User):
+    from datetime import date
+
+    sv = await login(user)
+    today = date.today()
+    task = sv.tasks.create(TaskCreate(title="Rendez-vous banque", due_date=today))
+    await user.open("/calendar")
+    day = f"calendar-day-{today.isoformat()}"
+    cell = next(iter(user.find(marker=day).elements))
+    user.find(marker=day).trigger("click")
+    assert "calendar-selected" in cell.classes
+    # Double-clic sur la pastille → éditeur de la tâche.
+    user.find(marker=f"calendar-task-{task.id}").trigger("dblclick.stop")
+    await user.should_see(marker="editor-title")
+    user.find(marker="task-editor-dialog").trigger("hide")
+    # Double-clic dans la case → case agrandie avec la carte complète.
+    user.find(marker=day).trigger("dblclick")
+    await user.should_see(marker="calendar-zoom")
+    with user.scope(marker="calendar-zoom"):
+        await user.should_see(marker=f"task-card-{task.id}")
+    user.find(marker="calendar-zoom-close").click()
+    # Une case sans tâche s'agrandit aussi, vide.
+    other = next(m for m in (f"calendar-day-{today.replace(day=d).isoformat()}" for d in (1, 2)) if m != day)
+    user.find(marker=other).trigger("dblclick")
+    await user.should_see("Aucune échéance ce jour-là.")
+
+
 # --- ajout rapide, éditeur, annuler -----------------------------------------------------------------------
 
 

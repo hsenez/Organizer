@@ -11,8 +11,8 @@ import random
 import re
 import unicodedata
 from collections.abc import Iterable
-from datetime import date, timedelta
-from typing import Protocol
+from datetime import date, time, timedelta
+from typing import Protocol, TypeVar
 
 from organizer.core.enums import DueBucket, Importance, LinkKind, Quadrant, Status, TaskKind, Urgency
 from organizer.core.errors import InvalidOperation
@@ -335,3 +335,51 @@ def month_grid(year: int, month: int) -> list[list[date]]:
         weeks.append([day + timedelta(days=i) for i in range(7)])
         day += timedelta(days=7)
     return weeks
+
+
+class _DatedTask(Protocol):
+    title: str
+    due_date: date | None
+    due_time: time | None
+    urgency: int
+    status: Status
+
+
+_Dated = TypeVar("_Dated", bound=_DatedTask)
+
+
+def is_overdue(task: _DatedTask, today: date) -> bool:
+    """Échéance passée et tâche ni finie ni annulée."""
+    return task.due_date is not None and task.due_date < today and not task.status.is_closed
+
+
+def calendar_days(tasks: Iterable[_Dated], today: date) -> dict[date, list[_Dated]]:
+    """Jour du calendrier où montrer chaque tâche datée.
+
+    - une tâche s'affiche à son échéance ;
+    - une tâche **en retard** s'affiche **aujourd'hui** (et plus à son échéance passée) ;
+    - les tâches annulées et sans échéance ne s'affichent pas.
+    Ordre dans une journée : retards d'abord (les plus anciens en tête), puis urgence décroissante, heure
+    (les tâches sans heure après), titre.
+    """
+    days: dict[date, list[_Dated]] = {}
+    for task in tasks:
+        if task.due_date is None or task.status is Status.CANCELLED:
+            continue
+        day = today if is_overdue(task, today) else task.due_date
+        days.setdefault(day, []).append(task)
+
+    def order(task: _Dated) -> tuple:
+        late = is_overdue(task, today)
+        return (
+            not late,
+            task.due_date if late else date.min,
+            -int(task.urgency),
+            task.due_time is None,
+            task.due_time or time.min,
+            task.title.lower(),
+        )
+
+    for listed in days.values():
+        listed.sort(key=order)
+    return days

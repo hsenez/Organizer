@@ -50,6 +50,18 @@ def relative(d: date, today: date) -> str:
     return f"dans {delta} j"
 
 
+def distance(d: date, today: date) -> str:
+    """« aujourd'hui », « demain », « hier », « dans 5 j », « il y a 3 j »."""
+    delta = (d - today).days
+    if delta == 0:
+        return "aujourd'hui"
+    if delta == 1:
+        return "demain"
+    if delta == -1:
+        return "hier"
+    return f"dans {delta} j" if delta > 0 else f"il y a {-delta} j"
+
+
 def due_text(d: date, t: time | None, today: date) -> str:
     text = short_date(d, today)
     return f"{text} {t:%H:%M}" if t else text
