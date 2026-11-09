@@ -533,13 +533,22 @@ Page `/calendar` (pleine largeur, pleine hauteur) — **première étape** du ch
 - **Échéances des tâches** (sous-tâches comprises) : petites pastilles elliptiques dans la case du jour,
   de la **couleur de l'urgence** (🐢 vert, 🕐 jaune, ⏰ orange, 🔥 rouge ; texte noir ou blanc selon le fond),
   titre coupé par « … », heure en tête s'il y en a une ; infobulle complète (titre, échéance, urgence,
-  importance, statut). Ordre dans une journée : retards, puis urgence décroissante, heure, titre
+  importance, statut). **Pourtour** = **importance** (couleur et épaisseur : ⚪ 1 px gris, 🔵 2 px bleu,
+  🟠 2 px orange, 🔴 3 px rouge), séparé du fond par un liseré clair (visible même orange sur orange).
+  Ordre dans une journée : retards, puis urgence décroissante, heure, titre
   (`rules.calendar_days`). Tâches finies : à leur date, estompées et barrées ; annulées : absentes.
 - **Tâches en retard** (échéance passée, pas finie) : affichées **aujourd'hui** (et non plus à leur date),
   pastille ⚠️ à rayures rouge sombre qui pulse ; la case du jour est bordée de rouge.
 - **Barre de filtres** au-dessus de la grille, mémorisée (préférence `view:calendar`) : interrupteur
   « 📋 Tâches » (affichées ou non — activé par défaut tant qu'il n'y a pas d'événements) et « Tâches de
   qui ? » : 👤 mes tâches, 🤝 partagées avec moi, 👥 les deux. Légende des couleurs à droite.
+- **📥 Sans échéance** : colonne à droite de la grille (sous la grille sous 1024 px de large) avec les tâches
+  ouvertes sans échéance, les plus prioritaires d'abord, dans les mêmes pastilles.
+- **Glisser-déposer** (souris ; doigt : appui long) : une pastille déposée sur un autre jour prend cette
+  échéance (l'heure est gardée) ; déposée sur « Sans échéance », elle perd son échéance (et son heure) ; une
+  tâche de « Sans échéance » déposée sur un jour la reçoit. Annulable (Ctrl+Z), toast de confirmation.
+  Une tâche en retard reposée sur aujourd'hui prend la date du jour. Ctrl + dépôt sur une autre pastille :
+  en faire une sous-tâche (comme partout).
 - **Clic** sur une case : la sélectionne (cadre bleu). **Double-clic sur une pastille** : ouvre l'éditeur
   de la tâche. **Double-clic ailleurs dans la case** (même vide) : la case s'agrandit à toute la fenêtre
   (animation depuis la case) et montre les **cartes complètes** de ses tâches (« ⚠️ En retard » puis
@@ -898,3 +907,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-09 | 1.20 | **📅 Calendrier** (§8.4 bis), première étape du chantier « événements » : module dans la colonne de gauche, page `/calendar` = grille du mois du lundi au dimanche, ‹ › et « Aujourd'hui », `?month=AAAA-MM` ; règles pures `rules.month_grid` / `rules.shift_month` ; noms complets des jours et des mois regroupés dans `ui/format.py` ; 369 tests + rendu vérifié dans Firefox (clair, sombre, téléphone) |
 | 2026-11-09 | 1.21 | **Branche de test `cloclo`** (§10.3) : `deploy/install_test.sh` bascule le serveur sur `cloclo` (ou `--branch`), `--main` y revient ; copie de la base en quittant main, retour refusé si la base est plus récente que main ; 372 tests |
 | 2026-11-10 | 1.22 | Calendrier : échéances des tâches en pastilles de la couleur de l'urgence, tâches en retard ramenées à aujourd'hui (pastille d'alerte), filtres « 📋 Tâches » et « Tâches de qui ? » mémorisés, sélection d'une case, double-clic = éditeur (pastille) ou case agrandie avec les cartes complètes ; `rules.calendar_days` / `rules.is_overdue`, `theme.readable_text`, `format.distance` ; 375 tests + parcours vérifié dans Firefox |
+| 2026-11-10 | 1.23 | Calendrier : pourtour des pastilles = importance ; colonne « 📥 Sans échéance » (à droite, sous la grille sur petit écran) ; glisser-déposer des pastilles entre les jours et vers / depuis « Sans échéance » pour changer ou retirer l'échéance (zones `day:<date>` et `undated`) ; 376 tests + glisser réel vérifié dans Firefox |

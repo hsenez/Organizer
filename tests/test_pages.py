@@ -183,9 +183,9 @@ async def test_calendar_month_navigation(user: User):
 def cell_of(user: User, marker: str):
     """Case du calendrier qui contient l'élément marqué ``marker`` (pastille)."""
     element = next(iter(user.find(marker=marker).elements))
-    while not any(m.startswith("calendar-day-") for m in element._markers):
-        element = element.parent_slot.parent
-    return next(m for m in element._markers if m.startswith("calendar-day-"))
+    while element is not None and not any(m.startswith("calendar-day-") for m in element._markers):
+        element = element.parent_slot.parent if element.parent_slot else None
+    return next((m for m in element._markers if m.startswith("calendar-day-")), None) if element else None
 
 
 async def test_calendar_shows_due_dates_overdue_today_and_filters(user: User):
@@ -214,8 +214,11 @@ async def test_calendar_shows_due_dates_overdue_today_and_filters(user: User):
     )
     await user.should_see(marker=f"calendar-task-{done.id}")
     await user.should_see(marker=f"calendar-task-{theirs.id}")
-    for hidden in (cancelled, undated):
-        await user.should_not_see(marker=f"calendar-task-{hidden.id}")
+    await user.should_not_see(marker=f"calendar-task-{cancelled.id}")
+    assert cell_of(user, f"calendar-task-{undated.id}") is None  # colonne « Sans échéance »
+    with user.scope(marker="calendar-undated"):
+        await user.should_see(marker=f"calendar-task-{undated.id}")
+        await user.should_not_see(marker=f"calendar-task-{done.id}")
 
     # Tâches de qui ? (mémorisé)
     select_value(user, "calendar-scope", "mine")
@@ -264,6 +267,41 @@ async def test_calendar_select_zoom_and_open_editor(user: User):
     other = next(m for m in (f"calendar-day-{today.replace(day=d).isoformat()}" for d in (1, 2)) if m != day)
     user.find(marker=other).trigger("dblclick")
     await user.should_see("Aucune échéance ce jour-là.")
+
+
+async def test_calendar_drag_changes_due_date_and_importance_ring(user: User):
+    from datetime import date, timedelta
+
+    sv = await login(user)
+    today = date.today()
+    first = today.replace(day=1)
+    task = sv.tasks.create(
+        TaskCreate(title="Banque", due_date=first, importance=Importance.CRITICAL, due_time=None)
+    )
+    floating = sv.tasks.create(TaskCreate(title="Un jour", importance=Importance.MINOR))
+    await user.open("/calendar")
+    chip = next(iter(user.find(marker=f"calendar-task-{task.id}").elements))
+    assert chip.style["border"] == "3px solid #fa5252"  # pourtour = importance critique
+
+    target = today + timedelta(days=10)  # futur : pas en retard, donc affichée à sa date
+    dnd = user.find(marker="dnd")
+    dnd.trigger("drop", {"task": task.id, "zone": f"day:{target.isoformat()}", "index": 0})
+    assert sv.tasks.get(task.id).due_date == target
+    await user.open(f"/calendar?month={target:%Y-%m}")
+    assert cell_of(user, f"calendar-task-{task.id}") == f"calendar-day-{target.isoformat()}"
+    dnd = user.find(marker="dnd")
+    # Vers « Sans échéance » : échéance retirée ; puis d'une tâche sans échéance vers un jour.
+    dnd.trigger("drop", {"task": task.id, "zone": "undated", "index": 0})
+    assert sv.tasks.get(task.id).due_date is None
+    dnd.trigger("drop", {"task": floating.id, "zone": f"day:{first.isoformat()}", "index": 0})
+    assert sv.tasks.get(floating.id).due_date == first
+    await settle()
+    with user.scope(marker="calendar-undated"):
+        await user.should_see(marker=f"calendar-task-{task.id}")
+        await user.should_not_see(marker=f"calendar-task-{floating.id}")
+    # Annulable, en une étape.
+    user.find(marker="undo-button").click()
+    assert sv.tasks.get(floating.id).due_date is None
 
 
 # --- ajout rapide, éditeur, annuler -----------------------------------------------------------------------

@@ -222,7 +222,11 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Contenu des cases : `rules.calendar_days(tasks, today)` (jour d'affichage : échéance, ou **aujourd'hui**
   pour une tâche en retard — `rules.is_overdue` ; annulées exclues ; ordre retards / urgence / heure /
   titre). Pastilles `calendar-chip` (fond = `Urgency.meta.color`, texte `theme.readable_text`),
-  `calendar-chip-overdue`, `calendar-chip-done`. Filtres : préférence `view:calendar`
+  `calendar-chip-overdue`, `calendar-chip-done` ; pourtour = importance (`_ring`,
+  `theme.IMPORTANCE_CHIP_BORDER_PX`) + `box-shadow` inset clair (à garder dans l'animation d'alerte).
+- Glisser-déposer : pastilles `draggable`, cases `drop_zone(cell, "day:<AAAA-MM-JJ>")`, colonne
+  `drop_zone(panel, "undated")` ; `CalendarView._dropped` → `ds.tasks.update(TaskPatch(due_date=…))`
+  (`self.tasks` = tâches de la dernière lecture). `_load()` lit une fois : jours + sans échéance. Filtres : préférence `view:calendar`
   `{"tasks": bool, "scope": "all|mine|shared"}` lue par `read_prefs` (tolérante).
 - Sélection : `select(day)` change les classes sans reconstruire la grille (`self.cells`). Case agrandie :
   `ui.dialog` `maximized` + transition `scale` ; `ZOOM_ORIGIN_JS` (js_handler du `dblclick`) pose
@@ -230,7 +234,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
   la case. Contenu `ui.refreshable`, relu par `ctx.on_refresh` s'il est ouvert.
 - Marqueurs de test : `calendar-prev`, `calendar-next`, `calendar-today`, `calendar-title`,
   `calendar-day-<AAAA-MM-JJ>` (une case par jour affiché), `calendar-task-<id>` (pastille),
-  `calendar-scope`, `calendar-show-tasks`, `calendar-zoom`, `calendar-zoom-close`. La pastille écoute
+  `calendar-scope`, `calendar-show-tasks`, `calendar-zoom`, `calendar-zoom-close`, `calendar-undated`. La pastille écoute
   `dblclick.stop` : dans le simulateur, `trigger("dblclick.stop")` (nom exact de l'écouteur).
 - Noms des jours / mois : `ui/format.py` (`DAYS`, `MONTHS` abrégés ; `DAY_NAMES`, `MONTH_NAMES` complets).
 
@@ -478,7 +482,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 375 tests au total (+1 réservé à Windows).
+- 376 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

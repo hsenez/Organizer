@@ -12,6 +12,7 @@ PRIMARY = "#5c7cfa"
 
 # Épaisseur du liseré gauche des cartes selon l'importance.
 IMPORTANCE_BORDER_PX = {1: 3, 2: 4, 3: 6, 4: 8}
+IMPORTANCE_CHIP_BORDER_PX = {1: 1, 2: 2, 3: 2, 4: 3}  # pourtour des pastilles du calendrier
 
 _PREFIX = {Importance: "imp", Urgency: "urg", Status: "st", TaskKind: "kd"}
 
@@ -169,16 +170,32 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .calendar-chips { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto;
     scrollbar-width: thin; }
 /* Pastille d'échéance : ellipse de la couleur de l'urgence, titre coupé par « … ». */
-.calendar-chip { display: block; flex: none; max-width: 100%; padding: 1px 8px; border-radius: 999px;
+.calendar-layout { display: flex; gap: 12px; min-height: 0; }
+.calendar-layout > .calendar { flex: 1 1 auto; min-width: 0; }
+.calendar-undated { flex: 0 0 236px; display: flex; flex-direction: column; gap: 6px; min-height: 0;
+    padding: 10px; border: 1px solid rgba(120, 130, 150, .25); border-radius: 12px; background: #fff; }
+.body--dark .calendar-undated { border-color: rgba(255, 255, 255, .10); background: #1a1e28; }
+.calendar-undated .calendar-chips { flex: 1 1 auto; gap: 4px; }
+@media (max-width: 1023px) {
+    .calendar-layout { flex-direction: column; }
+    .calendar-layout > .calendar { min-height: 70vh; }
+    .calendar-undated { flex: none; max-height: 60vh; }
+}
+/* Fond = urgence ; pourtour = importance (style en ligne), séparé du fond par un liseré clair pour rester
+   visible quand les deux couleurs se ressemblent (orange sur orange, rouge sur rouge). */
+.calendar-chip { display: block; flex: none; max-width: 100%; padding: 0 7px; border-radius: 999px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85); box-sizing: border-box;
     font-size: .75rem; line-height: 1.15rem; font-weight: 500; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; cursor: pointer; }
 .calendar-chip:hover { filter: brightness(.94); }
 .calendar-chip-done { text-decoration: line-through; opacity: .7; color: inherit; }
-@keyframes calendar-alarm { 0%, 100% { box-shadow: 0 0 0 0 rgba(224, 49, 49, .55); }
-    50% { box-shadow: 0 0 0 4px rgba(224, 49, 49, 0); } }
+@keyframes calendar-alarm {
+    0%, 100% { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85), 0 0 0 0 rgba(224, 49, 49, .55); }
+    50% { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85), 0 0 0 4px rgba(224, 49, 49, 0); } }
 .calendar-chip-overdue { color: #fff; font-weight: 700; text-shadow: 0 1px 1px rgba(0, 0, 0, .35);
     background: repeating-linear-gradient(-45deg, #a61e1e 0 6px, #c92a2a 6px 12px);
     animation: calendar-alarm 1.4s ease-in-out infinite; }
+.calendar-legend-ring { background: transparent; box-sizing: border-box; }
 .calendar-legend { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem;
     height: 1.1rem; border-radius: 999px; font-size: .7rem; }
 /* Case agrandie : la vue « grandit » depuis la case double-cliquée (centre mémorisé par le navigateur). */

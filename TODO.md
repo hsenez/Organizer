@@ -122,6 +122,7 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   - ✅ Échéances des tâches en pastilles (couleur = urgence), retards ramenés à aujourd'hui, filtres
     « 📋 Tâches » / « Tâches de qui ? », sélection, double-clic (éditeur / case agrandie).
     Quand les événements existeront : passer « 📋 Tâches » à **désactivé par défaut**.
+  - ✅ Pourtour = importance, colonne « 📥 Sans échéance », glisser-déposer pour changer / retirer l'échéance.
   - À vérifier sur téléphone : le double-clic (double tape) n'est pas émis par tous les navigateurs mobiles ;
     prévoir sans doute un appui long ou un bouton dans la case sélectionnée.
 - **Définir les cartes simples, partielles et complètes des tâches** (demandé le 10/11/2026) : quelles

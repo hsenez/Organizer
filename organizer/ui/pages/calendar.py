@@ -4,6 +4,10 @@
   une tâche **en retard** (échéance passée, pas finie) s'affiche **aujourd'hui**, en rouge clignotant.
 - Barre de filtres : tâches affichées ou non, et de qui (les miennes, partagées avec moi, les deux).
   Mémorisée dans la préférence ``view:calendar``.
+- Pourtour des pastilles : couleur et épaisseur de l'**importance**.
+- Colonne « 📥 Sans échéance » (à droite ; sous la grille sur petit écran) : tâches ouvertes sans échéance.
+- Glisser une pastille vers un autre jour change son échéance ; vers « Sans échéance », la retire (et
+  inversement). Zones ``day:<AAAA-MM-JJ>`` et ``undated`` (``dnd.js``).
 - Clic sur une case : la sélectionne. Double-clic sur une pastille : éditeur de la tâche. Double-clic
   ailleurs dans la case : la case s'agrandit à toute la fenêtre avec les cartes complètes de ses tâches.
 Le mois affiché se choisit aussi par l'adresse : ``/calendar?month=2026-11``.
@@ -18,15 +22,18 @@ from fastapi.responses import Response
 from nicegui import ui
 
 from organizer.core import rules
-from organizer.core.enums import Status, Urgency
-from organizer.core.schemas import TaskFilter, TaskOut, TaskSort
+from organizer.core.enums import Importance, Status, Urgency
+from organizer.core.schemas import TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
+from organizer.ui.components.dnd import draggable, drop_zone
 from organizer.ui.components.task_card import task_card
 from organizer.ui.context import UiContext
 from organizer.ui.layout import app_frame, card_grid, empty_state, section_title
-from organizer.ui.theme import hex_to_rgba, readable_text
+from organizer.ui.theme import IMPORTANCE_CHIP_BORDER_PX, hex_to_rgba, readable_text
 
 PREF_KEY = "view:calendar"
+UNDATED_ZONE = "undated"
+DAY_ZONE = "day:"
 SCOPES = {"mine": "👤 Mes tâches", "shared": "🤝 Partagées avec moi", "all": "👥 Les deux"}
 # Statuts affichés : tout sauf les tâches annulées (les finies restent à leur date, estompées).
 SHOWN_STATUSES = [status for status in Status if status is not Status.CANCELLED]
@@ -61,6 +68,11 @@ def parse_month(text: str | None) -> tuple[int, int] | None:
     return year, month
 
 
+def _ring(importance: Importance) -> str:
+    """Pourtour d'une pastille : couleur et épaisseur de l'importance."""
+    return f"border: {IMPORTANCE_CHIP_BORDER_PX[int(importance)]}px solid {importance.meta.color};"
+
+
 def read_prefs(data) -> tuple[bool, str]:
     """Préférence ``view:calendar`` → (tâches affichées, portée). Tolérante : une valeur inattendue
     (ancienne version) redonne la valeur par défaut."""
@@ -79,6 +91,7 @@ class CalendarView:
         self.selected: date | None = None
         self.cells: dict[date, ui.element] = {}
         self.zoomed: date | None = None
+        self.tasks: dict[int, TaskOut] = {}  # tâches affichées, par identifiant (glisser-déposer)
 
         with ui.row().classes("w-full items-center gap-2 no-wrap"):
             ui.label("📅").classes("text-2xl max-sm:hidden")
@@ -99,9 +112,10 @@ class CalendarView:
                 .mark("calendar-today")
             )
         self._filters()
-        self.body = ui.refreshable(self._grid)
+        self.body = ui.refreshable(self._body)
         self.body()
         ctx.on_refresh(self.body.refresh)
+        ctx.drop_handler = self._dropped
 
         with (
             ui.dialog()
@@ -134,7 +148,12 @@ class CalendarView:
                 for urgency in Urgency:
                     ui.label(urgency.meta.emoji).classes("calendar-legend").style(
                         f"background: {urgency.meta.color}"
-                    ).tooltip(f"{urgency.meta.label} — {urgency.meta.tooltip}")
+                    ).tooltip(f"Fond : urgence {urgency.meta.label} — {urgency.meta.tooltip}")
+                ui.label("Importance :").classes("ml-2")
+                for importance in Importance:
+                    ui.label(importance.meta.emoji).classes("calendar-legend calendar-legend-ring").style(
+                        _ring(importance)
+                    ).tooltip(f"Pourtour : importance {importance.meta.label} — {importance.meta.tooltip}")
                 ui.label("⚠️ en retard").classes("calendar-chip calendar-chip-overdue ml-1").tooltip(
                     "Échéance passée et tâche pas finie : affichée aujourd'hui"
                 )
@@ -154,13 +173,40 @@ class CalendarView:
 
     # --- données ---
 
-    def _days(self) -> dict[date, list[TaskOut]]:
-        """Tâches par jour d'affichage (voir ``rules.calendar_days``), selon les filtres."""
+    def _load(self) -> tuple[dict[date, list[TaskOut]], list[TaskOut]]:
+        """Tâches par jour d'affichage (voir ``rules.calendar_days``) et tâches ouvertes sans échéance (les
+        plus prioritaires d'abord), selon les filtres."""
         if not self.show_tasks:
-            return {}
+            self.tasks = {}
+            return {}, []
         flt = TaskFilter(scope=self.scope, include_subtasks=True, status=SHOWN_STATUSES)
-        tasks = self.ctx.ds.tasks.list(flt, TaskSort(key="due"))
-        return rules.calendar_days(tasks, self.ctx.today())
+        tasks = self.ctx.ds.tasks.list(flt, TaskSort(key="priority"))
+        self.tasks = {task.id: task for task in tasks}
+        undated = [task for task in tasks if task.due_date is None and not task.status.is_closed]
+        return rules.calendar_days(tasks, self.ctx.today()), undated
+
+    # --- glisser-déposer ---
+
+    def _dropped(self, task_id: int, zone: str, _index: int | None) -> None:
+        """Pastille déposée sur un jour (nouvelle échéance) ou sur « Sans échéance » (échéance retirée)."""
+        if zone == UNDATED_ZONE:
+            due = None
+        elif zone.startswith(DAY_ZONE):
+            try:
+                due = date.fromisoformat(zone[len(DAY_ZONE) :])
+            except ValueError:
+                return
+        else:
+            return
+        task = self.tasks.get(task_id) or self.ctx.call(self.ctx.ds.tasks.get, task_id)
+        if task is None or task.due_date == due:
+            return  # reposée là d'où elle venait
+        updated = self.ctx.call(self.ctx.ds.tasks.update, task_id, TaskPatch(due_date=due))
+        if updated is None:
+            return
+        where = f"échéance {fmt.long_date(due)}" if due else "plus d'échéance"
+        ui.notify(f"📅 « {updated.title} » → {where} (Ctrl+Z pour annuler)", position="top")
+        self.ctx.refresh()
 
     # --- navigation ---
 
@@ -184,16 +230,22 @@ class CalendarView:
 
     # --- grille ---
 
-    def _grid(self) -> None:
+    def _body(self) -> None:
         today = self.ctx.today()
         self.title.set_text(f"{fmt.MONTH_NAMES[self.month - 1].capitalize()} {self.year}")
         self.today_button.set_enabled((self.year, self.month) != (today.year, today.month))
+        days, undated = self._load()
+        with ui.element("div").classes("calendar-layout page-fill-grow w-full"):
+            self._grid(days, today)
+            if self.show_tasks:
+                self._undated(undated, today)
+
+    def _grid(self, days: dict[date, list[TaskOut]], today: date) -> None:
         weeks = rules.month_grid(self.year, self.month)
-        days = self._days()
         self.cells = {}
         with (
             ui.element("div")
-            .classes("calendar page-fill-grow w-full")
+            .classes("calendar")
             .style(f"grid-template-rows: auto repeat({len(weeks)}, minmax(0, 1fr))")
             .mark("calendar-grid")
         ):
@@ -224,6 +276,7 @@ class CalendarView:
             .on("click", lambda _, d=day: self.select(d))
             .on("dblclick", lambda _, d=day: self.zoom(d), js_handler=ZOOM_ORIGIN_JS)
         )
+        drop_zone(cell, f"{DAY_ZONE}{day.isoformat()}")
         self.cells[day] = cell
         with cell:
             ui.label(str(day.day)).classes("calendar-day-number")
@@ -232,8 +285,29 @@ class CalendarView:
                     for task in tasks:
                         self._chip(task, today)
 
+    def _undated(self, tasks: list[TaskOut], today: date) -> None:
+        """Colonne des tâches ouvertes sans échéance, elle aussi zone de dépôt (retirer l'échéance)."""
+        panel = ui.element("div").classes("calendar-undated").mark("calendar-undated")
+        drop_zone(panel, UNDATED_ZONE)
+        with panel:
+            with ui.row().classes("items-center gap-2 no-wrap"):
+                ui.label("📥 Sans échéance").classes("font-semibold")
+                ui.badge(str(len(tasks))).props("rounded color=grey-5 text-color=black")
+            ui.label(
+                "Glissez une pastille vers un jour pour lui donner cette échéance, ou ici pour la retirer."
+            ).classes("text-xs text-gray-500")
+            if tasks:
+                with ui.element("div").classes("calendar-chips"):
+                    for task in tasks:
+                        self._chip(task, today)
+            else:
+                ui.label("Toutes les tâches ouvertes ont une échéance 👍").classes(
+                    "text-sm text-gray-500 py-2"
+                )
+
     def _chip(self, task: TaskOut, today: date) -> None:
-        """Pastille d'une tâche : couleur de son urgence ; en retard = rouge clignotant ; finie = estompée."""
+        """Pastille d'une tâche : fond = urgence, pourtour = importance ; en retard = rouge clignotant ;
+        finie = estompée."""
         urgency = task.urgency.meta
         late = rules.is_overdue(task, today)
         text = task.title
@@ -246,20 +320,34 @@ class CalendarView:
             style = ""
         elif task.status.is_closed:
             css += " calendar-chip-done"
-            style = f"background: {hex_to_rgba(urgency.color, 0.25)}"
+            style = f"background: {hex_to_rgba(urgency.color, 0.25)};"
         else:
-            style = f"background: {urgency.color}; color: {readable_text(urgency.color)}"
-        due = f"{fmt.long_date(task.due_date)}" + (f" à {task.due_time:%H:%M}" if task.due_time else "")
-        tooltip = f"{task.title}\nÉchéance : {due}"
+            style = f"background: {urgency.color}; color: {readable_text(urgency.color)};"
+        style += _ring(task.importance)
+        if task.due_date is None:
+            due = "aucune"
+        else:
+            due = fmt.long_date(task.due_date) + (f" à {task.due_time:%H:%M}" if task.due_time else "")
+        tooltip = f"{task.title}" + (
+            f"\n↳ sous-tâche de « {task.parent_title} »" if task.parent_title else ""
+        )
+        tooltip += f"\nÉchéance : {due}"
         if late:
             tooltip += f" — {fmt.relative(task.due_date, today)}"
         tooltip += (
             f"\nUrgence : {urgency.emoji} {urgency.label} · Importance : {task.importance.meta.emoji} "
-            f"{task.importance.meta.label}\n{task.status.meta.text}\nDouble-clic : ouvrir la tâche"
+            f"{task.importance.meta.label}\n{task.status.meta.text}\n"
+            "Double-clic : ouvrir la tâche · glisser : changer l'échéance"
         )
-        ui.label(text).classes(css).style(style).mark(f"calendar-task-{task.id}").on(
-            "dblclick.stop", lambda _, t=task.id: self.ctx.editor.open(t)
-        ).tooltip(tooltip)
+        chip = (
+            ui.label(text)
+            .classes(css)
+            .style(style)
+            .mark(f"calendar-task-{task.id}")
+            .on("dblclick.stop", lambda _, t=task.id: self.ctx.editor.open(t))
+            .tooltip(tooltip)
+        )
+        draggable(chip, task)
 
     # --- case agrandie ---
 
@@ -281,7 +369,7 @@ class CalendarView:
         if day is None:
             return
         today = self.ctx.today()
-        tasks = self._days().get(day, [])
+        tasks = self._load()[0].get(day, [])
         late = [task for task in tasks if rules.is_overdue(task, today)]
         due = [task for task in tasks if not rules.is_overdue(task, today)]
         with ui.row().classes("calendar-zoom-head w-full items-center gap-2 px-4 py-3 no-wrap"):
