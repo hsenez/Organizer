@@ -283,8 +283,19 @@ Référence fonctionnelle complète : **`specifications.md`**.
   Ctrl 29, Alt 56, O 24, N 49). Le journal de KWin (`journalctl --user`) signale les actions inconnues
   (« failed to find an action matching… »). Fermer la fenêtre dans un test : script KWin filtré sur le
   **pid** du sous-processus (`workspace.windowList()`).
+- **Windows** : `client/winshell.py` (`ctypes` seulement), lancé par `window._start_windows_shell` dans le
+  sous-processus de la fenêtre : fil avec fenêtre cachée + boucle de messages ; raccourcis globaux par
+  `RegisterHotKey` (le processus qui reçoit `WM_HOTKEY` a le droit de passer au premier plan), icône de zone
+  de notification (`Shell_NotifyIconW`, menu Ouvrir / Nouvelle tâche / Quitter, remise sur `TaskbarCreated`),
+  `bring_to_front` (`SetForegroundWindow`, repli `AttachThreadInput` ; jamais `Form.Activate` : hors du fil
+  de l'interface). ⚠️ Les raccourcis ne sont **plus** posés sur les `.lnk` (`install.ps1` les efface) :
+  l'Explorateur les garderait (`RegisterHotKey` → erreur 1409) et la chaîne lnk → nouveau `pythonw` →
+  transmission → premier plan refusé échouait une fois sur deux. `instance.forward` appelle
+  `AllowSetForegroundWindow(ASFW_ANY)`. Notifications : `Icon(path=organizer-256.png)`, sinon Windows
+  affiche l'icône de Python (clé `HKCU\Software\Classes\AppUserModelId\Organizer`, écrite par
+  desktop-notifier). Test réel : `keybd_event` simule l'appui (`tests/test_client_desktop.py`).
 - Installeurs : `install/linux/install.sh`, `install/windows/install.ps1` (UTF-8 **avec BOM** et fins de
-  ligne CRLF, sinon Windows PowerShell 5.1 abîme les accents ; jamais exécuté faute de Windows).
+  ligne CRLF, sinon Windows PowerShell 5.1 abîme les accents). Python 3.11 à 3.13 sous Windows (pythonnet).
 - Icône : `scripts/make_icons.sh <svg> <svg plein>` régénère `organizer/assets/` (rsvg-convert + ImageMagick,
   outils de développement seulement ; les fichiers produits sont versionnés).
 

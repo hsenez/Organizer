@@ -74,8 +74,11 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - 🔄 Scripts de mise à jour Windows (`update.ps1`) jamais exécutés.
 - 🍓 `deploy/install.sh` et `deploy/update.sh` déroulés dans un bac à sable (faux sudo / systemctl) mais
   jamais sur un vrai Pi.
-- 🧺 Client bureau : icône dans la zone de notification (« tray ») avec Ouvrir / Nouvelle tâche / Quitter —
-  demanderait une dépendance (pystray + AppIndicator sous Linux).
+- 🧺 Client bureau : icône dans la zone de notification (« tray ») — faite sous **Windows** (`winshell.py`) ;
+  sous Linux, demanderait une dépendance (pystray + AppIndicator).
+- 🪟 Windows : raccourcis globaux et icône de zone de notification vérifiés par un appui simulé
+  (`keybd_event`), pas encore dans le vrai client à l'usage ; sans démarrage avec la session
+  (`-NoAutostart`), plus de raccourci global pour lancer Organizer à froid.
 - ⌨️ Raccourcis globaux GNOME (gsettings) écrits mais jamais essayés (poste de dev sous KDE).
 - 🪟 Wayland : le jeton d'activation du lanceur est transmis pour ramener la fenêtre au premier plan ; à
   confirmer à l'usage (KDE peut se contenter de la faire clignoter dans la barre des tâches).

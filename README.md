@@ -133,6 +133,12 @@ le démarrage en arrière-plan à l'ouverture de session et deux **raccourcis cl
 | **Ctrl+Alt+O** | ouvrir Organizer (le ramener au premier plan) |
 | **Ctrl+Alt+N** | créer une nouvelle tâche (éditeur ouvert sur la page affichée) |
 
+Sous Windows, ces raccourcis sont captés par Organizer lui-même : ils marchent quand il tourne (en
+arrière-plan, il démarre avec la session), et une **icône dans la zone de notification** (près de
+l'horloge) le rouvre d'un clic ; clic droit : nouvelle tâche, quitter. Après une mise à jour depuis une
+version ≤ 0.9.4, relancer `install.bat` (il libère les touches prises par les anciens raccourcis du menu
+Démarrer), puis quitter et relancer Organizer.
+
 Fermer la fenêtre la cache : Organizer continue en arrière-plan (rappels, raccourcis). Pour l'arrêter :
 menu du compte → **⏻ Quitter Organizer**. En ligne de commande : `run_client.py --new-task`, `--quit`,
 `--hidden` (une commande est transmise au client déjà lancé).

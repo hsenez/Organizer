@@ -9,7 +9,8 @@ Installation du client bureau Organizer sous Windows (utilisateur courant, sans 
     install.bat -Reuse                           reprend les options de la dernière installation (mise à jour)
 
 Étapes : vérifie Python >= 3.11, crée le venv .venv, installe requirements-client.txt, puis crée les
-raccourcis du menu Démarrer (avec leurs raccourcis clavier globaux), du Bureau et du démarrage de session.
+raccourcis du menu Démarrer, du Bureau et du démarrage de session. Les raccourcis clavier globaux sont
+enregistrés par Organizer lui-même quand il tourne (d'où le démarrage avec la session par défaut).
 Les raccourcis lancent pythonw.exe (pas de console) ; si Organizer tourne déjà, la commande lui est transmise.
 #>
 param(
@@ -59,7 +60,9 @@ function New-Link($Path, $Arguments, $Description, $Hotkey) {
     $link.WorkingDirectory = $Root
     if (Test-Path $Icon) { $link.IconLocation = "$Icon,0" }
     $link.Description = $Description
-    if ($Hotkey) { $link.Hotkey = $Hotkey.ToUpper() }
+    # Raccourcis clavier globaux : enregistrés par Organizer lui-même (winshell.py), plus fiables. Un raccourci
+    # posé sur un .lnk par une ancienne installation est effacé (sinon l'Explorateur garderait la touche).
+    $link.Hotkey = ""
     $link.Save()
 }
 

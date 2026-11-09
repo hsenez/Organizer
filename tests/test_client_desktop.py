@@ -143,3 +143,47 @@ def test_desktop_files(tmp_path, monkeypatch):
 def test_desktop_kind(monkeypatch, value, kind):
     monkeypatch.setenv("XDG_CURRENT_DESKTOP", value)
     assert install.desktop_kind() == kind
+
+
+def test_windows_hotkey_parsing():
+    from organizer.client.winshell import MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, parse_hotkey
+
+    assert parse_hotkey("Ctrl+Alt+O") == (MOD_CONTROL | MOD_ALT, ord("O"))
+    assert parse_hotkey("ctrl + shift + n") == (MOD_CONTROL | MOD_SHIFT, ord("N"))
+    assert parse_hotkey("Win+Alt+F12") == (MOD_WIN | MOD_ALT, 0x7B)
+    assert parse_hotkey("Ctrl+Alt+7") == (MOD_CONTROL | MOD_ALT, ord("7"))
+    assert parse_hotkey("O") is None and parse_hotkey("Hyper+O") is None and parse_hotkey("Ctrl+É") is None
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows seulement")
+def test_windows_shell_hotkey_and_tray():
+    """Vrai raccourci global (appui simulé) et icône de la zone de notification."""
+    import ctypes
+    import time
+
+    from organizer import ASSETS_DIR
+    from organizer.client import winshell
+
+    hits: list[str] = []
+    shell = winshell.Shell(
+        {"show": "Ctrl+Alt+Shift+F11"},
+        {"show": lambda: hits.append("show")},
+        ASSETS_DIR / "organizer.ico",
+        tooltip="Organizer (test)",
+    )
+    shell.start()
+    try:
+        assert shell.hwnd and shell.registered == {1: "show"}
+        keyboard = ctypes.windll.user32.keybd_event
+        for vk in (0x11, 0x12, 0x10, 0x7A):  # Ctrl, Alt, Maj, F11
+            keyboard(vk, 0, 0, 0)
+        for vk in (0x7A, 0x10, 0x12, 0x11):
+            keyboard(vk, 0, 2, 0)
+        for _ in range(50):
+            if hits:
+                break
+            time.sleep(0.02)
+        assert hits == ["show"]
+    finally:
+        shell.stop()
+    assert shell.hwnd == 0

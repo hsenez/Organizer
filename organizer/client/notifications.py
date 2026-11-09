@@ -75,7 +75,14 @@ def make_sender() -> Sender:
     try:
         from desktop_notifier import DesktopNotifier, Icon
 
-        icon = Icon(name="appointment-soon") if sys.platform.startswith("linux") else None
+        if sys.platform.startswith("linux"):
+            icon = Icon(name="appointment-soon")
+        elif sys.platform == "win32":  # sinon Windows affiche l'icône de Python (identité « Organizer »)
+            from organizer import ASSETS_DIR
+
+            icon = Icon(path=ASSETS_DIR / "organizer-256.png")
+        else:
+            icon = None
         notifier = (
             DesktopNotifier(app_name="Organizer", app_icon=icon)
             if icon

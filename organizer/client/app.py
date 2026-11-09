@@ -477,10 +477,15 @@ class DesktopClient:
             return
         self._hidden_hint_shown = True
         keys = {**DEFAULT_SHORTCUTS, **self.config.shortcuts}
+        quit_hint = (
+            "Icône dans la zone de notification (près de l'horloge) : clic pour rouvrir, "
+            "clic droit pour quitter."
+            if sys.platform == "win32"
+            else "Pour quitter : menu du compte → ⏻ Quitter Organizer."
+        )
         await make_sender()(
             "📋 Organizer reste ouvert en arrière-plan",
-            f"Rouvrir : {keys['show']} · Nouvelle tâche : {keys['new_task']}\n"
-            "Pour quitter : menu du compte → ⏻ Quitter Organizer.",
+            f"Rouvrir : {keys['show']} · Nouvelle tâche : {keys['new_task']}\n{quit_hint}",
             None,
         )
 

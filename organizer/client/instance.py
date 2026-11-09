@@ -62,4 +62,8 @@ def forward(directory: Path, action: str) -> bool:
         port, secret = int(data["port"]), str(data["secret"])
     except (OSError, ValueError, KeyError, TypeError):
         return False
+    if os.name == "nt":  # ce lancement (clic sur un raccourci) cède au client son droit au premier plan
+        from organizer.client import winshell
+
+        winshell.allow_foreground_for_others()
     return send(port, secret, action)

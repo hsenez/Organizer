@@ -15,13 +15,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import multiprocessing
 import os
+import sys
 import threading
 
 from organizer.client import instance
 
+log = logging.getLogger("organizer.client")
+
 QUIT = threading.Event()
+SHELL = None  # Windows : raccourcis globaux et zone de notification (``winshell.Shell``)
 
 
 def _parent_alive() -> bool:
@@ -48,10 +53,13 @@ def _raise_native(window, token: str | None) -> None:
             return False
 
         GLib.idle_add(present)
-    except ImportError:  # Windows (WinForms) : la fenêtre a une méthode Activate
-        activate = getattr(native, "Activate", None)
-        if callable(activate):
-            activate()
+    except ImportError:
+        if (
+            sys.platform == "win32"
+        ):  # appels Windows directs (Form.Activate hors du fil de l'interface : refusé)
+            from organizer.client import winshell
+
+            winshell.bring_to_front(SHELL.hwnd if SHELL is not None else 0)
 
 
 def file_uris(uris: list[str] | None, text: str | None = None) -> list[str]:
@@ -109,9 +117,41 @@ def setup_window() -> None:
 
     def organizer_quit() -> None:
         QUIT.set()
+        if SHELL is not None:
+            SHELL.stop()
         window.destroy()
 
     window.events.closing += on_closing
     window.organizer_present = organizer_present
     window.organizer_quit = organizer_quit
     _forward_dropped_files(window)
+    if sys.platform == "win32":
+        _start_windows_shell(organizer_present)
+
+
+def _start_windows_shell(present) -> None:
+    """Raccourcis clavier globaux et icône de la zone de notification (Windows, voir ``winshell``)."""
+    global SHELL
+    from organizer import ASSETS_DIR
+    from organizer.client import system, winshell
+    from organizer.client.config import ConfigStore
+
+    keys = {"show": "Ctrl+Alt+O", "new_task": "Ctrl+Alt+N"}
+    try:
+        keys.update(ConfigStore(system.config_dir()).load().shortcuts)
+    except Exception:
+        log.exception("Raccourcis non lus")
+
+    def new_task() -> None:
+        present()  # tout de suite, tant que ce processus a le droit de passer au premier plan
+        _tell_parent("new-task")
+
+    SHELL = winshell.Shell(
+        {name: keys[name] for name in ("show", "new_task") if keys.get(name)},
+        {"show": present, "new_task": new_task, "quit": lambda: _tell_parent("quit")},
+        ASSETS_DIR / "organizer.ico",
+    )
+    try:
+        SHELL.start()
+    except Exception:  # jamais bloquant pour la fenêtre
+        log.exception("Intégration Windows indisponible")
