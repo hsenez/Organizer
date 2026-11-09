@@ -1,6 +1,8 @@
 // Redimensionnement horizontal d'éléments (colonnes de kanban) à la souris ou au doigt.
 //
 // - Élément redimensionnable : data-resize-key="clé" ; poignée (à l'intérieur) : data-resize-handle.
+// - data-resize-side="left" : poignée sur le bord gauche (colonne à droite de l'écran), tirer vers la
+//   gauche élargit.
 // - Double-clic sur la poignée : largeur par défaut (événement envoyé avec width = null).
 // Événement envoyé au serveur : « resize » {key, width}.
 
@@ -31,13 +33,14 @@ export default {
       if (!box || event.button > 0) return;
       event.preventDefault();
       event.stopPropagation(); // ni glisser-déposer, ni sélection de texte
-      this.state = { box, x: event.clientX, width: box.getBoundingClientRect().width };
+      const sign = box.dataset.resizeSide === "left" ? -1 : 1;
+      this.state = { box, sign, x: event.clientX, width: box.getBoundingClientRect().width };
       document.body.classList.add("resizing");
     },
     move(event) {
       if (!this.state) return;
       event.preventDefault();
-      const width = Math.round(Math.min(this.max, Math.max(this.min, this.state.width + event.clientX - this.state.x)));
+      const width = Math.round(Math.min(this.max, Math.max(this.min, this.state.width + this.state.sign * (event.clientX - this.state.x))));
       this.state.box.style.width = `${width}px`;
     },
     up() {

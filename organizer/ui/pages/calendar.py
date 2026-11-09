@@ -15,6 +15,7 @@ Le mois affiché se choisit aussi par l'adresse : ``/calendar?month=2026-11``.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 
 from fastapi import Request
@@ -26,6 +27,7 @@ from organizer.core.enums import Importance, Status, Urgency
 from organizer.core.schemas import TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
 from organizer.ui.components.dnd import draggable, drop_zone
+from organizer.ui.components.resizer import Resizer, resizable, resize_handle
 from organizer.ui.components.task_card import task_card
 from organizer.ui.context import UiContext
 from organizer.ui.layout import app_frame, card_grid, empty_state, section_title
@@ -33,6 +35,8 @@ from organizer.ui.theme import IMPORTANCE_CHIP_BORDER_PX, hex_to_rgba, readable_
 
 PREF_KEY = "view:calendar"
 UNDATED_ZONE = "undated"
+UNDATED_WIDTH = 236  # largeur par défaut de la colonne « Sans échéance » (px)
+UNDATED_MIN, UNDATED_MAX = 160, 560
 DAY_ZONE = "day:"
 SCOPES = {"mine": "👤 Mes tâches", "shared": "🤝 Partagées avec moi", "all": "👥 Les deux"}
 # Statuts affichés : tout sauf les tâches annulées (les finies restent à leur date, estompées).
@@ -73,13 +77,38 @@ def _ring(importance: Importance) -> str:
     return f"border: {IMPORTANCE_CHIP_BORDER_PX[int(importance)]}px solid {importance.meta.color};"
 
 
-def read_prefs(data) -> tuple[bool, str]:
-    """Préférence ``view:calendar`` → (tâches affichées, portée). Tolérante : une valeur inattendue
-    (ancienne version) redonne la valeur par défaut."""
+@dataclass
+class CalendarPrefs:
+    """Préférence ``view:calendar``."""
+
+    show_tasks: bool = True
+    scope: str = "all"
+    undated_width: int | None = None  # None = largeur par défaut
+    undated_collapsed: bool = False
+
+    def dump(self) -> dict:
+        return {
+            "tasks": self.show_tasks,
+            "scope": self.scope,
+            "undated": {"width": self.undated_width, "collapsed": self.undated_collapsed},
+        }
+
+
+def read_prefs(data) -> CalendarPrefs:
+    """Tolérante : une valeur inattendue (ancienne version) redonne la valeur par défaut."""
     data = data if isinstance(data, dict) else {}
-    show = data.get("tasks")
-    scope = data.get("scope")
-    return (show if isinstance(show, bool) else True), (scope if scope in SCOPES else "all")
+    prefs = CalendarPrefs()
+    if isinstance(data.get("tasks"), bool):
+        prefs.show_tasks = data["tasks"]
+    if data.get("scope") in SCOPES:
+        prefs.scope = data["scope"]
+    undated = data.get("undated") if isinstance(data.get("undated"), dict) else {}
+    width = undated.get("width")
+    if isinstance(width, int) and not isinstance(width, bool):
+        prefs.undated_width = max(UNDATED_MIN, min(UNDATED_MAX, width))
+    if isinstance(undated.get("collapsed"), bool):
+        prefs.undated_collapsed = undated["collapsed"]
+    return prefs
 
 
 class CalendarView:
@@ -87,7 +116,8 @@ class CalendarView:
         self.ctx = ctx
         today = ctx.today()
         self.year, self.month = month or (today.year, today.month)
-        self.show_tasks, self.scope = read_prefs(ctx.ds.account.get_pref(PREF_KEY))
+        self.prefs = read_prefs(ctx.ds.account.get_pref(PREF_KEY))
+        self.undated_panel: ui.element | None = None
         self.selected: date | None = None
         self.cells: dict[date, ui.element] = {}
         self.zoomed: date | None = None
@@ -116,6 +146,7 @@ class CalendarView:
         self.body()
         ctx.on_refresh(self.body.refresh)
         ctx.drop_handler = self._dropped
+        Resizer(self._resized, min=UNDATED_MIN, max=UNDATED_MAX).mark("resizer")
 
         with (
             ui.dialog()
@@ -132,16 +163,16 @@ class CalendarView:
 
     def _filters(self) -> None:
         with ui.row().classes("w-full items-center gap-x-4 gap-y-2 -mt-2").mark("calendar-filters"):
-            ui.switch("📋 Tâches", value=self.show_tasks, on_change=self._tasks_toggled).props(
+            ui.switch("📋 Tâches", value=self.prefs.show_tasks, on_change=self._tasks_toggled).props(
                 "dense"
             ).tooltip("Afficher les échéances des tâches dans le calendrier").mark("calendar-show-tasks")
             self.scope_toggle = (
-                ui.toggle(SCOPES, value=self.scope, on_change=self._scope_changed)
+                ui.toggle(SCOPES, value=self.prefs.scope, on_change=self._scope_changed)
                 .props("no-caps unelevated dense")
                 .tooltip("Tâches de qui ?")
                 .mark("calendar-scope")
             )
-            self.scope_toggle.set_enabled(self.show_tasks)
+            self.scope_toggle.set_enabled(self.prefs.show_tasks)
             ui.space()
             with ui.row().classes("items-center gap-1 text-xs text-gray-500 max-sm:hidden"):
                 ui.label("Urgence :")
@@ -159,27 +190,45 @@ class CalendarView:
                 )
 
     def _tasks_toggled(self, e) -> None:
-        self.show_tasks = bool(e.value)
-        self.scope_toggle.set_enabled(self.show_tasks)
+        self.prefs.show_tasks = bool(e.value)
+        self.scope_toggle.set_enabled(self.prefs.show_tasks)
         self._save_prefs()
 
     def _scope_changed(self, e) -> None:
-        self.scope = e.value if e.value in SCOPES else "all"
+        self.prefs.scope = e.value if e.value in SCOPES else "all"
         self._save_prefs()
 
-    def _save_prefs(self) -> None:
-        self.ctx.ds.account.set_pref(PREF_KEY, {"tasks": self.show_tasks, "scope": self.scope})
-        self.body.refresh()
+    def _save_prefs(self, refresh: bool = True) -> None:
+        self.ctx.ds.account.set_pref(PREF_KEY, self.prefs.dump())
+        if refresh:
+            self.body.refresh()
+
+    # --- colonne « Sans échéance » : largeur, repli ---
+
+    def _resized(self, _key: str, width: int | None) -> None:
+        self.prefs.undated_width = None if width is None else max(UNDATED_MIN, min(UNDATED_MAX, int(width)))
+        panel = self.undated_panel
+        if panel is not None:  # garde l'élément d'accord avec le navigateur
+            panel._style.pop("width", None)
+            if self.prefs.undated_width is not None:
+                panel.style(f"width: {self.prefs.undated_width}px")
+            else:
+                panel.update()
+        self._save_prefs(refresh=False)
+
+    def toggle_undated(self) -> None:
+        self.prefs.undated_collapsed = not self.prefs.undated_collapsed
+        self._save_prefs()
 
     # --- données ---
 
     def _load(self) -> tuple[dict[date, list[TaskOut]], list[TaskOut]]:
         """Tâches par jour d'affichage (voir ``rules.calendar_days``) et tâches ouvertes sans échéance (les
         plus prioritaires d'abord), selon les filtres."""
-        if not self.show_tasks:
+        if not self.prefs.show_tasks:
             self.tasks = {}
             return {}, []
-        flt = TaskFilter(scope=self.scope, include_subtasks=True, status=SHOWN_STATUSES)
+        flt = TaskFilter(scope=self.prefs.scope, include_subtasks=True, status=SHOWN_STATUSES)
         tasks = self.ctx.ds.tasks.list(flt, TaskSort(key="priority"))
         self.tasks = {task.id: task for task in tasks}
         undated = [task for task in tasks if task.due_date is None and not task.status.is_closed]
@@ -204,6 +253,7 @@ class CalendarView:
         updated = self.ctx.call(self.ctx.ds.tasks.update, task_id, TaskPatch(due_date=due))
         if updated is None:
             return
+        self.tasks[task_id] = updated  # un second dépôt avant la relecture de la page part du bon état
         where = f"échéance {fmt.long_date(due)}" if due else "plus d'échéance"
         ui.notify(f"📅 « {updated.title} » → {where} (Ctrl+Z pour annuler)", position="top")
         self.ctx.refresh()
@@ -237,7 +287,7 @@ class CalendarView:
         days, undated = self._load()
         with ui.element("div").classes("calendar-layout page-fill-grow w-full"):
             self._grid(days, today)
-            if self.show_tasks:
+            if self.prefs.show_tasks:
                 self._undated(undated, today)
 
     def _grid(self, days: dict[date, list[TaskOut]], today: date) -> None:
@@ -286,13 +336,40 @@ class CalendarView:
                         self._chip(task, today)
 
     def _undated(self, tasks: list[TaskOut], today: date) -> None:
-        """Colonne des tâches ouvertes sans échéance, elle aussi zone de dépôt (retirer l'échéance)."""
+        """Colonne des tâches ouvertes sans échéance, elle aussi zone de dépôt (retirer l'échéance).
+        Largeur réglable (poignée à gauche), repliable en une bande étroite qui reste une zone de dépôt."""
+        if self.prefs.undated_collapsed:
+            self.undated_panel = None
+            strip = (
+                ui.element("div")
+                .classes("calendar-undated calendar-undated-collapsed")
+                .tooltip("Tâches sans échéance — cliquer pour déplier")
+                .on("click", self.toggle_undated)
+                .mark("calendar-undated", "calendar-undated-expand")
+            )
+            drop_zone(strip, UNDATED_ZONE)
+            with strip:
+                # Pas de on_click sur le bouton : le clic remonte à la bande entière (sinon double bascule).
+                ui.button(icon="first_page").props("flat round dense size=sm color=grey-7")
+                ui.badge(str(len(tasks))).props("rounded color=grey-5 text-color=black")
+                ui.label("📥").classes("text-lg")
+                ui.label("Sans échéance").classes("kanban-vtitle")
+            return
         panel = ui.element("div").classes("calendar-undated").mark("calendar-undated")
+        if self.prefs.undated_width is not None:
+            panel.style(f"width: {self.prefs.undated_width}px")
         drop_zone(panel, UNDATED_ZONE)
+        resizable(panel, "undated", side="left")
+        self.undated_panel = panel
         with panel:
+            resize_handle(side="left")
             with ui.row().classes("items-center gap-2 no-wrap"):
                 ui.label("📥 Sans échéance").classes("font-semibold")
                 ui.badge(str(len(tasks))).props("rounded color=grey-5 text-color=black")
+                ui.space()
+                ui.button(icon="last_page", on_click=self.toggle_undated).props(
+                    "flat round dense size=sm color=grey-7"
+                ).tooltip("Replier la colonne").mark("calendar-undated-collapse")
             ui.label(
                 "Glissez une pastille vers un jour pour lui donner cette échéance, ou ici pour la retirer."
             ).classes("text-xs text-gray-500")
@@ -388,7 +465,7 @@ class CalendarView:
                 "Fermer (Échap)"
             ).mark("calendar-zoom-close")
         with ui.column().classes("w-full p-4 gap-4 overflow-auto").mark("calendar-zoom"):
-            if not self.show_tasks:
+            if not self.prefs.show_tasks:
                 empty_state("🙈", "Les tâches sont masquées (filtre 📋 Tâches).")
                 return
             if not tasks:

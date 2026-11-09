@@ -226,7 +226,12 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `theme.IMPORTANCE_CHIP_BORDER_PX`) + `box-shadow` inset clair (à garder dans l'animation d'alerte).
 - Glisser-déposer : pastilles `draggable`, cases `drop_zone(cell, "day:<AAAA-MM-JJ>")`, colonne
   `drop_zone(panel, "undated")` ; `CalendarView._dropped` → `ds.tasks.update(TaskPatch(due_date=…))`
-  (`self.tasks` = tâches de la dernière lecture). `_load()` lit une fois : jours + sans échéance. Filtres : préférence `view:calendar`
+  (`self.tasks` = tâches de la dernière lecture, mis à jour après chaque dépôt). `_load()` lit une fois :
+  jours + sans échéance.
+- Colonne « Sans échéance » : `resizable(panel, "undated", side="left")` + `resize_handle(side="left")`
+  (`resize.js` : `data-resize-side="left"` inverse le sens) ; `Resizer` de la page marqué `resizer` ;
+  repliée = bande `calendar-undated-collapsed` (marqueur `calendar-undated-expand`), bouton
+  `calendar-undated-collapse`. Préférences : `CalendarPrefs` / `read_prefs` (tolérant). Filtres : préférence `view:calendar`
   `{"tasks": bool, "scope": "all|mine|shared"}` lue par `read_prefs` (tolérante).
 - Sélection : `select(day)` change les classes sans reconstruire la grille (`self.cells`). Case agrandie :
   `ui.dialog` `maximized` + transition `scale` ; `ZOOM_ORIGIN_JS` (js_handler du `dblclick`) pose
@@ -482,7 +487,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 376 tests au total (+1 réservé à Windows).
+- 377 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

@@ -543,7 +543,11 @@ Page `/calendar` (pleine largeur, pleine hauteur) — **première étape** du ch
   « 📋 Tâches » (affichées ou non — activé par défaut tant qu'il n'y a pas d'événements) et « Tâches de
   qui ? » : 👤 mes tâches, 🤝 partagées avec moi, 👥 les deux. Légende des couleurs à droite.
 - **📥 Sans échéance** : colonne à droite de la grille (sous la grille sous 1024 px de large) avec les tâches
-  ouvertes sans échéance, les plus prioritaires d'abord, dans les mêmes pastilles.
+  ouvertes sans échéance, les plus prioritaires d'abord, dans les mêmes pastilles. **Largeur réglable**
+  (poignée sur son bord gauche, 160 à 560 px ; double-clic : largeur par défaut) et **repliable** (⇥) en
+  une bande étroite (titre vertical, nombre de tâches) qui reste une zone de dépôt ; clic pour la déplier.
+  Largeur et repli mémorisés (`view:calendar` → `undated: {width, collapsed}`). Sur petit écran, repliée
+  = une barre sous la grille.
 - **Glisser-déposer** (souris ; doigt : appui long) : une pastille déposée sur un autre jour prend cette
   échéance (l'heure est gardée) ; déposée sur « Sans échéance », elle perd son échéance (et son heure) ; une
   tâche de « Sans échéance » déposée sur un jour la reçoit. Annulable (Ctrl+Z), toast de confirmation.
@@ -908,3 +912,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-09 | 1.21 | **Branche de test `cloclo`** (§10.3) : `deploy/install_test.sh` bascule le serveur sur `cloclo` (ou `--branch`), `--main` y revient ; copie de la base en quittant main, retour refusé si la base est plus récente que main ; 372 tests |
 | 2026-11-10 | 1.22 | Calendrier : échéances des tâches en pastilles de la couleur de l'urgence, tâches en retard ramenées à aujourd'hui (pastille d'alerte), filtres « 📋 Tâches » et « Tâches de qui ? » mémorisés, sélection d'une case, double-clic = éditeur (pastille) ou case agrandie avec les cartes complètes ; `rules.calendar_days` / `rules.is_overdue`, `theme.readable_text`, `format.distance` ; 375 tests + parcours vérifié dans Firefox |
 | 2026-11-10 | 1.23 | Calendrier : pourtour des pastilles = importance ; colonne « 📥 Sans échéance » (à droite, sous la grille sur petit écran) ; glisser-déposer des pastilles entre les jours et vers / depuis « Sans échéance » pour changer ou retirer l'échéance (zones `day:<date>` et `undated`) ; 376 tests + glisser réel vérifié dans Firefox |
+| 2026-11-10 | 1.24 | Calendrier : colonne « 📥 Sans échéance » de largeur réglable (poignée à gauche ; `resize.js` : `data-resize-side="left"`) et repliable en bande étroite qui reste une zone de dépôt, mémorisé ; correction : deux dépôts rapides de suite sur la même tâche (le second était ignoré) ; 377 tests + vérifié à la souris dans Firefox |

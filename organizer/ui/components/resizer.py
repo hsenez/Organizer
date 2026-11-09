@@ -1,4 +1,5 @@
-"""Redimensionnement horizontal (voir ``resize.js``) : colonnes de kanban.
+"""Redimensionnement horizontal (voir ``resize.js``) : colonnes de kanban, colonne « Sans échéance » du
+calendrier.
 
 L'élément redimensionnable porte ``data-resize-key`` (:func:`resizable`), sa poignée ``data-resize-handle``
 (:func:`resize_handle`). Le composant :class:`Resizer` (un par page) écoute toute la page et appelle
@@ -22,13 +23,18 @@ class Resizer(ui.element, component="resize.js"):
         self.on("resize", lambda e: on_resize(str(e.args["key"]), e.args.get("width")))
 
 
-def resizable(element: ui.element, key: str) -> ui.element:
+def resizable(element: ui.element, key: str, *, side: str = "right") -> ui.element:
+    """``side="left"`` : poignée sur le bord gauche (élément placé à droite de l'écran)."""
     element._props["data-resize-key"] = key
+    if side == "left":
+        element._props["data-resize-side"] = "left"
     return element
 
 
-def resize_handle(tooltip: str = "Glisser pour élargir · double-clic : largeur par défaut") -> ui.element:
-    handle = ui.element("div").classes("resize-handle")
+def resize_handle(
+    tooltip: str = "Glisser pour élargir · double-clic : largeur par défaut", *, side: str = "right"
+) -> ui.element:
+    handle = ui.element("div").classes("resize-handle" + (" resize-handle-left" if side == "left" else ""))
     handle._props["data-resize-handle"] = ""
     handle._props["data-dnd-ignore"] = ""
     handle._props["title"] = tooltip

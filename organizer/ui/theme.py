@@ -172,14 +172,23 @@ body.dnd-active * { scroll-snap-type: none !important; }
 /* Pastille d'échéance : ellipse de la couleur de l'urgence, titre coupé par « … ». */
 .calendar-layout { display: flex; gap: 12px; min-height: 0; }
 .calendar-layout > .calendar { flex: 1 1 auto; min-width: 0; }
-.calendar-undated { flex: 0 0 236px; display: flex; flex-direction: column; gap: 6px; min-height: 0;
+.calendar-undated { position: relative; flex: none; width: 236px; display: flex; flex-direction: column;
+    gap: 6px; min-height: 0;
     padding: 10px; border: 1px solid rgba(120, 130, 150, .25); border-radius: 12px; background: #fff; }
 .body--dark .calendar-undated { border-color: rgba(255, 255, 255, .10); background: #1a1e28; }
 .calendar-undated .calendar-chips { flex: 1 1 auto; gap: 4px; }
+.calendar-undated-collapsed { width: 46px !important; align-items: center; padding: 8px 4px; cursor: pointer; }
+.calendar-undated-collapsed:hover { background: rgba(92, 124, 250, .10); }
+.resize-handle-left { right: auto; left: -7px; }
 @media (max-width: 1023px) {
     .calendar-layout { flex-direction: column; }
     .calendar-layout > .calendar { min-height: 70vh; }
-    .calendar-undated { flex: none; max-height: 60vh; }
+    .calendar-undated { width: auto !important; max-height: 60vh; }
+    .calendar-undated .resize-handle { display: none; }
+    /* Repliée sous la grille : une barre horizontale. */
+    .calendar-undated-collapsed { flex-direction: row; justify-content: flex-start; gap: 8px; padding: 6px 10px; }
+    .calendar-undated-collapsed .kanban-vtitle { writing-mode: horizontal-tb; }
+    .calendar-undated .q-btn .q-icon { transform: rotate(-90deg); }
 }
 /* Fond = urgence ; pourtour = importance (style en ligne), séparé du fond par un liseré clair pour rester
    visible quand les deux couleurs se ressemblent (orange sur orange, rouge sur rouge). */

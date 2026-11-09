@@ -229,7 +229,7 @@ async def test_calendar_shows_due_dates_overdue_today_and_filters(user: User):
     await settle()
     await user.should_see(marker=f"calendar-task-{theirs.id}")
     await user.should_not_see(marker=f"calendar-task-{mine.id}")
-    assert sv.users.get_pref(sv.actor.id, "view:calendar") == {"tasks": True, "scope": "shared"}
+    assert sv.users.get_pref(sv.actor.id, "view:calendar")["scope"] == "shared"
     # Tâches masquées.
     select_value(user, "calendar-show-tasks", False)
     await settle()
@@ -302,6 +302,45 @@ async def test_calendar_drag_changes_due_date_and_importance_ring(user: User):
     # Annulable, en une étape.
     user.find(marker="undo-button").click()
     assert sv.tasks.get(floating.id).due_date is None
+
+
+async def test_calendar_undated_column_resizes_and_collapses(user: User):
+    from organizer.ui.pages.calendar import read_prefs
+
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Un jour peut-être"))
+    await user.open("/calendar")
+    user.find(marker="resizer").trigger("resize", {"key": "undated", "width": 400})
+    prefs = sv.users.get_pref(sv.actor.id, "view:calendar")
+    assert prefs["undated"] == {"width": 400, "collapsed": False}
+    await user.open("/calendar")  # largeur retrouvée
+    panel = next(iter(user.find(marker="calendar-undated").elements))
+    assert panel.style["width"] == "400px"
+    user.find(marker="resizer").trigger("resize", {"key": "undated", "width": None})  # double-clic
+    assert "width" not in panel.style
+    assert sv.users.get_pref(sv.actor.id, "view:calendar")["undated"]["width"] is None
+
+    # Repliée : bande étroite, toujours zone de dépôt ; mémorisé.
+    user.find(marker="calendar-undated-collapse").click()
+    await settle()
+    await user.should_see(marker="calendar-undated-expand")
+    await user.should_not_see(marker=f"calendar-task-{task.id}")
+    user.find(marker="dnd").trigger("drop", {"task": task.id, "zone": "day:2026-11-20", "index": 0})
+    assert sv.tasks.get(task.id).due_date is not None
+    user.find(marker="dnd").trigger("drop", {"task": task.id, "zone": "undated", "index": 0})
+    assert sv.tasks.get(task.id).due_date is None
+    await user.open("/calendar")
+    await user.should_see(marker="calendar-undated-expand")
+    user.find(marker="calendar-undated-expand").trigger("click")
+    await settle()
+    await user.should_see(marker=f"calendar-task-{task.id}")
+    assert sv.users.get_pref(sv.actor.id, "view:calendar")["undated"]["collapsed"] is False
+
+    # Préférences d'une ancienne version ou abîmées : valeurs par défaut.
+    assert read_prefs({"tasks": True, "scope": "mine"}).undated_width is None
+    assert read_prefs({"undated": {"width": 9999, "collapsed": "oui"}}).undated_width == 560
+    assert read_prefs({"undated": "abîmé"}).undated_collapsed is False
+    assert read_prefs(None).scope == "all"
 
 
 # --- ajout rapide, éditeur, annuler -----------------------------------------------------------------------

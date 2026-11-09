@@ -63,7 +63,7 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
   fonctionne toujours, mais un bandeau orange invite à le changer (Réglages → Profil).
 - **Modules** (colonne de gauche) : 🏠 Accueil, 📋 Toutes les tâches, 📊 Kanbans, 🎯 Matrice, 📅 Calendrier
   (grille du mois avec les échéances des tâches : fond = urgence, pourtour = importance, retards ramenés à
-  aujourd'hui ; glisser une pastille pour changer son échéance ; colonne des tâches sans échéance ;
+  aujourd'hui ; glisser une pastille pour changer son échéance ; colonne des tâches sans échéance, réglable et repliable ;
   double-clic sur une case pour l'agrandir), 🔍 Recherche (Ctrl+K), ⚙️ Réglages.
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs` (une fois connecté).
 
