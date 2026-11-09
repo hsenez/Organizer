@@ -428,7 +428,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
   Ctrl+drop ; puis kanbans pleine page, colonnes repliables / redimensionnables, reclassement (urgence +
   rang).
 - ✅ Étape 7 : client bureau (fenêtre native, `RemoteDataSource` via l'API, connexion par jeton, ouverture
-  des fichiers locaux, notifications des rappels). Vérifié sous Linux (GTK) ; **Windows jamais essayé**.
+  des fichiers locaux, notifications des rappels). Vérifié sous Linux (GTK) ; **Windows** : installé et lancé (Python 3.13 ; 3.14+ refusé par l'installeur, faute de pythonnet), suite de tests verte ; usage réel encore peu essayé.
   Puis : arrière-plan, instance unique, raccourcis globaux, installeurs, icône « Post-it en vrac »
   (source : `organizer/assets/organizer.svg`).
 - ✅ Étape 8 : temps réel (SSE), PWA, HTTPS facultatif, finitions. Feuille de route terminée.

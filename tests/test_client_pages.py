@@ -129,7 +129,7 @@ async def test_dropped_file_paths_are_read_on_desktop(server, user: User, tmp_pa
     await user.should_see("Bonjour Alice")
     await user.open("/tasks")
     await user.should_see(marker=f"task-card-{task.id}")
-    uri = "file://" + str(document).replace(" ", "%20")
+    uri = document.as_uri()  # file:///home/… ou file:///C:/…
     user.find(marker="file-drop").trigger("paths", {"kind": "card", "task": task.id, "uris": [uri]})
     await user.should_see("joint(s) à « Devis »")
     (link,) = sv.tasks.get(task.id).links

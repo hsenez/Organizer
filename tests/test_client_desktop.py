@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -117,6 +118,7 @@ def test_exec_quoting():
     assert install.exec_arg('/x/"$y"') == '"/x/\\"\\$y\\""'
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="fichiers .desktop : Linux seulement (chemins à « / »)")
 def test_desktop_files(tmp_path, monkeypatch):
     paths = install.Paths(tmp_path / "share", tmp_path / "config")
     root = tmp_path / "Mes outils" / "Organizer"

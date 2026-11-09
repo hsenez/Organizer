@@ -392,8 +392,11 @@ def test_system_helpers(tmp_path, monkeypatch):
     target = tmp_path / "dossier avec espace" / "f.txt"
     target.parent.mkdir()
     target.write_text("x")
+    assert system.resolve_local_path(target.as_uri()) == target
+    # Forme approximative (file://C:/… sous Windows, file:///home/… ailleurs) : acceptée aussi.
     assert system.resolve_local_path(f"file://{target.as_posix()}".replace(" ", "%20")) == target
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))  # « ~ » sous Windows
     assert system.resolve_local_path("~/dossier avec espace/f.txt") == target
     monkeypatch.setenv("ORGANIZER_CLIENT_DIR", str(tmp_path / "c"))
     assert system.config_dir() == tmp_path / "c" and system.cache_dir() == tmp_path / "c" / "cache"
@@ -405,6 +408,7 @@ def test_xdg_downloads_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("ORGANIZER_CLIENT_DIR", raising=False)
     monkeypatch.setattr(system.sys, "platform", "linux")
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))  # Path.home() quand le test tourne sous Windows
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
     assert system.downloads_dir() == tmp_path / "Downloads"  # pas de user-dirs.dirs
     (tmp_path / ".config").mkdir()

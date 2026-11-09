@@ -93,13 +93,14 @@ def filename_from_disposition(header: str) -> str:
 def resolve_local_path(target: str) -> Path:
     """Chemin local d'un lien (``~``, variables d'environnement, ``file://``) ; erreur s'il n'existe pas."""
     text = target.strip()
-    if text.lower().startswith("file://"):
+    drive = re.match(r"^file:/*([A-Za-z]:[\\/].*)$", text, re.IGNORECASE)
+    if drive:  # Windows : file:///C:/…, mais aussi les formes approximatives file://C:/… ou file://C:\…
+        text = unquote(drive.group(1))
+    elif text.lower().startswith("file://"):
         parsed = urlparse(text)
         text = unquote(parsed.path)
         if parsed.netloc and parsed.netloc != "localhost":
             text = f"//{parsed.netloc}{text}"  # partage réseau
-        if sys.platform == "win32" and re.match(r"^/[A-Za-z]:", text):
-            text = text[1:]
     path = Path(os.path.expandvars(os.path.expanduser(text)))
     if not path.exists():
         raise NotFound(f"📁 Introuvable sur ce poste : {target}")

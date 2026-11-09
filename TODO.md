@@ -65,10 +65,8 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - ✏️ Temps réel : si la tâche ouverte dans l'éditeur est modifiée ailleurs, l'éditeur ne se met pas à jour
   (volontairement : il ne doit pas changer sous les doigts) — afficher plutôt « modifiée ailleurs » ?
 - 🪟 Client bureau sous **Windows** : installé et lancé (Python 3.13, novembre 2026) ; reste à essayer
-  WebView2 à l'usage, `os.startfile`, notifications WinRT. 4 tests échouent sous Windows (déjà avant) :
-  `test_system_helpers` et `test_dropped_file_paths_are_read_on_desktop` (chemins `file://C:/…` → « Introuvable
-  sur ce poste » : **ouverture / dépôt de fichiers locaux probablement cassés sous Windows**),
-  `test_xdg_downloads_dir` et `test_desktop_files` (tests propres à Linux, à sauter ailleurs).
+  WebView2 à l'usage, `os.startfile` (ouvrir un lien vers un fichier local), notifications WinRT. La suite
+  de tests passe sous Windows (version 0.9.4).
 - 🖥️ Client bureau : glisser un fichier depuis l'explorateur sur une tâche pour l'ajouter en lien (pywebview
   fournit le chemin complet : événement `drop` de NiceGUI natif) — rejoint le sujet des liens de fichiers.
 - 🔔 Si l'envoi d'une notification échoue (D-Bus absent…), la tâche est quand même notée « notifiée » pour
