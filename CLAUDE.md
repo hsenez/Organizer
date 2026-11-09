@@ -10,7 +10,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
 
 - **Langue** : échanges, commentaires et docstrings en français (avec accents). Identifiants de code en anglais.
 - **Git** (depuis le 9/11/2026) : travailler sur la branche **`cloclo`** ; y **commiter et pousser
-  systématiquement** (`git push github cloclo`) après chaque changement terminé et vérifié (format, lint,
+  systématiquement** sur le NAS (`git push origin cloclo`, pas GitHub) après chaque changement terminé et vérifié (format, lint,
   tests verts), sans demander : c'est ce que l'utilisateur teste sur le Pi (`deploy/install_test.sh`).
   **Jamais rien sur `main` sans son approbation explicite** (fusion de `cloclo`, push, étiquette).
 - **Documentation** : `specifications.md`, `CLAUDE.md` et `README.md` sont **mis à jour à chaque changement**
