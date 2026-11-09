@@ -283,6 +283,15 @@ def test_normalize_server_url():
     assert normalize_server_url("raspberrypi.local") == "http://raspberrypi.local:2603"
     assert normalize_server_url(" 192.168.1.20:8000/ ") == "http://192.168.1.20:8000"
     assert normalize_server_url("HTTPS://organizer.example.org") == "https://organizer.example.org"
+    # Nom de domaine public sans protocole : https (derrière Cloudflare, le port 2603 n'est pas servi).
+    assert normalize_server_url("organizer.blou.top/") == "https://organizer.blou.top"
+    assert normalize_server_url("http://organizer.blou.top") == "http://organizer.blou.top:2603"
+    assert normalize_server_url("organizer.blou.top:2603") == "http://organizer.blou.top:2603"
+    # Réseau local, IP, nom sans point : http et port 2603.
+    assert normalize_server_url("raspberrypi") == "http://raspberrypi:2603"
+    assert normalize_server_url("pi.lan") == "http://pi.lan:2603"
+    assert normalize_server_url("localhost") == "http://localhost:2603"
+    assert normalize_server_url("86.245.12.7") == "http://86.245.12.7:2603"
     with pytest.raises(ValueError):
         normalize_server_url("  ")
 

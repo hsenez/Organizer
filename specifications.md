@@ -596,7 +596,8 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   données passent par l'API REST du serveur (`RemoteDataSource` : mêmes méthodes, mêmes erreurs que les
   services locaux).
 - **Connexion** (`/connect`) : adresse du serveur (`raspberrypi.local` ou `192.168.1.20` suffit : `http://`
-  et le port 2603 sont ajoutés), identifiant, mot de passe → **jeton API** (90 jours glissants) enregistré
+  et le port 2603 sont ajoutés ; un nom de domaine public sans port, comme `organizer.blou.top`, devient
+  `https://organizer.blou.top`), identifiant, mot de passe → **jeton API** (90 jours glissants) enregistré
   dans `client.json` (lisible par l'utilisateur seul ; jamais le mot de passe). Reconnexion automatique ;
   jeton expiré ou révoqué → retour à `/connect` avec un message ; serveur injoignable → message et
   « 🔄 Réessayer ». Un serveur sans compte renvoie vers `/setup` dans un navigateur.
@@ -834,3 +835,5 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-08 | 1.18 | **Version 0.9.1** du logiciel. **Réseau local automatique** pour le client bureau (§10.1) : adresses locales et clé du compte données par le serveur, preuve d'identité réservée au réseau local avant tout envoi du jeton, bascule de toutes les pages, retour à l'adresse publique hors de la maison ; routes `/api/v1/local-access` et `/local-access/proof` ; état et réglage dans Réglages → 🔌 Connexion ; 345 tests + essai réel (découverte de l'adresse du poste, bascule) |
 | 2026-11-08 | 1.18.1 | **Version 0.9.2**. Indicateur 🏠 réseau local / 🌍 Internet en bas à gauche de chaque page, avec infobulle explicative (client bureau : suit les bascules, clic → réglages de connexion ; web : selon l'adresse du visiteur) ; 350 tests + rendu vérifié dans Firefox |
 | 2026-11-08 | 1.18.2 | **Tests lancés sur le Pi** (Python 3.11.2) : 345 / 350 ; corrections : `deploy/restore.sh` plantait à l'affichage du résumé sur un système réglé en Latin-1 (sortie de Python forcée en UTF-8 : `PYTHONUTF8=1` dans le script et dans le service systemd généré), test qui utilisait une option de `tarfile` absente de Python 3.11.2 ; tests du script lancés avec une sortie Latin-1 ; 351 tests |
+| 2026-11-09 | 1.18.3 | **Premier essai sous Windows** : l'installeur prenait Python 3.15 (`py -3`), pour lequel pythonnet (requis par pywebview) n'existe pas et PyYAML n'a pas de wheel (compilation bloquée par le Contrôle intelligent des applications). `install.ps1` exige désormais Python 3.11 à 3.13 (`py -3.13`, `-3.12`, `-3.11`) et refait un venv d'une autre version |
+| 2026-11-09 | 1.18.4 | **Version 0.9.3**. Client bureau : une adresse saisie sans protocole qui est un nom de domaine public (`organizer.blou.top`) devient `https://…` au lieu de `http://…:2603` (que Cloudflare ne sert pas : « ne répond pas » au premier essai sous Windows) ; adresses locales inchangées ; message « ne répond pas » adapté (réseau local / Internet). `is_local_host` partagé par `config.py` et `lan.py` |

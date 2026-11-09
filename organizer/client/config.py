@@ -10,6 +10,7 @@ import json
 import os
 import re
 from dataclasses import asdict, dataclass, field, fields
+from ipaddress import ip_address
 from pathlib import Path
 
 DEFAULT_PORT = 2603
@@ -30,16 +31,46 @@ class ClientConfig:
     lan_user: int | None = None
 
 
-def normalize_server_url(text: str) -> str:
-    """Adresse saisie → URL du serveur : ``raspberrypi.local`` → ``http://raspberrypi.local:2603``.
+LOCAL_SUFFIXES = (".local", ".lan", ".home", ".internal")
 
-    Le port 2603 est ajouté s'il manque (sauf en https), le protocole http par défaut (réseau local).
+
+def is_local_host(host: str) -> bool:
+    """Nom ou adresse d'une machine du réseau local (IP privée, ``raspberrypi.local``, ``localhost``…) ?"""
+    host = host.lower().strip("[]")
+    if host == "localhost" or host.endswith(LOCAL_SUFFIXES):
+        return True
+    try:
+        address = ip_address(host)
+    except ValueError:
+        return False
+    return address.is_private or address.is_loopback
+
+
+def _is_domain_name(host: str) -> bool:
+    """Nom de domaine public (``organizer.blou.top``) : avec un point, ni adresse IP ni nom local."""
+    if "." not in host or is_local_host(host):
+        return False
+    try:
+        ip_address(host.strip("[]"))
+    except ValueError:
+        return True
+    return False
+
+
+def normalize_server_url(text: str) -> str:
+    """Adresse saisie → URL du serveur.
+
+    Sans protocole : ``organizer.blou.top`` (nom de domaine public, sans port) → ``https://organizer.blou.top``
+    (serveur derrière un proxy comme Cloudflare, qui ne sert pas le port 2603) ; sinon http, réseau local :
+    ``raspberrypi.local`` → ``http://raspberrypi.local:2603``. En http, le port 2603 est ajouté s'il manque.
     """
     url = text.strip().rstrip("/")
     if not url:
         raise ValueError("Indiquez l'adresse du serveur.")
     if not re.match(r"^https?://", url, re.IGNORECASE):
-        url = f"http://{url}"
+        host = url.split("/", 1)[0]
+        public = re.search(r":\d+$", host) is None and _is_domain_name(host)
+        url = f"https://{url}" if public else f"http://{url}"
     scheme, rest = url.split("://", 1)
     host, _, path = rest.partition("/")
     if not host:

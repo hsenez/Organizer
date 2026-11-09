@@ -72,22 +72,33 @@ if ($Uninstall) {
 
 Write-Step "Installation du client bureau Organizer dans $Root"
 
-# --- Python >= 3.11 (lanceur « py » de python.org, sinon « python ») ---
+# --- Python 3.11 à 3.13 (lanceur « py » de python.org, sinon « python ») ---
+# Plus récent : pythonnet (requis par pywebview sous Windows) n'existe pas encore, et des paquets sans
+# wheel (PyYAML…) devraient être compilés (ce que le Contrôle intelligent des applications bloque).
+$VersionCheck = "import sys; print((3, 11) <= sys.version_info[:2] <= (3, 13))"
 $base = $null
-foreach ($candidate in @(@("py", "-3"), @("python"))) {
+foreach ($candidate in @(@("py", "-3.13"), @("py", "-3.12"), @("py", "-3.11"), @("python"))) {
     try {
         $exe = $candidate[0]; $rest = @($candidate | Select-Object -Skip 1)
-        $ok = & $exe @rest -c "import sys; print(sys.version_info >= (3, 11))" 2>$null
+        $ok = & $exe @rest -c $VersionCheck 2>$null
         if ($ok -eq "True") { $base = $candidate; break }
     } catch { }
 }
 if (-not $base) {
-    Write-Host "Python 3.11 ou plus récent est introuvable." -ForegroundColor Red
-    Write-Host "Installez-le depuis https://www.python.org/downloads/ (cocher « Add python.exe to PATH »), puis relancez."
+    Write-Host "Python 3.11, 3.12 ou 3.13 est introuvable (les versions plus récentes ne conviennent pas encore)." -ForegroundColor Red
+    Write-Host "Installez Python 3.13 : « py install 3.13 » (gestionnaire d'installation Python), ou depuis"
+    Write-Host "https://www.python.org/downloads/ (cocher « Add python.exe to PATH »), puis relancez."
     exit 1
 }
 
-# --- venv et dépendances ---
+# --- venv et dépendances (un venv créé avec une version qui ne convient pas est refait) ---
+if (Test-Path $Python) {
+    $ok = & $Python -c $VersionCheck 2>$null
+    if ($ok -ne "True") {
+        Write-Step "Environnement Python existant d'une version qui ne convient pas : recréation"
+        Remove-Item -Recurse -Force $Venv
+    }
+}
 if (-not (Test-Path $Python)) {
     Write-Step "Création de l'environnement Python ($Venv)"
     $exe = $base[0]; $rest = @($base | Select-Object -Skip 1)

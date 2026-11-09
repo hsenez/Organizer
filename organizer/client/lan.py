@@ -27,13 +27,12 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
-from ipaddress import ip_address
 from urllib.parse import urlparse
 
 import httpx
 
 from organizer.client.api import API_PREFIX, ApiClient, make_http
-from organizer.client.config import ClientConfig
+from organizer.client.config import ClientConfig, is_local_host
 from organizer.core.errors import NotFound, OrganizerError
 from organizer.core.schemas import LocalAccessOut
 
@@ -47,14 +46,7 @@ INFO_EVERY = 600.0  # s : adresses et clé redemandées au serveur (l'adresse du
 
 def is_lan_url(url: str) -> bool:
     """Adresse d'un serveur sur le réseau local (IP privée, ``raspberrypi.local``…) ?"""
-    host = (urlparse(url).hostname or "").lower()
-    if host in ("localhost",) or host.endswith((".local", ".lan", ".home", ".internal")):
-        return True
-    try:
-        address = ip_address(host)
-    except ValueError:
-        return False
-    return address.is_private or address.is_loopback
+    return is_local_host(urlparse(url).hostname or "")
 
 
 def expected_proof(key: str, nonce: str) -> str:

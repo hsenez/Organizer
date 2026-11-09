@@ -64,7 +64,8 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs` (une fois connecté).
 
 **🖥️ Client bureau** : au premier lancement, indiquer l'adresse du Pi (`raspberrypi.local` ou son IP : le
-port 2603 est ajouté tout seul), l'identifiant et le mot de passe. Seul un **jeton** est conservé
+port 2603 est ajouté tout seul ; un nom de domaine public comme `organizer.blou.top` passe en `https://`),
+l'identifiant et le mot de passe. Seul un **jeton** est conservé
 (`~/.config/organizer/client.json`, ou `%APPDATA%\Organizer\` sous Windows) : les lancements suivants
 ouvrent directement l'application. Par rapport au site :
 
@@ -120,7 +121,8 @@ install/linux/install.sh                  # options : --no-autostart --no-shortc
 install/linux/install.sh --show-key Meta+O --new-key Meta+N   # autres raccourcis
 ```
 
-**Windows** : double-cliquer sur `install\windows\install.bat` (Python ≥ 3.11 depuis python.org requis ;
+**Windows** : double-cliquer sur `install\windows\install.bat` (Python **3.11 à 3.13** requis — pas plus récent : pythonnet, utilisé par la fenêtre, ne le gère pas encore ;
+`py install 3.13` avec le gestionnaire d'installation Python ;
 désinstallation : `uninstall.bat`).
 
 L'installeur crée l'environnement Python, le lanceur « Organizer » (menu des applications / menu Démarrer),

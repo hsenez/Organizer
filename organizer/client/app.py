@@ -230,9 +230,13 @@ class DesktopClient:
         params = request.query_params
         with auth_shell("Connectez ce poste à votre serveur Organizer"):
             if params.get("offline"):
+                hint = (
+                    "que ce poste est sur le même réseau."
+                    if is_lan_url(self.config.server)
+                    else "la connexion Internet de ce poste."
+                )
                 ui.label(
-                    f"🔌 Le serveur {self.config.server} ne répond pas. Vérifiez qu'il est démarré et que ce "
-                    "poste est sur le même réseau."
+                    f"🔌 Le serveur {self.config.server} ne répond pas. Vérifiez qu'il est démarré, et {hint}"
                 ).classes("text-sm text-amber-700")
                 ui.button("🔄 Réessayer", on_click=lambda: ui.navigate.to("/")).props(
                     "outline no-caps"
@@ -245,7 +249,7 @@ class DesktopClient:
                 ui.input(
                     "🖧 Adresse du serveur",
                     value=self.config.server,
-                    placeholder="raspberrypi.local ou 192.168.1.20",
+                    placeholder="organizer.exemple.fr, raspberrypi.local ou 192.168.1.20",
                 )
                 .props("outlined autofocus")
                 .classes("w-full")
