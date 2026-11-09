@@ -11,25 +11,10 @@ from nicegui import ui
 from organizer.core import rules
 from organizer.core.enums import DueBucket, Quadrant, Status
 from organizer.core.schemas import TaskFilter, TaskOut, TaskSort
+from organizer.ui import format as fmt
 from organizer.ui.components.task_card import task_card
 from organizer.ui.context import UiContext
 from organizer.ui.layout import app_frame, card_grid, empty_state, section_title
-
-DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-MONTHS = [
-    "janvier",
-    "février",
-    "mars",
-    "avril",
-    "mai",
-    "juin",
-    "juillet",
-    "août",
-    "septembre",
-    "octobre",
-    "novembre",
-    "décembre",
-]
 
 
 def page(make_context):
@@ -55,9 +40,9 @@ def _body(ctx: UiContext, view: dict, body) -> None:
 
     with ui.column().classes("gap-0"):
         ui.label(f"Bonjour {ctx.user.display_name} 👋").classes("text-2xl sm:text-3xl font-bold")
-        ui.label(f"{DAYS[today.weekday()]} {today.day} {MONTHS[today.month - 1]} {today.year}").classes(
-            "text-gray-500"
-        )
+        ui.label(
+            f"{fmt.DAY_NAMES[today.weekday()]} {today.day} {fmt.MONTH_NAMES[today.month - 1]} {today.year}"
+        ).classes("text-gray-500")
 
     monday = today - timedelta(days=today.weekday())
     done_this_week = [

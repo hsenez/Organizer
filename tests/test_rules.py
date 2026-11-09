@@ -235,3 +235,40 @@ def test_rank_drop_inside_a_group():
     assert urgency == 3 and ranks == {9: 1.0, 2: 2.0}
     # Seule dans la colonne : rien à faire.
     assert rules.rank_drop([(9, 2, 0.0)], 9) == (2, {})
+
+
+# --- Calendrier -------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("year", "month", "delta", "expected"),
+    [
+        (2026, 11, 1, (2026, 12)),
+        (2026, 12, 1, (2027, 1)),
+        (2026, 1, -1, (2025, 12)),
+        (2026, 11, -23, (2024, 12)),
+        (2026, 11, 0, (2026, 11)),
+    ],
+)
+def test_shift_month(year, month, delta, expected):
+    assert rules.shift_month(year, month, delta) == expected
+
+
+def test_month_grid_starts_monday_and_ends_sunday():
+    weeks = rules.month_grid(2026, 11)  # 1er novembre 2026 = dimanche
+    assert weeks[0][0] == date(2026, 10, 26)  # lundi précédent
+    assert weeks[0][-1] == date(2026, 11, 1)
+    assert weeks[-1][-1] == date(2026, 12, 6)  # 30 novembre = lundi → dimanche suivant
+    assert len(weeks) == 6
+    assert all(len(week) == 7 for week in weeks)
+    assert all(week[0].weekday() == 0 for week in weeks)
+    days = [d for week in weeks for d in week]
+    assert days == [days[0] + timedelta(days=i) for i in range(len(days))]  # continu, sans trou
+
+
+def test_month_grid_exact_weeks():
+    # Février 2027 : commence un lundi, 28 jours → exactement 4 semaines, sans jour voisin.
+    weeks = rules.month_grid(2027, 2)
+    assert len(weeks) == 4
+    assert weeks[0][0] == date(2027, 2, 1)
+    assert weeks[-1][-1] == date(2027, 2, 28)

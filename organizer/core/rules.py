@@ -308,3 +308,30 @@ def rank_drop(order: list[tuple[int, int, float]], moved: int) -> tuple[Urgency,
 def priority_score(importance: int, urgency: int) -> int:
     """Score combiné (2 à 8) ; plus il est haut, plus la tâche est prioritaire."""
     return importance + urgency
+
+
+# --- Calendrier -------------------------------------------------------------------------------------------
+
+
+def shift_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    """Mois décalé de ``delta`` (négatif = vers le passé) : ``(2026, 12) + 1`` → ``(2027, 1)``."""
+    index = year * 12 + (month - 1) + delta
+    return index // 12, index % 12 + 1
+
+
+def month_grid(year: int, month: int) -> list[list[date]]:
+    """Semaines complètes (lundi → dimanche) qui couvrent le mois : 4 à 6 lignes de 7 jours.
+
+    La première ligne commence au lundi qui précède (ou qui est) le 1er ; la dernière finit au dimanche qui
+    suit (ou qui est) le dernier jour. Les jours des mois voisins sont donc inclus.
+    """
+    first = date(year, month, 1)
+    next_year, next_month = shift_month(year, month, 1)
+    last = date(next_year, next_month, 1) - timedelta(days=1)
+    day = first - timedelta(days=first.weekday())
+    end = end_of_week(last)
+    weeks: list[list[date]] = []
+    while day <= end:
+        weeks.append([day + timedelta(days=i) for i in range(7)])
+        day += timedelta(days=7)
+    return weeks

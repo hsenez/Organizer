@@ -70,7 +70,7 @@ organizer/
     schemas.py           # objets échangés (Pydantic) : *In / *Patch / *Out, filtres, tri
     db.py                # moteur SQLite (clés étrangères, WAL), création du schéma
     errors.py            # erreurs métier (message français affichable)
-    rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche
+    rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche, calendrier
     unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
     services/            # users, auth, account, labels (projets + tags), tasks, boards, attachments, undo ;
                          # façade `Services`
@@ -99,11 +99,12 @@ organizer/
     components/          # task_card, level_slider, task_editor, markdown_editor, filter_bar, task_list,
                          # search_dialog, tag_chips, dnd (.py + .js : glisser-déposer),
                          # resizer (.py + resize.js : largeur des colonnes)
-    pages/               # home, tasks (+ recherche), kanban, matrix, settings
+    pages/               # home, tasks (+ recherche), kanban, matrix, calendar, settings
   assets/                # icônes (SVG source, PNG, ICO, maskable, apple-touch) — scripts/make_icons.sh
 tests/
 scripts/demo.py          # démo terminal + données d'exemple (base data/demo.db)
-deploy/                 # install.sh (serveur : venv + service systemd généré), update.sh, common.sh
+deploy/                 # install.sh (serveur : venv + service systemd généré), update.sh, common.sh,
+                         # install_test.sh (bascule sur la branche de test cloclo), restore.sh
 run_server.py
 run_client.py
 ```
@@ -406,8 +407,9 @@ sous-tâches, on demande s'il faut les supprimer aussi ou les garder.
 2. 📋 **Toutes les tâches** — liste générale
 3. 📊 **Kanbans** — boards prédéfinis + personnalisés
 4. 🎯 **Matrice d'Eisenhower**
-5. 🔍 **Recherche** (aussi accessible partout par `Ctrl+K`)
-6. ⚙️ **Réglages**
+5. 📅 **Calendrier** — grille du mois
+6. 🔍 **Recherche** (aussi accessible partout par `Ctrl+K`)
+7. ⚙️ **Réglages**
 
 Bouton flottant **➕ Nouvelle tâche** sur tous les écrans (raccourci **N**) : ouvre l'éditeur complet en
 mode création (voir §6).
@@ -517,6 +519,20 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 - Mêmes filtres que les kanbans ; par défaut, filtre « statut ouvert » (les tâches finies / annulées sont
   masquées) ; vue et filtres mémorisés (préférence `view:matrix`).
 - Téléphone : les quatre quadrants sont empilés.
+
+### 8.4 bis 📅 Calendrier
+
+Page `/calendar` (pleine largeur, pleine hauteur) — **première étape** du chantier « événements » (voir
+`TODO.md`) :
+
+- Grille classique du mois : **7 colonnes, du lundi au dimanche**, 4 à 6 semaines complètes ; les jours des
+  mois voisins complètent la première et la dernière ligne (grisés), le week-end est légèrement teinté,
+  aujourd'hui est entouré.
+- En-tête : ‹ › pour passer au mois précédent / suivant, nom du mois, bouton « Aujourd'hui » (grisé quand
+  on est déjà sur le mois en cours). Le mois se choisit aussi par l'adresse : `/calendar?month=2026-11`.
+- Les cases sont **vides pour l'instant** : y viendront les événements et, en option, les échéances des
+  tâches.
+- Téléphone : mêmes 7 colonnes, cases plus basses.
 
 ### 8.5 Barre de filtres
 
@@ -693,6 +709,11 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   redémarrage, vérification de `/api/v1/version`. Les données (`data/`) ne sont pas touchées ; les
   évolutions de la base sont appliquées au démarrage (migrations, §10.6).
 - Ordre conseillé : **le serveur d'abord**, puis les postes (le bandeau les y invite).
+- **Branche de test** `cloclo` : le développement y est poussé au fil de l'eau ; `main` ne reçoit que ce
+  qui a été validé. Sur le Pi, `deploy/install_test.sh` bascule l'installation sur `cloclo` (`--main` :
+  retour ; `--branch x` : autre branche) puis relance `deploy/install.sh --reuse`. Mêmes données : copie de
+  la base avant de quitter main ; retour sur main refusé si la base a été migrée au-delà de ce que main
+  connaît. `deploy/update.sh` suit la branche active.
 - Le code reste **compatible Python 3.11** (contrôlé par ruff, `target-version = py311`).
 - **HTTPS par le serveur lui-même** (facultatif, réseau local) : `ORGANIZER_SSL_CERT` / `ORGANIZER_SSL_KEY`
   (fichiers PEM). Certificat conseillé : autorité locale **mkcert** (son certificat racine est à installer sur
@@ -862,3 +883,5 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-09 | 1.18.5 | **Version 0.9.4**. Suite de tests lancée sous **Windows** (Python 3.13) : 341 réussis, 10 sautés. Liens `file://` vers un disque Windows acceptés sous toutes leurs formes (`file:///C:/…`, mais aussi `file://C:/…` ou `file://C:\…`) ; tests rendus portables (`Path.as_uri()`, `USERPROFILE`), test des fichiers `.desktop` réservé à Linux |
 | 2026-11-09 | 1.18.6 | **Version 0.9.5**. Client bureau sous **Windows** : raccourcis globaux captés par Organizer (`RegisterHotKey`, `winshell.py`) au lieu des `.lnk` du menu Démarrer (appuis perdus une fois sur deux : premier plan refusé par Windows) ; **icône dans la zone de notification** (clic : ouvrir ; clic droit : nouvelle tâche, quitter) ; mise au premier plan par `SetForegroundWindow` ; icône d'Organizer (et non de Python) dans les notifications ; 343 tests |
 | 2026-11-09 | 1.19 | **🎉 Version 1.0.0**. Migrations de la base (§10.6) : numéro de schéma dans l'en-tête SQLite, étapes transactionnelles (structure comprise), copie de sécurité avant migration, base trop récente refusée, schéma 1 = point de départ ; numéro de schéma dans le manifeste des sauvegardes ; base créée par la 0.9.0 gardée comme référence de test (`tests/fixtures/organizer-0.9.0.db`) ; essai sur des copies des bases existantes du poste de développement ; 361 tests (+1 réservé à Windows) |
+| 2026-11-09 | 1.20 | **📅 Calendrier** (§8.4 bis), première étape du chantier « événements » : module dans la colonne de gauche, page `/calendar` = grille du mois du lundi au dimanche, ‹ › et « Aujourd'hui », `?month=AAAA-MM` ; règles pures `rules.month_grid` / `rules.shift_month` ; noms complets des jours et des mois regroupés dans `ui/format.py` ; 369 tests + rendu vérifié dans Firefox (clair, sombre, téléphone) |
+| 2026-11-09 | 1.21 | **Branche de test `cloclo`** (§10.3) : `deploy/install_test.sh` bascule le serveur sur `cloclo` (ou `--branch`), `--main` y revient ; copie de la base en quittant main, retour refusé si la base est plus récente que main ; 372 tests |

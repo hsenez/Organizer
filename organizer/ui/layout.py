@@ -37,6 +37,7 @@ MODULES = [
     Module("/tasks", "📋", "Toutes les tâches", "La liste complète, triée par priorité"),
     Module("/kanban", "📊", "Kanbans", "Boards par statut, échéance, type, projet… et les vôtres"),
     Module("/matrix", "🎯", "Matrice", "Matrice d'Eisenhower : important × urgent"),
+    Module("/calendar", "📅", "Calendrier", "Le mois en un coup d'œil, du lundi au dimanche"),
     Module("/search", "🔍", "Recherche", "Rechercher dans les titres, notes, tags et projets (Ctrl+K)"),
 ]
 SETTINGS = Module("/settings", "⚙️", "Réglages", "Profil, projets, tags, appareils, utilisateurs")

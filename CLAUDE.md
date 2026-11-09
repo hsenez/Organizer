@@ -9,7 +9,10 @@ Référence fonctionnelle complète : **`specifications.md`**.
 ## Règles de travail (demandées par l'utilisateur)
 
 - **Langue** : échanges, commentaires et docstrings en français (avec accents). Identifiants de code en anglais.
-- **Git** : commits réguliers, mais **jamais de commit sans confirmation explicite de l'utilisateur**.
+- **Git** (depuis le 9/11/2026) : travailler sur la branche **`cloclo`** ; y **commiter et pousser
+  systématiquement** (`git push github cloclo`) après chaque changement terminé et vérifié (format, lint,
+  tests verts), sans demander : c'est ce que l'utilisateur teste sur le Pi (`deploy/install_test.sh`).
+  **Jamais rien sur `main` sans son approbation explicite** (fusion de `cloclo`, push, étiquette).
 - **Documentation** : `specifications.md`, `CLAUDE.md` et `README.md` sont **mis à jour à chaque changement**
   (fonctionnalité, architecture, dépendance, commande). Ajouter une ligne dans l'historique de
   `specifications.md`.
@@ -210,6 +213,16 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `trigger("attach", {...})`. Le geste réel se vérifie dans Firefox (BiDi, `input.performActions` souris et
   `pointerType: "touch"`) ; ne pas faire défiler la page entre la mesure des positions et le geste.
 
+## Calendrier (chantier « événements », en cours)
+
+- Page `ui/pages/calendar.py` (`CalendarView`, `app_frame(..., wide=True)`) : grille CSS `.calendar`
+  (7 colonnes, lignes `minmax(0, 1fr)` → la grille remplit la hauteur, `page-fill-grow`), styles dans
+  `theme.py`. Grille calculée par `rules.month_grid(year, month)` (semaines complètes lundi → dimanche),
+  navigation par `rules.shift_month`. Mois initial : `?month=AAAA-MM` (`parse_month`), sinon `ctx.today()`.
+- Marqueurs de test : `calendar-prev`, `calendar-next`, `calendar-today`, `calendar-title`,
+  `calendar-day-<AAAA-MM-JJ>` (une case par jour affiché).
+- Noms des jours / mois : `ui/format.py` (`DAYS`, `MONTHS` abrégés ; `DAY_NAMES`, `MONTH_NAMES` complets).
+
 ## Étape 7 : client bureau
 
 - `organizer/client/` : **aucune** dépendance au serveur (`organizer.server`) hors tests. `app.py`
@@ -399,7 +412,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
 
 - `organizer/__init__.py` : `__version__` (**1.0.0** depuis le 9/11/2026 ; ensuite MINEUR = nouveauté,
   CORRECTIF = correction, MAJEUR = incompatibilité) et `API_VERSION`.
-  **À chaque version livrée** (commit confirmé par l'utilisateur) : augmenter `__version__`, l'indiquer dans
+  **À chaque version livrée** (passage sur `main` approuvé par l'utilisateur) : augmenter `__version__`, l'indiquer dans
   l'historique de `specifications.md`, proposer l'étiquette git `v<version>`. Augmenter `API_VERSION`
   seulement si un client plus ancien ne peut plus fonctionner (route supprimée / modifiée de façon
   incompatible) — préférer des changements compatibles (champs ajoutés avec valeur par défaut).
@@ -415,6 +428,11 @@ Référence fonctionnelle complète : **`specifications.md`**.
   administrateur : faux `sudo` / `systemctl` en tête du `PATH` (le faux `systemctl restart` lance le serveur
   d'après le fichier généré). ⚠️ Pour arrêter un serveur de test, viser le **programme** python
   (`ps -eo pid,args | awk '$2 ~ /python/ && /motif/'`), jamais `pkill -f motif` (tue son propre shell).
+- **Version de test** : `deploy/install_test.sh` (Pi) bascule la même installation (même service, mêmes
+  données) sur `cloclo` (ou `--branch x`), `--main` y revient ; copie de la base `avant-<branche>-<date>.db`
+  en quittant main ; refuse de revenir sur main si la base a un schéma plus récent que celui de main
+  (`SCHEMA_VERSION`), et reste alors sur la branche de test. Ensuite `deploy/update.sh` suit la branche
+  active. Tests : `tests/test_deploy.py` (dépôt distant + clone temporaires, faux paquet `migrations`).
 - Scripts : `install/linux/update.sh`, `install/windows/update.ps1` (+ `.bat`), `deploy/update.sh` (Pi). Les
   scripts bash sont enveloppés dans une fonction `main` (git pull peut les modifier pendant leur exécution).
   L'installeur retient ses options (`install.json`, `--reuse`).
@@ -449,7 +467,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 361 tests au total (+1 réservé à Windows).
+- 372 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

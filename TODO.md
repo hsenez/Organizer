@@ -118,6 +118,8 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - Ils peuvent contenir des tâches (intéraction des attributs à définir clairement)
 - Ils sont publics, privés ou partagés (comme les tâches)
 - On aura en plus de kanban et compagnie dans le menu de gauche, un calendrier. 
+  - ✅ Première étape faite : module 📅 Calendrier, grille du mois (lundi → dimanche), ‹ › et « Aujourd'hui ».
+    Cases encore vides : contenu à définir avec Hubert.
   - Il affiche les événements, et optionnellement les dates critiques des taches (par défaut désactivé mais facilement ajoutable)
   - L'interface permet facilement d'éditer le début et la fin d'un événement (tiravec la souris)
   - Les événements et taches publics ou partagées spécifiquement avec moi sont potentiellement visibles aussi mais on peut filtrer poru ne pas les voir

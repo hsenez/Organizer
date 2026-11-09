@@ -127,6 +127,27 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .page-fill-column { flex: 1 1 auto; }
 .page-fill-grow { flex: 1 1 auto; min-height: 320px; }
 
+/* --- Calendrier --------------------------------------------------------------------------------- */
+.calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; overflow: hidden;
+    border: 1px solid rgba(120, 130, 150, .25); border-radius: 12px; background: rgba(120, 130, 150, .25); }
+.calendar-head { padding: 4px 6px; text-align: center; font-size: .8rem; font-weight: 600;
+    text-transform: capitalize; color: #64748b; background: #f8fafc; }
+.calendar-cell { min-height: 64px; padding: 4px; background: #fff; overflow: hidden; }
+.calendar-cell.calendar-weekend, .calendar-head.calendar-weekend { background: #f4f6fb; }
+.calendar-outside { color: #adb5bd; }
+.calendar-outside.calendar-cell { background: #fafbfc; }
+.calendar-day-number { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6rem;
+    height: 1.6rem; padding: 0 4px; border-radius: 999px; font-size: .85rem; font-weight: 600; }
+.calendar-today .calendar-day-number { background: #5c7cfa; color: #fff; }
+.calendar-today { box-shadow: inset 0 0 0 2px rgba(92, 124, 250, .55); }
+.body--dark .calendar { border-color: rgba(255, 255, 255, .10); background: rgba(255, 255, 255, .10); }
+.body--dark .calendar-head { color: #94a3b8; background: #161a23; }
+.body--dark .calendar-cell { background: #1a1e28; }
+.body--dark .calendar-cell.calendar-weekend, .body--dark .calendar-head.calendar-weekend { background: #1f2330; }
+.body--dark .calendar-outside { color: #4b5563; }
+.body--dark .calendar-outside.calendar-cell { background: #15181f; }
+@media (max-width: 599px) { .calendar-cell { min-height: 52px; padding: 2px; } }
+
 /* --- Kanbans ------------------------------------------------------------------------------------- */
 .kanban { scroll-padding-left: 4px; align-items: stretch !important; }
 .kanban-col { position: relative; width: 264px; max-width: 86vw; min-height: 140px;

@@ -6,6 +6,21 @@ from datetime import date, datetime, time
 
 DAYS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
 MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+DAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+MONTH_NAMES = [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+]
 
 
 def short_date(d: date, today: date) -> str:

@@ -61,6 +61,8 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 - Ensuite : page de connexion, avec « 🍪 Se souvenir de moi » (30 jours).
 - **Mots de passe** : 12 caractères minimum. Un compte créé avant cette règle avec un mot de passe plus court
   fonctionne toujours, mais un bandeau orange invite à le changer (Réglages → Profil).
+- **Modules** (colonne de gauche) : 🏠 Accueil, 📋 Toutes les tâches, 📊 Kanbans, 🎯 Matrice, 📅 Calendrier
+  (grille du mois ; les événements viendront s'y placer), 🔍 Recherche (Ctrl+K), ⚙️ Réglages.
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs` (une fois connecté).
 
 **🖥️ Client bureau** : au premier lancement, indiquer l'adresse du Pi (`raspberrypi.local` ou son IP : le
@@ -170,6 +172,18 @@ d'afficher les adresses à ouvrir. Première visite : création du compte admini
 | `--ssl-cert <pem> --ssl-key <pem>` / `--no-https` | HTTPS (voir plus bas) / retour au HTTP |
 | `--print-service` | affiche le service qui serait installé, sans rien changer |
 | `--uninstall` | arrête et retire le service (code et données conservés) |
+
+**Version de test** (branche `cloclo`, travail pas encore validé) :
+
+```bash
+deploy/install_test.sh          # passe le serveur sur cloclo (ou la met à jour) et le redémarre
+deploy/install_test.sh --main   # revient sur main
+```
+
+Même service, même port, **mêmes données** : seul le code change. Une copie de la base
+(`avant-cloclo-<date>.db`, dans le dossier des données) est faite en quittant main. `deploy/update.sh`
+met ensuite à jour la branche active. Si la version de test a fait évoluer la base et que main ne connaît
+pas encore cette évolution, le retour sur main est refusé (le serveur reste sur cloclo).
 
 Les options sont retenues (`deploy/server.conf`). Suivi : `systemctl status organizer`,
 `journalctl -u organizer -f`. Le journal contient aussi chaque tentative de connexion (identifiant, adresse

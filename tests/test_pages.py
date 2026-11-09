@@ -154,6 +154,32 @@ async def test_placeholder_modules(user: User):
     await user.should_see(marker="zone-q:do")
 
 
+async def test_calendar_month_navigation(user: User):
+    from datetime import date
+
+    await login(user)
+    today = date.today()
+    await user.open("/calendar")
+    await user.should_see(marker=f"calendar-day-{today.isoformat()}")
+    await user.should_see(marker="calendar-day-" + date(today.year, today.month, 1).isoformat())
+    user.find(marker="calendar-next").click()
+    next_first = date(today.year + today.month // 12, today.month % 12 + 1, 1)
+    await user.should_see(marker=f"calendar-day-{next_first.isoformat()}")
+    user.find(marker="calendar-today").click()
+    await user.should_see(marker=f"calendar-day-{today.isoformat()}")
+    # Mois choisi par l'adresse ; lundi en premier, dimanche en dernier.
+    await user.open("/calendar?month=2027-02")
+    await user.should_see("Février 2027")
+    await user.should_see(marker="calendar-day-2027-02-01")
+    await user.should_see(marker="calendar-day-2027-02-28")
+    await user.should_not_see(marker="calendar-day-2027-03-01")
+    user.find(marker="calendar-prev").click()
+    await user.should_see("Janvier 2027")
+    await user.should_see(marker="calendar-day-2026-12-28")  # lundi de la 1re semaine
+    await user.should_see(marker="calendar-day-2027-01-31")  # dimanche : dernière case
+    await user.should_not_see(marker="calendar-day-2027-02-01")
+
+
 # --- ajout rapide, éditeur, annuler -----------------------------------------------------------------------
 
 
