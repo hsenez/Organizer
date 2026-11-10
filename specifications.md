@@ -576,8 +576,18 @@ Module indépendant, fonctionne comme un **kanban en 2D** :
 
 ### 8.4 bis 📅 Calendrier
 
-Page `/calendar` (pleine largeur, pleine hauteur) — **première étape** du chantier « événements » (voir
-`TODO.md`) :
+Page `/calendar` (pleine largeur, pleine hauteur) :
+
+- **Vues** : **Mois** (par défaut), **Semaine** (une ligne de 7 jours, cases hautes) et **6 semaines** (à
+  cheval sur deux mois) ; dans ces deux dernières, ‹ › avancent **d'une semaine** et le premier jour de
+  chaque mois est repéré (« 1 déc. »). Vue mémorisée ; sur téléphone, le choix de la vue passe dans la barre
+  des filtres.
+- **Événements** (§4.7) : ceux qui durent **toute la journée** ou touchent **plusieurs jours** sont des
+  **bandes** de leur couleur qui traversent les cases (un morceau par semaine, ◂ ▸ quand elles continuent ;
+  rangées sur des lignes sans chevauchement, au-dessus des pastilles) ; les autres sont des **étiquettes
+  horaires** (« 09:30 Dentiste ») rectangulaires à liseré coloré, avant les tâches de la case.
+  **Double-clic** : éditeur. **Glisser** vers un autre jour : il y commence, mêmes horaires, même durée
+  (pas pour un événement en lecture seule ; « Sans échéance » refuse un événement).
 
 - Grille classique du mois : **7 colonnes, du lundi au dimanche**, 4 à 6 semaines complètes ; les jours des
   mois voisins complètent la première et la dernière ligne (grisés), le week-end est légèrement teinté,
@@ -593,9 +603,10 @@ Page `/calendar` (pleine largeur, pleine hauteur) — **première étape** du ch
   (`rules.calendar_days`). Tâches finies : à leur date, estompées et barrées ; annulées : absentes.
 - **Tâches en retard** (échéance passée, pas finie) : affichées **aujourd'hui** (et non plus à leur date),
   pastille ⚠️ à rayures rouge sombre qui pulse ; la case du jour est bordée de rouge.
-- **Barre de filtres** au-dessus de la grille, mémorisée (préférence `view:calendar`) : interrupteur
-  « 📋 Tâches » (affichées ou non — activé par défaut tant qu'il n'y a pas d'événements) et « Tâches de
-  qui ? » : 👤 mes tâches, 🤝 partagées avec moi, 👥 les deux. Légende des couleurs à droite.
+- **Barre de filtres** au-dessus de la grille, mémorisée (préférence `view:calendar`) : interrupteurs
+  « 📅 Événements » (activé par défaut) et « 📋 Tâches » (échéances ; **désactivé par défaut**), et « De
+  qui ? » (événements et tâches) : 👤 les miens, 🤝 partagés avec moi (et événements publics des autres),
+  👥 tous. Légende des couleurs à droite.
 - **📥 Sans échéance** : colonne à droite de la grille (sous la grille sous 1024 px de large) avec les tâches
   ouvertes sans échéance, les plus prioritaires d'abord, dans les mêmes pastilles. **Largeur réglable**
   (poignée sur son bord gauche, 160 à 560 px ; double-clic : largeur par défaut) et **repliable** (⇥) en
@@ -973,3 +984,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.24 | Calendrier : colonne « 📥 Sans échéance » de largeur réglable (poignée à gauche ; `resize.js` : `data-resize-side="left"`) et repliable en bande étroite qui reste une zone de dépôt, mémorisé ; correction : deux dépôts rapides de suite sur la même tâche (le second était ignoré) ; 377 tests + vérifié à la souris dans Firefox |
 | 2026-11-10 | 1.25 | **Événements, étape 1** (§4.7) : tables `event`, `event_tag`, `event_share` (modifiable ou lecture seule), `event_link` ; base commune tâches / événements (`ItemBase`, `LinkBase`, `ItemOut`, `ItemService`) ; `AgendaService` (période, portée, texte, projets, tags ; droits ; liens et pièces jointes ; conversion tâche ↔ événement) ; règles `event_span`, `event_days`, `event_times_from_due`, `maps_url`, `waze_url` ; API `/agenda` et `RemoteAgenda` ; correction : enregistrement de `client.json` par deux fils à la fois (le client pouvait perdre sa configuration) ; 392 tests |
 | 2026-11-10 | 1.26 | **Événements, étape 2** (§6.0) : éditeur commun tâche / événement (`Editor` = panneau et aiguillage, `ItemEditor` = base, `TaskEditor`, `EventEditor`), bascule 📋 / 📅 (brouillon : champs communs gardés ; existant : conversion en une action, `extra` appliqué dans la même transaction), éditeur d'événement (journée entière, durée gardée, lieu + Maps / Waze, couleur, public, partage modifiable ou lecture seule, vue en lecture seule), `?event=` ; calendrier : sélection de plusieurs jours au clic-glisser (`day_select.js`), clic droit → nouvel événement / nouvelle tâche ; 397 tests + vérifié dans Firefox |
+| 2026-11-10 | 1.27 | **Événements, étape 3** : événements dans le calendrier — bandes sur plusieurs jours (`rules.band_layout`, `is_band`), étiquettes horaires, glisser vers un autre jour (`dnd.js` : `data-dnd-kind="event"`, `ctx.event_drop_handler`), double-clic → éditeur ; filtres « 📅 Événements » et « De qui ? » ; « 📋 Tâches » désactivé par défaut ; vues Mois / Semaine / 6 semaines (défilement à la semaine) ; 400 tests + vérifié dans Firefox (clair, sombre, téléphone) |

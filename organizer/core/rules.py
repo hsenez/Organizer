@@ -468,3 +468,51 @@ def waze_url(location: str) -> str | None:
         if match:
             return f"https://waze.com/ul?ll={match.group(1)},{match.group(2)}&navigate=yes"
     return None
+
+
+def week_start(day: date) -> date:
+    """Lundi de la semaine de ``day``."""
+    return day - timedelta(days=day.weekday())
+
+
+def weeks_from(monday: date, count: int) -> list[list[date]]:
+    """``count`` semaines complètes à partir du lundi ``monday``."""
+    return [[monday + timedelta(days=7 * w + d) for d in range(7)] for w in range(count)]
+
+
+def is_band(start_date: date, start_time: time | None, end_date: date, end_time: time | None) -> bool:
+    """Un événement s'affiche en **bande** (au-dessus des pastilles) s'il dure toute la journée ou touche
+    plusieurs jours ; sinon c'est une pastille horaire dans sa case."""
+    return start_time is None or len(event_days(start_date, start_time, end_date, end_time)) > 1
+
+
+_Key = TypeVar("_Key")
+
+
+def band_layout(
+    spans: Iterable[tuple[_Key, date, date]], monday: date
+) -> list[tuple[_Key, int, int, int, bool, bool]]:
+    """Place des bandes (``(clé, premier jour, dernier jour)``) dans la semaine du lundi ``monday``, sur des
+    lignes sans chevauchement (la plus haute libre ; les plus longues d'abord à début égal).
+
+    Renvoie ``(clé, colonne de début, colonne de fin, ligne, commence avant, continue après)`` (colonnes 0
+    à 6, lundi à dimanche) pour les bandes qui touchent la semaine.
+    """
+    sunday = monday + timedelta(days=6)
+    segments = [
+        (key, max(first, monday), min(last, sunday), first < monday, last > sunday)
+        for key, first, last in spans
+        if last >= monday and first <= sunday
+    ]
+    segments.sort(key=lambda seg: (seg[1], -(seg[2] - seg[1]).days))
+    lane_ends: list[int] = []  # dernière colonne occupée sur chaque ligne
+    placed = []
+    for key, first, last, before, after in segments:
+        start, end = (first - monday).days, (last - monday).days
+        lane = next((i for i, used in enumerate(lane_ends) if used < start), len(lane_ends))
+        if lane == len(lane_ends):
+            lane_ends.append(end)
+        else:
+            lane_ends[lane] = end
+        placed.append((key, start, end, lane, before, after))
+    return placed

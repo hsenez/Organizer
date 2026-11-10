@@ -62,7 +62,7 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 - **Mots de passe** : 12 caractères minimum. Un compte créé avant cette règle avec un mot de passe plus court
   fonctionne toujours, mais un bandeau orange invite à le changer (Réglages → Profil).
 - **Modules** (colonne de gauche) : 🏠 Accueil, 📋 Toutes les tâches, 📊 Kanbans, 🎯 Matrice, 📅 Calendrier
-  (grille du mois avec les échéances des tâches : fond = urgence, pourtour = importance, retards ramenés à
+  (vues mois, semaine, 6 semaines ; événements en bandes ou à l'heure ; échéances des tâches : fond = urgence, pourtour = importance, retards ramenés à
   aujourd'hui ; glisser une pastille pour changer son échéance ; colonne des tâches sans échéance, réglable et repliable ;
   double-clic sur une case pour l'agrandir ; clic droit ou clic-glisser sur des jours pour créer un
   événement ou une tâche ; un même éditeur pour les deux, avec une bascule 📋 / 📅), 🔍 Recherche (Ctrl+K), ⚙️ Réglages.

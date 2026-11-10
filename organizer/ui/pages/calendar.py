@@ -1,9 +1,14 @@
-"""📅 Calendrier : grille du mois (7 colonnes, du lundi au dimanche), ‹ › pour changer de mois.
+"""📅 Calendrier : grille de 7 colonnes (lundi → dimanche) ; vues **Mois**, **Semaine** et **6 semaines**
+(‹ › : mois précédent / suivant, ou semaine par semaine).
+
+- **Événements** (``ds.agenda``) : toute la journée ou sur plusieurs jours = **bande** qui traverse les jours
+  (``rules.band_layout``) ; sinon pastille horaire dans sa case. Couleur : ``display_color``. On les glisse
+  vers un autre jour (horaires et durée gardés) ; double-clic : éditeur.
 
 - Échéances des tâches en petites pastilles de la couleur de leur **urgence** (``rules.calendar_days``) ;
   une tâche **en retard** (échéance passée, pas finie) s'affiche **aujourd'hui**, en rouge clignotant.
-- Barre de filtres : tâches affichées ou non, et de qui (les miennes, partagées avec moi, les deux).
-  Mémorisée dans la préférence ``view:calendar``.
+- Barre de filtres : événements / tâches affichés ou non (tâches masquées par défaut), et de qui (les
+  miens, partagés avec moi, tous). Mémorisée dans la préférence ``view:calendar`` (avec la vue).
 - Pourtour des pastilles : couleur et épaisseur de l'**importance**.
 - Colonne « 📥 Sans échéance » (à droite ; sous la grille sur petit écran) : tâches ouvertes sans échéance.
 - Glisser une pastille vers un autre jour change son échéance ; vers « Sans échéance », la retire (et
@@ -16,7 +21,7 @@ Le mois affiché se choisit aussi par l'adresse : ``/calendar?month=2026-11``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import Request
 from fastapi.responses import Response
@@ -24,10 +29,10 @@ from nicegui import ui
 
 from organizer.core import rules
 from organizer.core.enums import Importance, Status, Urgency
-from organizer.core.schemas import TaskFilter, TaskOut, TaskPatch, TaskSort
+from organizer.core.schemas import EventFilter, EventOut, EventPatch, TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
 from organizer.ui.components.day_select import DaySelect, selectable_day
-from organizer.ui.components.dnd import draggable, drop_zone
+from organizer.ui.components.dnd import draggable, draggable_event, drop_zone
 from organizer.ui.components.resizer import Resizer, resizable, resize_handle
 from organizer.ui.components.task_card import task_card
 from organizer.ui.context import UiContext
@@ -39,7 +44,10 @@ UNDATED_ZONE = "undated"
 UNDATED_WIDTH = 236  # largeur par défaut de la colonne « Sans échéance » (px)
 UNDATED_MIN, UNDATED_MAX = 160, 560
 DAY_ZONE = "day:"
-SCOPES = {"mine": "👤 Mes tâches", "shared": "🤝 Partagées avec moi", "all": "👥 Les deux"}
+SCOPES = {"mine": "👤 Les miens", "shared": "🤝 Partagés avec moi", "all": "👥 Tous"}
+VIEWS = {"month": "Mois", "week": "Semaine", "six": "6 semaines"}
+SIX_WEEKS = 6
+LANE_PX = 20  # hauteur d'une ligne de bandes (px)
 # Statuts affichés : tout sauf les tâches annulées (les finies restent à leur date, estompées).
 SHOWN_STATUSES = [status for status in Status if status is not Status.CANCELLED]
 # Mémorise, côté navigateur, le centre de la case double-cliquée : la vue agrandie « grandit » depuis là.
@@ -89,15 +97,19 @@ def _ring(importance: Importance) -> str:
 class CalendarPrefs:
     """Préférence ``view:calendar``."""
 
-    show_tasks: bool = True
+    show_tasks: bool = False  # les échéances des tâches s'ajoutent d'un clic
+    show_events: bool = True
     scope: str = "all"
+    view: str = "month"
     undated_width: int | None = None  # None = largeur par défaut
     undated_collapsed: bool = False
 
     def dump(self) -> dict:
         return {
             "tasks": self.show_tasks,
+            "events": self.show_events,
             "scope": self.scope,
+            "view": self.view,
             "undated": {"width": self.undated_width, "collapsed": self.undated_collapsed},
         }
 
@@ -108,8 +120,12 @@ def read_prefs(data) -> CalendarPrefs:
     prefs = CalendarPrefs()
     if isinstance(data.get("tasks"), bool):
         prefs.show_tasks = data["tasks"]
+    if isinstance(data.get("events"), bool):
+        prefs.show_events = data["events"]
     if data.get("scope") in SCOPES:
         prefs.scope = data["scope"]
+    if data.get("view") in VIEWS:
+        prefs.view = data["view"]
     undated = data.get("undated") if isinstance(data.get("undated"), dict) else {}
     width = undated.get("width")
     if isinstance(width, int) and not isinstance(width, bool):
@@ -125,28 +141,42 @@ class CalendarView:
         today = ctx.today()
         self.year, self.month = month or (today.year, today.month)
         self.prefs = read_prefs(ctx.ds.account.get_pref(PREF_KEY))
+        if month is not None:  # ?month= : le mois demandé
+            self.prefs.view = "month"
+        self.anchor = rules.week_start(today)  # premier lundi affiché (vues Semaine et 6 semaines)
         self.undated_panel: ui.element | None = None
         self.selection: tuple[date, date] | None = None  # jours sélectionnés (premier, dernier)
         self.cells: dict[date, ui.element] = {}
         self.zoomed: date | None = None
         self.tasks: dict[int, TaskOut] = {}  # tâches affichées, par identifiant (glisser-déposer)
+        self.events: dict[int, EventOut] = {}  # événements affichés
 
         with ui.row().classes("w-full items-center gap-2 no-wrap"):
             ui.label("📅").classes("text-2xl max-sm:hidden")
-            ui.button(icon="chevron_left", on_click=lambda: self.go(-1)).props("flat round dense").tooltip(
-                "Mois précédent"
-            ).mark("calendar-prev")
-            ui.button(icon="chevron_right", on_click=lambda: self.go(1)).props("flat round dense").tooltip(
-                "Mois suivant"
-            ).mark("calendar-next")
+            with (
+                ui.button(icon="chevron_left", on_click=lambda: self.go(-1))
+                .props("flat round dense")
+                .mark("calendar-prev")
+            ):
+                self.prev_tip = ui.tooltip()
+            with (
+                ui.button(icon="chevron_right", on_click=lambda: self.go(1))
+                .props("flat round dense")
+                .mark("calendar-next")
+            ):
+                self.next_tip = ui.tooltip()
             self.title = (
                 ui.label().classes("text-xl sm:text-2xl font-bold whitespace-nowrap").mark("calendar-title")
             )
             ui.space()
+            # Choix de la vue : dans l'en-tête sur grand écran, dans la barre des filtres sur téléphone.
+            self.view_toggles: list[ui.toggle] = []
+            with ui.element("div").classes("max-sm:hidden"):
+                self._view_toggle().mark("calendar-view")
             self.today_button = (
                 ui.button("Aujourd'hui", on_click=self.go_today)
                 .props('outline no-caps padding="2px 12px"')
-                .tooltip("Revenir au mois en cours")
+                .tooltip("Revenir à aujourd'hui")
                 .mark("calendar-today")
             )
         self._filters()
@@ -154,6 +184,7 @@ class CalendarView:
         self.body()
         ctx.on_refresh(self.body.refresh)
         ctx.drop_handler = self._dropped
+        ctx.event_drop_handler = self._event_dropped
         Resizer(self._resized, min=UNDATED_MIN, max=UNDATED_MAX).mark("resizer")
         DaySelect(self.select_range).mark("day-select")
 
@@ -172,16 +203,21 @@ class CalendarView:
 
     def _filters(self) -> None:
         with ui.row().classes("w-full items-center gap-x-4 gap-y-2 -mt-2").mark("calendar-filters"):
+            ui.switch("📅 Événements", value=self.prefs.show_events, on_change=self._events_toggled).props(
+                "dense"
+            ).tooltip("Afficher les événements").mark("calendar-show-events")
             ui.switch("📋 Tâches", value=self.prefs.show_tasks, on_change=self._tasks_toggled).props(
                 "dense"
             ).tooltip("Afficher les échéances des tâches dans le calendrier").mark("calendar-show-tasks")
             self.scope_toggle = (
                 ui.toggle(SCOPES, value=self.prefs.scope, on_change=self._scope_changed)
                 .props("no-caps unelevated dense")
-                .tooltip("Tâches de qui ?")
+                .tooltip("De qui ? (événements et tâches)")
                 .mark("calendar-scope")
             )
-            self.scope_toggle.set_enabled(self.prefs.show_tasks)
+            self.scope_toggle.set_enabled(self.prefs.show_tasks or self.prefs.show_events)
+            with ui.element("div").classes("sm:hidden"):
+                self._view_toggle()
             ui.space()
             with ui.row().classes("items-center gap-1 text-xs text-gray-500 max-sm:hidden"):
                 ui.label("Urgence :")
@@ -198,9 +234,39 @@ class CalendarView:
                     "Échéance passée et tâche pas finie : affichée aujourd'hui"
                 )
 
+    def _view_toggle(self) -> ui.toggle:
+        toggle = (
+            ui.toggle(VIEWS, value=self.prefs.view, on_change=self._view_changed)
+            .props("no-caps unelevated dense")
+            .tooltip("Mois · semaine · 6 semaines (défilement à la semaine)")
+        )
+        self.view_toggles.append(toggle)
+        return toggle
+
     def _tasks_toggled(self, e) -> None:
         self.prefs.show_tasks = bool(e.value)
-        self.scope_toggle.set_enabled(self.prefs.show_tasks)
+        self.scope_toggle.set_enabled(self.prefs.show_tasks or self.prefs.show_events)
+        self._save_prefs()
+
+    def _events_toggled(self, e) -> None:
+        self.prefs.show_events = bool(e.value)
+        self.scope_toggle.set_enabled(self.prefs.show_tasks or self.prefs.show_events)
+        self._save_prefs()
+
+    def _view_changed(self, e) -> None:
+        if e.value not in VIEWS or e.value == self.prefs.view:
+            return
+        today = self.ctx.today()
+        if e.value == "month":
+            shown = self.anchor if self.prefs.view != "month" else date(self.year, self.month, 1)
+            self.year, self.month = shown.year, shown.month
+        elif self.prefs.view == "month":
+            current = (self.year, self.month) == (today.year, today.month)
+            self.anchor = rules.week_start(today if current else date(self.year, self.month, 1))
+        self.prefs.view = e.value
+        for toggle in self.view_toggles:  # l'autre bouton (téléphone / grand écran) suit
+            if toggle.value != e.value:
+                toggle.set_value(e.value)
         self._save_prefs()
 
     def _scope_changed(self, e) -> None:
@@ -230,6 +296,21 @@ class CalendarView:
         self._save_prefs()
 
     # --- données ---
+
+    def _weeks(self) -> list[list[date]]:
+        if self.prefs.view == "week":
+            return rules.weeks_from(self.anchor, 1)
+        if self.prefs.view == "six":
+            return rules.weeks_from(self.anchor, SIX_WEEKS)
+        return rules.month_grid(self.year, self.month)
+
+    def _load_events(self, first: date, last: date) -> list[EventOut]:
+        if not self.prefs.show_events:
+            self.events = {}
+            return []
+        events = self.ctx.ds.agenda.list(EventFilter(start=first, end=last, scope=self.prefs.scope))
+        self.events = {event.id: event for event in events}
+        return events
 
     def _load(self) -> tuple[dict[date, list[TaskOut]], list[TaskOut]]:
         """Tâches par jour d'affichage (voir ``rules.calendar_days``) et tâches ouvertes sans échéance (les
@@ -267,16 +348,62 @@ class CalendarView:
         ui.notify(f"📅 « {updated.title} » → {where} (Ctrl+Z pour annuler)", position="top")
         self.ctx.refresh()
 
+    def _event_dropped(self, event_id: int, zone: str, _index: int | None) -> None:
+        """Événement déposé sur un autre jour : il y commence, avec les mêmes horaires et la même durée."""
+        if zone == UNDATED_ZONE:
+            ui.notify("Un événement a toujours une date.", type="warning", position="top")
+            return
+        if not zone.startswith(DAY_ZONE):
+            return
+        try:
+            day = date.fromisoformat(zone[len(DAY_ZONE) :])
+        except ValueError:
+            return
+        event = self.events.get(event_id) or self.ctx.call(self.ctx.ds.agenda.get, event_id)
+        if event is None or event.start_date == day:
+            return
+        shift = day - event.start_date
+        patch = EventPatch(start_date=day, end_date=event.end_date + shift)
+        updated = self.ctx.call(self.ctx.ds.agenda.update, event_id, patch)
+        if updated is None:
+            return
+        self.events[event_id] = updated
+        ui.notify(f"📅 « {updated.title} » → {fmt.long_date(day)} (Ctrl+Z pour annuler)", position="top")
+        self.ctx.refresh()
+
     # --- navigation ---
 
     def go(self, delta: int) -> None:
-        self.year, self.month = rules.shift_month(self.year, self.month, delta)
+        """Mois précédent / suivant ; semaine précédente / suivante dans les vues Semaine et 6 semaines."""
+        if self.prefs.view == "month":
+            self.year, self.month = rules.shift_month(self.year, self.month, delta)
+        else:
+            self.anchor += timedelta(days=7 * delta)
         self.body.refresh()
 
     def go_today(self) -> None:
         today = self.ctx.today()
         self.year, self.month = today.year, today.month
+        self.anchor = rules.week_start(today)
         self.body.refresh()
+
+    def _header_texts(self, weeks: list[list[date]], today: date) -> None:
+        if self.prefs.view == "month":
+            self.title.set_text(f"{fmt.MONTH_NAMES[self.month - 1].capitalize()} {self.year}")
+            at_today = (self.year, self.month) == (today.year, today.month)
+            self.prev_tip.set_text("Mois précédent")
+            self.next_tip.set_text("Mois suivant")
+        else:
+            first, last = weeks[0][0], weeks[-1][-1]
+            prefix = "Semaine du " if self.prefs.view == "week" else ""
+            same_month = first.month == last.month
+            start = f"{first.day}" if same_month else f"{first.day} {fmt.MONTHS[first.month - 1]}"
+            joint = " au " if self.prefs.view == "week" else " → "
+            self.title.set_text(f"{prefix}{start}{joint}{last.day} {fmt.MONTHS[last.month - 1]} {last.year}")
+            at_today = self.anchor == rules.week_start(today)
+            self.prev_tip.set_text("Semaine précédente")
+            self.next_tip.set_text("Semaine suivante")
+        self.today_button.set_enabled(not at_today)
 
     def select(self, day: date) -> None:
         """Sélectionne une case."""
@@ -343,35 +470,60 @@ class CalendarView:
 
     def _body(self) -> None:
         today = self.ctx.today()
-        self.title.set_text(f"{fmt.MONTH_NAMES[self.month - 1].capitalize()} {self.year}")
-        self.today_button.set_enabled((self.year, self.month) != (today.year, today.month))
+        weeks = self._weeks()
+        self._header_texts(weeks, today)
         days, undated = self._load()
+        events = self._load_events(weeks[0][0], weeks[-1][-1])
         with ui.element("div").classes("calendar-layout page-fill-grow w-full"):
-            self._grid(days, today)
+            self._grid(weeks, days, events, today)
             if self.prefs.show_tasks:
                 self._undated(undated, today)
 
-    def _grid(self, days: dict[date, list[TaskOut]], today: date) -> None:
-        weeks = rules.month_grid(self.year, self.month)
+    def _grid(
+        self, weeks: list[list[date]], days: dict[date, list[TaskOut]], events: list[EventOut], today: date
+    ) -> None:
         self.cells = {}
-        with (
+        bands = [e for e in events if rules.is_band(e.start_date, e.start_time, e.end_date, e.end_time)]
+        timed: dict[date, list[EventOut]] = {}
+        for event in events:
+            if event not in bands:
+                timed.setdefault(event.start_date, []).append(event)
+        spans = [(e, e.start_date, _last_day(e)) for e in bands]
+        grid = (
             ui.element("div")
-            .classes("calendar")
+            .classes("calendar" + (" calendar-single-week" if len(weeks) == 1 else ""))
             .style(f"grid-template-rows: auto repeat({len(weeks)}, minmax(0, 1fr))")
             .mark("calendar-grid")
-        ):
+        )
+        with grid:
             for index, name in enumerate(fmt.DAYS):
-                ui.label(name).classes("calendar-head" + (" calendar-weekend" if index >= 5 else "")).tooltip(
-                    fmt.DAY_NAMES[index]
-                )
-            for week in weeks:
-                for day in week:
-                    self._cell(day, today, days.get(day, []))
+                ui.label(name).classes("calendar-head" + (" calendar-weekend" if index >= 5 else "")).style(
+                    f"grid-row: 1; grid-column: {index + 1}"
+                ).tooltip(fmt.DAY_NAMES[index])
+            for row, week in enumerate(weeks, start=2):
+                placed = rules.band_layout(spans, week[0])
+                lanes = [0] * 7  # lignes de bandes au-dessus des pastilles, par jour
+                for _, start, end, lane, _before, _after in placed:
+                    for col in range(start, end + 1):
+                        lanes[col] = max(lanes[col], lane + 1)
+                for col, day in enumerate(week):
+                    self._cell(day, today, days.get(day, []), timed.get(day, []), row, col, lanes[col])
+                for event, start, end, lane, before, after in placed:
+                    self._band(event, row, start, end, lane, before, after)
             self._context_menu()
 
-    def _cell(self, day: date, today: date, tasks: list[TaskOut]) -> None:
+    def _cell(
+        self,
+        day: date,
+        today: date,
+        tasks: list[TaskOut],
+        events: list[EventOut],
+        row: int,
+        col: int,
+        lanes: int,
+    ) -> None:
         css = "calendar-cell"
-        if day.month != self.month:  # jour du mois précédent / suivant (grisé)
+        if self.prefs.view == "month" and day.month != self.month:  # jour d'un mois voisin (grisé)
             css += " calendar-outside"
         if day.weekday() >= 5:
             css += " calendar-weekend"
@@ -384,6 +536,7 @@ class CalendarView:
         cell = (
             ui.element("div")
             .classes(css)
+            .style(f"grid-row: {row}; grid-column: {col + 1}; --lanes: {lanes}")
             .mark(f"calendar-day-{day.isoformat()}")
             .on("click", lambda _, d=day: self.select(d))
             .on("dblclick", lambda _, d=day: self.zoom(d), js_handler=ZOOM_ORIGIN_JS)
@@ -393,11 +546,70 @@ class CalendarView:
         selectable_day(cell, day)
         self.cells[day] = cell
         with cell:
-            ui.label(str(day.day)).classes("calendar-day-number")
-            if tasks:
+            number = str(day.day)
+            if self.prefs.view != "month" and (day.day == 1 or (row, col) == (2, 0)):
+                number = f"{day.day} {fmt.MONTHS[day.month - 1]}"  # repère du mois
+            ui.label(number).classes("calendar-day-number")
+            if tasks or events:
                 with ui.element("div").classes("calendar-chips"):
+                    for event in events:
+                        self._event_chip(event)
                     for task in tasks:
                         self._chip(task, today)
+
+    # --- événements ---
+
+    def _event_tooltip(self, event: EventOut) -> str:
+        lines = [
+            event.title,
+            fmt.event_range(event.start_date, event.start_time, event.end_date, event.end_time),
+        ]
+        if event.location:
+            lines.append(f"📍 {event.location}")
+        if event.owner_id != self.ctx.user.id:
+            lines.append("📢 Public" if event.is_public else "👥 Partagé avec moi")
+        lines.append("Double-clic : ouvrir" + (" · glisser : changer de jour" if event.can_edit else ""))
+        return "\n".join(lines)
+
+    def _event_chip(self, event: EventOut) -> None:
+        """Événement d'un seul jour, avec heures : rectangle à liseré de sa couleur, heure en tête."""
+        color = event.display_color
+        chip = (
+            ui.label(f"{event.start_time:%H:%M} {event.title}")
+            .classes("calendar-event")
+            .style(f"border-left-color: {color}; background: {hex_to_rgba(color, 0.18)}")
+            .mark(f"calendar-event-{event.id}")
+            .on("dblclick.stop", lambda _, i=event.id: self.ctx.editor.open_event(i))
+            .tooltip(self._event_tooltip(event))
+        )
+        if event.can_edit:
+            draggable_event(chip, event)
+
+    def _band(
+        self, event: EventOut, row: int, start: int, end: int, lane: int, before: bool, after: bool
+    ) -> None:
+        """Bande d'un événement de plusieurs jours (ou toute la journée), qui traverse les cases d'une
+        semaine ; coins carrés et flèche quand elle continue sur la semaine d'avant / d'après."""
+        color = event.display_color
+        text = event.title if event.all_day else f"{event.start_time:%H:%M} {event.title}"
+        css = (
+            "calendar-band"
+            + (" calendar-band-before" if before else "")
+            + (" calendar-band-after" if after else "")
+        )
+        band = (
+            ui.label(("◂ " if before else "") + text + (" ▸" if after else ""))
+            .classes(css)
+            .style(
+                f"grid-row: {row}; grid-column: {start + 1} / {end + 2}; --lane: {lane}; "
+                f"background: {color}; color: {readable_text(color)}"
+            )
+            .mark(f"calendar-event-{event.id}")
+            .on("dblclick.stop", lambda _, i=event.id: self.ctx.editor.open_event(i))
+            .tooltip(self._event_tooltip(event))
+        )
+        if event.can_edit:
+            draggable_event(band, event)
 
     def _undated(self, tasks: list[TaskOut], today: date) -> None:
         """Colonne des tâches ouvertes sans échéance, elle aussi zone de dépôt (retirer l'échéance).
@@ -511,6 +723,11 @@ class CalendarView:
             return
         today = self.ctx.today()
         tasks = self._load()[0].get(day, [])
+        day_events = [
+            e
+            for e in self._load_events(day, day)
+            if day in rules.event_days(e.start_date, e.start_time, e.end_date, e.end_time)
+        ]
         late = [task for task in tasks if rules.is_overdue(task, today)]
         due = [task for task in tasks if not rules.is_overdue(task, today)]
         with ui.row().classes("calendar-zoom-head w-full items-center gap-2 px-4 py-3 no-wrap"):
@@ -529,11 +746,18 @@ class CalendarView:
                 "Fermer (Échap)"
             ).mark("calendar-zoom-close")
         with ui.column().classes("w-full p-4 gap-4 overflow-auto").mark("calendar-zoom"):
+            if day_events:
+                section_title("📅", "Événements", len(day_events))
+                with ui.column().classes("w-full gap-1"):
+                    for event in day_events:
+                        self._event_row(event)
             if not self.prefs.show_tasks:
-                empty_state("🙈", "Les tâches sont masquées (filtre 📋 Tâches).")
+                if not day_events:
+                    empty_state("🙈", "Les tâches sont masquées (filtre 📋 Tâches).")
                 return
             if not tasks:
-                empty_state("🌤️", "Aucune échéance ce jour-là.")
+                if not day_events:
+                    empty_state("🌤️", "Aucune échéance ce jour-là.")
                 return
             if late:
                 section_title("⚠️", "En retard", len(late), "Échéance passée et tâche pas finie")
@@ -545,3 +769,23 @@ class CalendarView:
                 with card_grid():
                     for task in due:
                         task_card(task, self.ctx)
+
+    def _event_row(self, event: EventOut) -> None:
+        color = event.display_color
+        with (
+            ui.row()
+            .classes("w-full items-center gap-3 p-2 rounded-lg cursor-pointer no-wrap")
+            .style(f"border-left: 4px solid {color}; background: {hex_to_rgba(color, 0.1)}")
+            .on("click", lambda i=event.id: self.ctx.editor.open_event(i))
+            .mark(f"zoom-event-{event.id}")
+        ):
+            ui.label(event.title).classes("font-semibold")
+            ui.label(
+                fmt.event_range(event.start_date, event.start_time, event.end_date, event.end_time)
+            ).classes("text-sm text-gray-500")
+            if event.location:
+                ui.label(f"📍 {event.location}").classes("text-sm text-gray-500 truncate")
+
+
+def _last_day(event: EventOut) -> date:
+    return rules.event_days(event.start_date, event.start_time, event.end_date, event.end_time)[-1]

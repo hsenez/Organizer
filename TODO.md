@@ -121,12 +121,14 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   - ✅ Première étape faite : module 📅 Calendrier, grille du mois (lundi → dimanche), ‹ › et « Aujourd'hui ».
   - ✅ Échéances des tâches en pastilles (couleur = urgence), retards ramenés à aujourd'hui, filtres
     « 📋 Tâches » / « Tâches de qui ? », sélection, double-clic (éditeur / case agrandie).
-    Quand les événements existeront : passer « 📋 Tâches » à **désactivé par défaut**.
+    ✅ « 📋 Tâches » désactivé par défaut depuis l'arrivée des événements.
+  - Glisser une bande de plusieurs jours : elle commence au jour où on la lâche (pas d'après le jour
+    saisi dans la bande) — à affiner si gênant.
   - ✅ Pourtour = importance, colonne « 📥 Sans échéance » (réglable, repliable), glisser-déposer pour changer /
     retirer l'échéance.
   - Événements — feuille de route convenue le 10/11/2026 : ✅ 1. modèle, services, API, client bureau ;
     ✅ 2. éditeur commun + bascule tâche ↔ événement + création par clic droit (sélection d'une ou plusieurs
-    cases, clic-glisser) ; 3. affichage dans le mois (bandes sur plusieurs jours), filtres, vues Mois /
+    cases, clic-glisser) ; ✅ 3. affichage dans le mois (bandes sur plusieurs jours), filtres, vues Mois /
     Semaine / 6 semaines (défilement à la semaine) ; 4. vue d'un jour : zone tâches + agenda 2 colonnes
     (0-12 h, 12-24 h), glisser l'événement ou ses bords (pas de 15 min) ; 5. **module 🔔 Notifications**
     (colonne de gauche) : ce que d'autres ont fait qui me concerne (partage avec moi, modification d'une

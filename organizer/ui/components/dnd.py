@@ -43,6 +43,14 @@ def drop_zone(
     return element
 
 
+def draggable_event(element: ui.element, event) -> ui.element:
+    """Rend un événement du calendrier saisissable (dépôt reçu par ``ctx.event_drop_handler``)."""
+    element._props["data-dnd-task"] = str(event.id)
+    element._props["data-dnd-kind"] = "event"
+    element._props["data-dnd-title"] = event.title
+    return element
+
+
 def draggable(element: ui.element, task) -> ui.element:
     """Rend une carte (ou une ligne) de tâche saisissable."""
     element._props["data-dnd-task"] = str(task.id)

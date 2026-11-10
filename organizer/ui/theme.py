@@ -213,6 +213,30 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .calendar-zoom-head { border-bottom: 1px solid rgba(120, 130, 150, .25); }
 .calendar-zoom-number { font-size: 1.1rem; min-width: 2.2rem; height: 2.2rem; }
 .calendar-today-number { background: #5c7cfa; color: #fff; }
+/* Événements dans la grille. Les bandes (plusieurs jours / toute la journée) sont des éléments de la grille
+   posés par-dessus les cases (grid-row / grid-column), décalés selon leur ligne (--lane) ; les pastilles
+   d'une case commencent sous les bandes qui la traversent (--lanes). */
+.calendar { --lane-h: 20px; --day-head: calc(1.6rem + 6px); }
+.calendar-cell .calendar-chips { margin-top: calc(var(--lanes, 0) * var(--lane-h)); }
+.calendar-band { align-self: start; z-index: 2; height: calc(var(--lane-h) - 3px); min-width: 0;
+    margin: calc(var(--day-head) + var(--lane) * var(--lane-h)) 3px 0; padding: 0 6px; border-radius: 5px;
+    font-size: .75rem; line-height: calc(var(--lane-h) - 3px); font-weight: 600; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, .15); }
+.calendar-band:hover { filter: brightness(.94); }
+.calendar-band-before { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.calendar-band-after { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+body.dnd-active .calendar-band { pointer-events: none; }  /* la case sous le pointeur reçoit le dépôt */
+.calendar-event { display: block; flex: none; max-width: 100%; padding: 0 5px; border-radius: 4px;
+    border-left: 3px solid; font-size: .75rem; line-height: 1.15rem; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; cursor: pointer; }
+.calendar-event:hover { filter: brightness(.94); }
+.calendar-single-week .calendar-cell { min-height: 260px; }
+@media (max-width: 599px) {
+    .calendar { --lane-h: 16px; --day-head: calc(1.6rem + 4px); }
+    .calendar-band { font-size: .62rem; padding: 0 3px; }
+    .calendar-event { font-size: .62rem; line-height: 1rem; padding: 0 2px; }
+}
+
 /* Éditeur d'événement : pastilles de couleur. */
 .calendar-swatch { width: 22px; height: 22px; border-radius: 999px; cursor: pointer;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }

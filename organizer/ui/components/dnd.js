@@ -1,6 +1,7 @@
 // Glisser-déposer des cartes de tâches, à la souris et au doigt.
 //
-// - Cartes : éléments portant data-dnd-task (+ data-dnd-parent, data-dnd-has-subtasks, data-dnd-title).
+// - Cartes : éléments portant data-dnd-task (+ data-dnd-parent, data-dnd-has-subtasks, data-dnd-title ;
+//   data-dnd-kind="event" pour un événement du calendrier : son dépôt porte kind="event").
 // - Zones de dépôt : éléments portant data-dnd-zone="clé" (data-dnd-accept="0" : dépôt refusé, avec le
 //   message data-dnd-denied, sauf pour reclasser une carte de la zone ; data-dnd-ordered="1" : l'ordre des
 //   cartes compte, un repère montre où la carte va s'insérer).
@@ -31,11 +32,13 @@ function infoOf(element) {
     parent: element.dataset.dndParent ? Number(element.dataset.dndParent) : null,
     hasSubtasks: element.dataset.dndHasSubtasks === "1",
     title: element.dataset.dndTitle || "",
+    kind: element.dataset.dndKind || "task", // « task » ou « event »
   };
 }
 
 // Mêmes règles que organizer.core.rules.attach_refusal_reason (le serveur revérifie).
 function refusal(child, parent) {
+  if (child.kind !== "task" || parent.kind !== "task") return "Pas de sous-tâche avec un événement";
   if (child.id === parent.id) return "Une tâche ne peut pas être sa propre sous-tâche";
   if (parent.parent !== null) return "La cible est déjà une sous-tâche (un seul niveau)";
   if (child.hasSubtasks) return "Cette tâche a déjà des sous-tâches (un seul niveau)";
@@ -329,7 +332,9 @@ export default {
       this.suppressClick = true;
       setTimeout(() => (this.suppressClick = false), 0);
       if (drag.attach !== null) this.$emit("attach", { task: drag.info.id, parent: drag.attach });
-      else if (drag.zone !== null) this.$emit("drop", { task: drag.info.id, zone: drag.zone, index: drag.index });
+      else if (drag.zone !== null) {
+        this.$emit("drop", { task: drag.info.id, kind: drag.info.kind, zone: drag.zone, index: drag.index });
+      }
     },
     cancel() {
       clearTimeout(this.pressTimer);

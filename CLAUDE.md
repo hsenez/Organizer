@@ -247,7 +247,9 @@ Référence fonctionnelle complète : **`specifications.md`**.
   la case. Contenu `ui.refreshable`, relu par `ctx.on_refresh` s'il est ouvert.
 - Marqueurs de test : `calendar-prev`, `calendar-next`, `calendar-today`, `calendar-title`,
   `calendar-day-<AAAA-MM-JJ>` (une case par jour affiché), `calendar-task-<id>` (pastille),
-  `calendar-scope`, `calendar-show-tasks`, `calendar-zoom`, `calendar-zoom-close`, `calendar-undated`. La pastille écoute
+  `calendar-scope`, `calendar-show-tasks`, `calendar-show-events`, `calendar-view`, `calendar-zoom`,
+  `calendar-zoom-close`, `calendar-undated`, `calendar-event-<id>` (bande ou étiquette). Les tâches sont
+  masquées par défaut : `show_calendar_tasks(sv)` dans les tests. La pastille écoute
   `dblclick.stop` : dans le simulateur, `trigger("dblclick.stop")` (nom exact de l'écouteur).
 - Noms des jours / mois : `ui/format.py` (`DAYS`, `MONTHS` abrégés ; `DAY_NAMES`, `MONTH_NAMES` complets).
 
@@ -271,6 +273,15 @@ Référence fonctionnelle complète : **`specifications.md`**.
   événements. Suppression / fusion de tags et de projets : traiter `TaskTag` **et** `EventTag`, `Task`
   **et** `Event`.
 - Tests : `tests/test_agenda.py` (services), `test_client.py::test_agenda_through_api_matches_local`.
+- Calendrier, grille : **placement explicite** de chaque case (`grid-row` / `grid-column`) — sinon le
+  placement automatique de la grille contournerait les bandes. Bandes = éléments de la grille par-dessus
+  les cases (`--lane`), pastilles décalées sous les bandes (`--lanes` par case) ; `body.dnd-active` coupe
+  les clics sur les bandes pendant un glisser (la case dessous reçoit le dépôt). Vues : `prefs.view`
+  (`month` : `year` / `month` ; `week` / `six` : `anchor` = lundi). `view:calendar` =
+  `{tasks, events, scope, view, undated}` (`CalendarPrefs`).
+- Glisser un événement : `draggable_event` (`data-dnd-kind="event"`) ; `dnd.js` émet `drop` avec `kind`,
+  `UiContext.handle_drop` aiguille vers `ctx.event_drop_handler`. `refusal()` (JS) refuse tout rattachement
+  avec un événement (règle propre au JS : le serveur ne rattache que des tâches).
 - Calendrier : sélection `self.selection = (premier, dernier)` ; `day_select.js` (`DaySelect`, marqueur
   `day-select`, événement `range`) surligne pendant le clic-glisser et absorbe le clic final ; cases
   `data-cal-day`. Clic droit : `contextmenu` sur la case (`_context`) + `ui.context_menu` de la grille
@@ -522,7 +533,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 397 tests au total (+1 réservé à Windows).
+- 400 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

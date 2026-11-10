@@ -180,6 +180,11 @@ async def test_calendar_month_navigation(user: User):
     await user.should_not_see(marker="calendar-day-2027-02-01")
 
 
+def show_calendar_tasks(sv) -> None:
+    """Le calendrier masque les tâches par défaut : on les affiche (préférence ``view:calendar``)."""
+    sv.users.set_pref(sv.actor.id, "view:calendar", {"tasks": True})
+
+
 def cell_of(user: User, marker: str):
     """Case du calendrier qui contient l'élément marqué ``marker`` (pastille)."""
     element = next(iter(user.find(marker=marker).elements))
@@ -192,6 +197,7 @@ async def test_calendar_shows_due_dates_overdue_today_and_filters(user: User):
     from datetime import date, timedelta
 
     sv = await login(user)
+    show_calendar_tasks(sv)
     bob = state().users.create_user("bob", "motdepasse-12", "Bob", by=sv.actor)
     today = date.today()
     soon = today + timedelta(days=1) if today.day < 28 else today  # reste dans le mois affiché
@@ -396,10 +402,116 @@ async def test_event_read_only_for_viewers(user: User):
     await user.should_not_see(marker="editor-kind")
 
 
+async def test_calendar_shows_events_bands_and_timed(user: User):
+    from datetime import date, time, timedelta
+
+    from organizer.core.schemas import EventCreate, ShareSpec
+
+    sv = await login(user)
+    bob_user = state().users.create_user("bob", "motdepasse-12", "Bob", by=sv.actor)
+    bob = state().services_for(bob_user)
+    first = date.today().replace(day=1)
+    trip = sv.agenda.create(EventCreate(title="Voyage", start_date=first, end_date=first + timedelta(days=9)))
+    dentist = sv.agenda.create(
+        EventCreate(title="Dentiste", start_date=first + timedelta(days=3), start_time=time(9, 30))
+    )
+    party = bob.agenda.create(EventCreate(title="Fête", start_date=first + timedelta(days=4), is_public=True))
+    shared = bob.agenda.create(
+        EventCreate(title="Ciné", start_date=first + timedelta(days=5), start_time=time(20))
+    )
+    bob.agenda.set_shares(shared.id, [ShareSpec(user_id=sv.actor.id, can_edit=True)])
+
+    await user.open("/calendar")
+    # Bande sur plusieurs jours : un morceau par semaine traversée.
+    bands = list(user.find(marker=f"calendar-event-{trip.id}").elements)
+    assert len(bands) >= 2 and all("calendar-band" in b.classes for b in bands)
+    columns = {b.style["grid-column"] for b in bands}
+    assert f"{first.weekday() + 1} / 8" in columns  # le 1er jusqu'au dimanche
+    chip = next(iter(user.find(marker=f"calendar-event-{dentist.id}").elements))
+    assert "calendar-event" in chip.classes and chip.text == "09:30 Dentiste"
+    assert (
+        cell_of(user, f"calendar-event-{dentist.id}")
+        == f"calendar-day-{(first + timedelta(days=3)).isoformat()}"
+    )
+    assert chip.props["data-dnd-kind"] == "event"
+    public = next(iter(user.find(marker=f"calendar-event-{party.id}").elements))
+    assert "data-dnd-task" not in public.props  # public d'un autre : lecture seule, pas déplaçable
+    await user.should_see(marker=f"calendar-event-{shared.id}")
+
+    # Glisser un événement : même horaire, nouveau jour.
+    target = first + timedelta(days=6)
+    user.find(marker="dnd").trigger(
+        "drop", {"task": dentist.id, "kind": "event", "zone": f"day:{target.isoformat()}", "index": 0}
+    )
+    moved = sv.agenda.get(dentist.id)
+    assert (moved.start_date, moved.start_time, moved.end_time) == (target, time(9, 30), time(10, 30))
+    user.find(marker="dnd").trigger(
+        "drop", {"task": trip.id, "kind": "event", "zone": f"day:{(first + timedelta(days=1)).isoformat()}"}
+    )
+    assert (sv.agenda.get(trip.id).start_date, sv.agenda.get(trip.id).end_date) == (
+        first + timedelta(days=1),
+        first + timedelta(days=10),
+    )
+    # Double-clic : éditeur de l'événement.
+    user.find(marker=f"calendar-event-{shared.id}").trigger("dblclick.stop")
+    await user.should_see(marker="editor-location")
+    user.find(marker="task-editor-dialog").trigger("hide")
+
+    # Filtres : de qui, et événements masqués.
+    select_value(user, "calendar-scope", "mine")
+    await settle()
+    await user.should_not_see(marker=f"calendar-event-{party.id}")
+    await user.should_see(marker=f"calendar-event-{trip.id}")
+    select_value(user, "calendar-scope", "shared")
+    await settle()
+    await user.should_see(marker=f"calendar-event-{party.id}")
+    await user.should_not_see(marker=f"calendar-event-{trip.id}")
+    select_value(user, "calendar-show-events", False)
+    await settle()
+    await user.should_not_see(marker=f"calendar-event-{party.id}")
+    prefs = sv.users.get_pref(sv.actor.id, "view:calendar")
+    assert prefs["events"] is False and prefs["tasks"] is False  # tâches masquées par défaut
+
+
+async def test_calendar_week_and_six_week_views(user: User):
+    from datetime import date, timedelta
+
+    from organizer.core import rules
+
+    sv = await login(user)
+    today = date.today()
+    monday = rules.week_start(today)
+    await user.open("/calendar")
+    select_value(user, "calendar-view", "week")
+    await settle()
+    await user.should_see(marker=f"calendar-day-{monday.isoformat()}")
+    await user.should_see(marker=f"calendar-day-{(monday + timedelta(days=6)).isoformat()}")
+    await user.should_not_see(marker=f"calendar-day-{(monday + timedelta(days=7)).isoformat()}")
+    user.find(marker="calendar-next").click()  # une semaine plus loin
+    await settle()
+    await user.should_see(marker=f"calendar-day-{(monday + timedelta(days=7)).isoformat()}")
+    await user.should_not_see(marker=f"calendar-day-{monday.isoformat()}")
+    select_value(user, "calendar-view", "six")
+    await settle()
+    last = monday + timedelta(days=7 + 6 * 7 - 1)
+    await user.should_see(marker=f"calendar-day-{last.isoformat()}")
+    user.find(marker="calendar-prev").click()
+    await settle()
+    await user.should_see(marker=f"calendar-day-{monday.isoformat()}")
+    assert sv.users.get_pref(sv.actor.id, "view:calendar")["view"] == "six"
+    await user.open("/calendar")  # vue retenue
+    await user.should_see(marker=f"calendar-day-{(monday + timedelta(days=41)).isoformat()}")
+    user.find(marker="calendar-today").click()
+    select_value(user, "calendar-view", "month")
+    await settle()
+    await user.should_see(marker=f"calendar-day-{today.replace(day=1).isoformat()}")
+
+
 async def test_calendar_select_zoom_and_open_editor(user: User):
     from datetime import date
 
     sv = await login(user)
+    show_calendar_tasks(sv)
     today = date.today()
     task = sv.tasks.create(TaskCreate(title="Rendez-vous banque", due_date=today))
     await user.open("/calendar")
@@ -427,6 +539,7 @@ async def test_calendar_drag_changes_due_date_and_importance_ring(user: User):
     from datetime import date, timedelta
 
     sv = await login(user)
+    show_calendar_tasks(sv)
     today = date.today()
     first = today.replace(day=1)
     task = sv.tasks.create(
@@ -462,6 +575,7 @@ async def test_calendar_undated_column_resizes_and_collapses(user: User):
     from organizer.ui.pages.calendar import read_prefs
 
     sv = await login(user)
+    show_calendar_tasks(sv)
     task = sv.tasks.create(TaskCreate(title="Un jour peut-être"))
     await user.open("/calendar")
     user.find(marker="resizer").trigger("resize", {"key": "undated", "width": 400})

@@ -49,6 +49,8 @@ class UiContext:
         self.dark: Any = None  # ui.dark_mode de la page (créé par le layout)
         # Dépôt d'une carte dans une zone de la page : fonction (task_id, zone, index) fournie par la page.
         self.drop_handler: Callable[[int, str, int | None], None] | None = None
+        # Dépôt d'un événement (calendrier) : (identifiant de l'événement, zone, index).
+        self.event_drop_handler: Callable[[int, str, int | None], None] | None = None
         # Onglets de réglages propres à la plateforme (bureau : 🔌 Connexion) : clé → (libellé, builder).
         self.extra_settings: dict[str, tuple[str, Callable[[UiContext], None]]] = {}
         # Client bureau : arrêter vraiment l'application (fermer la fenêtre ne fait que la cacher).
@@ -113,6 +115,10 @@ class UiContext:
     # --- glisser-déposer ---
 
     def handle_drop(self, args: dict) -> None:
+        if args.get("kind") == "event":
+            if self.event_drop_handler is not None:
+                self.event_drop_handler(int(args["task"]), str(args["zone"]), args.get("index"))
+            return
         if self.drop_handler is not None:
             self.drop_handler(int(args["task"]), str(args["zone"]), args.get("index"))
 

@@ -367,3 +367,26 @@ def test_maps_and_waze_links():
     )
     assert rules.maps_url("maps.app.goo.gl/AbCdE") == "https://maps.app.goo.gl/AbCdE"
     assert rules.waze_url("https://maps.app.goo.gl/AbCdE") is None  # lien court : pas de coordonnées
+
+
+def test_band_layout_and_weeks():
+    monday = date(2026, 11, 9)
+    assert rules.week_start(date(2026, 11, 12)) == monday and rules.week_start(monday) == monday
+    weeks = rules.weeks_from(monday, 6)
+    assert len(weeks) == 6 and weeks[0][0] == monday and weeks[-1][-1] == date(2026, 12, 20)
+    spans = [
+        ("long", date(2026, 11, 5), date(2026, 11, 11)),  # commence la semaine d'avant
+        ("court", date(2026, 11, 10), date(2026, 11, 10)),
+        ("chevauche", date(2026, 11, 11), date(2026, 11, 20)),  # continue après
+        ("libre", date(2026, 11, 13), date(2026, 11, 14)),
+        ("ailleurs", date(2026, 11, 1), date(2026, 11, 2)),
+    ]
+    placed = {key: rest for key, *rest in rules.band_layout(spans, monday)}
+    assert placed["long"] == [0, 2, 0, True, False]
+    assert placed["court"] == [1, 1, 1, False, False]
+    assert placed["chevauche"] == [2, 6, 1, False, True]  # ligne 0 occupée le mercredi par « long »
+    assert placed["libre"] == [4, 5, 0, False, False]  # la ligne 0 est libre dès jeudi
+    assert "ailleurs" not in placed
+    assert rules.is_band(monday, None, monday, None)
+    assert rules.is_band(monday, time(22), date(2026, 11, 10), time(1))
+    assert not rules.is_band(monday, time(9), monday, time(10))
