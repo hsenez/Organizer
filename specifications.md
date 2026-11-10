@@ -461,6 +461,22 @@ sous-tâches, on demande s'il faut les supprimer aussi ou les garder.
 
 ---
 
+## 7 bis. 👥 À qui est-ce ? (pictogrammes de partage)
+
+Partout où une tâche ou un événement s'affiche (cartes, lignes compactes, pastilles, bandes et étiquettes
+du calendrier, agenda du jour), un pictogramme dit à qui il est (source unique : `Ownership` dans
+`enums.py`, règle `rules.ownership`) :
+
+| | Cas | Infobulle |
+|---|---|---|
+| (rien) | à moi, partagé avec personne | — |
+| 👥 | à moi, partagé avec d'autres | « À vous, partagé avec Bob, … » |
+| 🤝 | à un autre, partagé avec moi, modifiable | « À Bob, partagé avec vous : modifiable » |
+| 👁️ | à un autre, en lecture seule (partage non modifiable, ou public) | « … en lecture seule » / « Public, de Bob » |
+
+Une tâche partagée est aujourd'hui toujours modifiable (👁️ ne concerne donc que les événements). Légende
+dans la barre de filtres du calendrier.
+
 ## 8. Navigation et modules
 
 **Colonne de gauche** (repliable ; menu ☰ sur téléphone) :
@@ -641,6 +657,10 @@ Page `/calendar` (pleine largeur, pleine hauteur) :
     pour celui qui déborde de la journée (à modifier dans l'éditeur). **Double-clic sur une heure libre** :
     nouvel événement d'une heure à cette heure-là ; **clic droit** : menu « 📅 Nouvel événement à HH:MM » /
     « 📋 Nouvelle tâche ». Clic sur un bloc : éditeur. Gestes à la souris (le doigt viendra plus tard).
+- **Clic sur une tâche ou un événement** : le sélectionne (contour bleu ; une bande sur plusieurs semaines
+  est sélectionnée en entier) ; **Suppr** (ou ⌫) le supprime — Ctrl+Z annule ; une tâche qui a des
+  sous-tâches passe par la question habituelle ; un élément qu'on ne peut pas supprimer (pas à soi) le
+  signale. Un clic sur une case désélectionne.
 - **Clic** sur une case : la sélectionne (cadre bleu). **Clic-glisser** d'une case à l'autre : sélectionne
   la plage de jours. **Clic droit** : sélectionne la case (sauf si elle fait déjà partie de la sélection) et
   ouvre un menu : « 📅 Nouvel événement » (un jour : de 9 h à 10 h ; plusieurs jours : toute la journée sur
@@ -1030,3 +1050,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.29 | **🔔 Notifications** (§8.4 ter) : table `notification`, créées dans la transaction de chaque action enregistrée (`UnitOfWork.before_commit` → `notifications.record` : concernés = propriétaire + partages, parent d'une sous-tâche ; types partage / modification / fin de partage / suppression ; regroupement 15 min), `NotificationService`, API `/notifications`, `RemoteNotifications` (nombre de non lues gardé en mémoire), module dans la colonne de gauche avec bulle, page `/notifications` (non lues mises en valeur, clic = ouvrir + lu, tout marquer comme lu) ; 409 tests |
 | 2026-11-10 | 1.30 | Calendrier : « De qui ? » n'est plus mémorisé, la page s'ouvre toujours sur « Tous » (le choix « Mes tâches » d'avant les événements, gardé, masquait les événements partagés) ; 409 tests |
 | 2026-11-10 | 1.31 | **Tags / projets du même nom** (§4.5) : deux publics du même nom refusés ; noms rendus distincts dans les listes (`rules.label_names` : « x (privé) » / « x (public) », couleurs retrouvées sans confusion), nom tapé = son propre tag d'abord ; notification « conflict » au propriétaire du privé (Renommer / Fusionner dans le public) ; fusion de projets (`ProjectService.merge`, `POST /projects/{id}/merge`, bouton dans les réglages) ; 414 tests + vérifié dans Firefox |
+| 2026-11-10 | 1.32 | Calendrier : clic = sélection d'une tâche / d'un événement, **Suppr** pour le supprimer (Ctrl+Z annule) ; **pictogrammes de partage** (§7 bis : 👥 à moi partagé, 🤝 partagé avec moi, 👁️ lecture seule ; `Ownership`, `rules.ownership`, `components/ownership.py`) sur les cartes, lignes, pastilles, bandes, agenda, avec légende ; 416 tests + vérifié dans Firefox |

@@ -14,6 +14,8 @@
 - Colonne « 📥 Sans échéance » (à droite ; sous la grille sur petit écran) : tâches ouvertes sans échéance.
 - Glisser une pastille vers un autre jour change son échéance ; vers « Sans échéance », la retire (et
   inversement). Zones ``day:<AAAA-MM-JJ>`` et ``undated`` (``dnd.js``).
+- Clic sur une tâche ou un événement : le sélectionne ; **Suppr** (ou ⌫) le supprime (Ctrl+Z annule).
+- Pictogramme devant le titre : 👥 à moi et partagé, 🤝 partagé avec moi, 👁️ lecture seule (``Ownership``).
 - Clic sur une case : la sélectionne. Double-clic sur une pastille : éditeur de la tâche. Double-clic
   ailleurs dans la case : la case s'agrandit à toute la fenêtre avec les cartes complètes de ses tâches.
 Le mois affiché se choisit aussi par l'adresse : ``/calendar?month=2026-11``.
@@ -29,14 +31,15 @@ from fastapi.responses import Response
 from nicegui import ui
 
 from organizer.core import rules
-from organizer.core.enums import Importance, Status, Urgency
+from organizer.core.enums import Importance, Ownership, Status, Urgency
 from organizer.core.schemas import EventFilter, EventOut, EventPatch, TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
 from organizer.ui.components.agenda import Agenda, agenda_columns, moment_of
 from organizer.ui.components.day_select import DaySelect, selectable_day
 from organizer.ui.components.dnd import draggable, draggable_event, drop_zone
+from organizer.ui.components.ownership import ownership_emoji, ownership_text
 from organizer.ui.components.resizer import Resizer, resizable, resize_handle
-from organizer.ui.components.task_card import task_row
+from organizer.ui.components.task_card import confirm_delete, task_row
 from organizer.ui.context import UiContext
 from organizer.ui.layout import app_frame
 from organizer.ui.theme import IMPORTANCE_CHIP_BORDER_PX, hex_to_rgba, readable_text
@@ -147,6 +150,8 @@ class CalendarView:
         self.anchor = rules.week_start(today)  # premier lundi affiché (vues Semaine et 6 semaines)
         self.undated_panel: ui.element | None = None
         self.selection: tuple[date, date] | None = None  # jours sélectionnés (premier, dernier)
+        self.selected_item: tuple[str, int] | None = None  # ("task" | "event", identifiant)
+        self.item_elements: dict[tuple[str, int], list[ui.element]] = {}
         self.cells: dict[date, ui.element] = {}
         self.zoomed: date | None = None
         self.tasks: dict[int, TaskOut] = {}  # tâches affichées, par identifiant (glisser-déposer)
@@ -188,6 +193,7 @@ class CalendarView:
         ctx.event_drop_handler = self._event_dropped
         Resizer(self._resized, min=UNDATED_MIN, max=UNDATED_MAX).mark("resizer")
         DaySelect(self.select_range).mark("day-select")
+        ui.keyboard(on_key=self._key, ignore=["input", "select", "button", "textarea"]).mark("calendar-keys")
 
         with (
             ui.dialog()
@@ -231,6 +237,10 @@ class CalendarView:
                     ui.label(importance.meta.emoji).classes("calendar-legend calendar-legend-ring").style(
                         _ring(importance)
                     ).tooltip(f"Pourtour : importance {importance.meta.label} — {importance.meta.tooltip}")
+                for kind in (Ownership.SHARED_BY_ME, Ownership.SHARED_WITH_ME, Ownership.READ_ONLY):
+                    ui.label(kind.meta.emoji).classes("ml-1 text-sm").tooltip(
+                        f"{kind.meta.label} — {kind.meta.tooltip}"
+                    ).mark(f"legend-{kind.value}")
                 ui.label("⚠️ en retard").classes("calendar-chip calendar-chip-overdue ml-1").tooltip(
                     "Échéance passée et tâche pas finie : affichée aujourd'hui"
                 )
@@ -420,6 +430,67 @@ class CalendarView:
                 cell.classes(add="calendar-selected") if wanted else cell.classes(remove="calendar-selected")
         self._update_menu()
 
+    # --- sélection d'une tâche / d'un événement, Suppr ---
+
+    def _selectable(self, element: ui.element, key: tuple[str, int]) -> None:
+        """Un clic sélectionne l'élément (une bande sur plusieurs semaines : tous ses morceaux)."""
+        self.item_elements.setdefault(key, []).append(element)
+        element.on("click.stop", lambda _, k=key: self.select_item(k))
+        if key == self.selected_item:
+            element.classes(add="calendar-item-selected")
+
+    def select_item(self, key: tuple[str, int] | None) -> None:
+        if key == self.selected_item:
+            return
+        for element in self.item_elements.get(self.selected_item, []) if self.selected_item else []:
+            if not element.is_deleted:
+                element.classes(remove="calendar-item-selected")
+        self.selected_item = key
+        for element in self.item_elements.get(key, []) if key else []:
+            element.classes(add="calendar-item-selected")
+
+    def _key(self, e) -> None:
+        if not e.action.keydown or str(e.key.name) not in ("Delete", "Backspace"):
+            return
+        if self.selected_item is None or self.ctx.editor.dialog.value or self.zoom_dialog.value:
+            return
+        self.delete_selected()
+
+    def delete_selected(self) -> None:
+        """Supprime la tâche / l'événement sélectionné (Ctrl+Z annule) ; une tâche qui a des sous-tâches
+        passe par la question habituelle (les supprimer aussi ou les garder)."""
+        if self.selected_item is None:
+            return
+        kind, item_id = self.selected_item
+        if kind == "event":
+            event = self.events.get(item_id) or self.ctx.call(self.ctx.ds.agenda.get, item_id)
+            if event is None:
+                return
+            if not event.can_delete:
+                ui.notify(
+                    "Seul son propriétaire peut supprimer cet événement.", type="warning", position="top"
+                )
+                return
+            if self.ctx.attempt(self.ctx.ds.agenda.delete, item_id):
+                self._deleted(event.title)
+            return
+        task = self.tasks.get(item_id) or self.ctx.call(self.ctx.ds.tasks.get, item_id)
+        if task is None:
+            return
+        if not task.can_delete:
+            ui.notify("Seul son propriétaire peut supprimer cette tâche.", type="warning", position="top")
+            return
+        if task.has_subtasks:
+            confirm_delete(task, self.ctx, after=lambda: self.select_item(None))
+            return
+        if self.ctx.attempt(self.ctx.ds.tasks.delete, item_id):
+            self._deleted(task.title)
+
+    def _deleted(self, title: str) -> None:
+        self.selected_item = None
+        ui.notify(f"🗑️ « {title} » supprimé (Ctrl+Z pour annuler)", position="top")
+        self.ctx.refresh()
+
     def is_selected(self, day: date) -> bool:
         return self.selection is not None and self.selection[0] <= day <= self.selection[1]
 
@@ -475,6 +546,7 @@ class CalendarView:
         self._header_texts(weeks, today)
         days, undated = self._load()
         events = self._load_events(weeks[0][0], weeks[-1][-1])
+        self.item_elements = {}
         with ui.element("div").classes("calendar-layout page-fill-grow w-full"):
             self._grid(weeks, days, events, today)
             if self.prefs.show_tasks:
@@ -539,7 +611,7 @@ class CalendarView:
             .classes(css)
             .style(f"grid-row: {row}; grid-column: {col + 1}; --lanes: {lanes}")
             .mark(f"calendar-day-{day.isoformat()}")
-            .on("click", lambda _, d=day: self.select(d))
+            .on("click", lambda _, d=day: (self.select(d), self.select_item(None)))
             .on("dblclick", lambda _, d=day: self.zoom(d), js_handler=ZOOM_ORIGIN_JS)
             .on("contextmenu", lambda _, d=day: self._context(d))
         )
@@ -567,22 +639,25 @@ class CalendarView:
         ]
         if event.location:
             lines.append(f"📍 {event.location}")
-        if event.owner_id != self.ctx.user.id:
-            lines.append("📢 Public" if event.is_public else "👥 Partagé avec moi")
-        lines.append("Double-clic : ouvrir" + (" · glisser : changer de jour" if event.can_edit else ""))
+        lines.append(f"{ownership_emoji(event, self.ctx)} {ownership_text(event, self.ctx)}".strip())
+        lines.append(
+            "Clic : sélectionner (Suppr : supprimer) · double-clic : ouvrir"
+            + (" · glisser : changer de jour" if event.can_edit else "")
+        )
         return "\n".join(lines)
 
     def _event_chip(self, event: EventOut) -> None:
         """Événement d'un seul jour, avec heures : rectangle à liseré de sa couleur, heure en tête."""
         color = event.display_color
         chip = (
-            ui.label(f"{event.start_time:%H:%M} {event.title}")
+            ui.label(_with_mark(ownership_emoji(event, self.ctx), f"{event.start_time:%H:%M} {event.title}"))
             .classes("calendar-event")
             .style(f"border-left-color: {color}; background: {hex_to_rgba(color, 0.18)}")
             .mark(f"calendar-event-{event.id}")
             .on("dblclick.stop", lambda _, i=event.id: self.ctx.editor.open_event(i))
             .tooltip(self._event_tooltip(event))
         )
+        self._selectable(chip, ("event", event.id))
         if event.can_edit:
             draggable_event(chip, event)
 
@@ -593,6 +668,7 @@ class CalendarView:
         semaine ; coins carrés et flèche quand elle continue sur la semaine d'avant / d'après."""
         color = event.display_color
         text = event.title if event.all_day else f"{event.start_time:%H:%M} {event.title}"
+        text = _with_mark(ownership_emoji(event, self.ctx), text)
         css = (
             "calendar-band"
             + (" calendar-band-before" if before else "")
@@ -609,6 +685,7 @@ class CalendarView:
             .on("dblclick.stop", lambda _, i=event.id: self.ctx.editor.open_event(i))
             .tooltip(self._event_tooltip(event))
         )
+        self._selectable(band, ("event", event.id))
         if event.can_edit:
             draggable_event(band, event)
 
@@ -668,6 +745,7 @@ class CalendarView:
         if task.due_time and not late:
             text = f"{task.due_time:%H:%M} {text}"
         css = "calendar-chip"
+        text = _with_mark(ownership_emoji(task, self.ctx), text)
         if late:
             css += " calendar-chip-overdue"
             text = f"⚠️ {text}"
@@ -691,7 +769,10 @@ class CalendarView:
         tooltip += (
             f"\nUrgence : {urgency.emoji} {urgency.label} · Importance : {task.importance.meta.emoji} "
             f"{task.importance.meta.label}\n{task.status.meta.text}\n"
-            "Double-clic : ouvrir la tâche · glisser : changer l'échéance"
+        )
+        tooltip += f"{ownership_emoji(task, self.ctx)} {ownership_text(task, self.ctx)}".strip()
+        tooltip += (
+            "\nClic : sélectionner (Suppr : supprimer) · double-clic : ouvrir · glisser : changer l'échéance"
         )
         chip = (
             ui.label(text)
@@ -701,6 +782,7 @@ class CalendarView:
             .on("dblclick.stop", lambda _, t=task.id: self.ctx.editor.open(t))
             .tooltip(tooltip)
         )
+        self._selectable(chip, ("task", task.id))
         draggable(chip, task)
 
     # --- vue d'un jour (case agrandie) ---
@@ -785,7 +867,11 @@ class CalendarView:
                 agenda.classes("w-full").mark("agenda")
                 with agenda:
                     agenda_columns(
-                        day, timed, self.ctx.editor.open_event, datetime.now() if day == today else None
+                        day,
+                        timed,
+                        self.ctx.editor.open_event,
+                        datetime.now() if day == today else None,
+                        mark_of=lambda e: ownership_emoji(e, self.ctx),
                     )
                     with ui.context_menu().mark("agenda-menu"):
                         with ui.menu_item(on_click=self._agenda_menu_event).mark("agenda-new-event"):
@@ -816,7 +902,7 @@ class CalendarView:
 
     def _whole_day_bar(self, event: EventOut) -> None:
         color = event.display_color
-        text = event.title
+        text = _with_mark(ownership_emoji(event, self.ctx), event.title)
         if event.start_date != event.end_date:
             text += f" ({fmt.event_range(event.start_date, None, event.end_date, None).split('(')[-1]}"
         (
@@ -869,6 +955,11 @@ class CalendarView:
 
     def _agenda_menu_event(self) -> None:
         self._agenda_create(getattr(self, "slot_minute", 9 * 60))
+
+
+def _with_mark(mark: str, text: str) -> str:
+    """Pictogramme de partage devant un texte (rien pour un élément à moi, partagé avec personne)."""
+    return f"{mark} {text}" if mark else text
 
 
 def _last_day(event: EventOut) -> date:

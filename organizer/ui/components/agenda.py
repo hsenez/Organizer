@@ -48,10 +48,14 @@ def bounds(event: EventOut) -> tuple[datetime, datetime]:
 
 
 def agenda_columns(
-    day: date, events: list[EventOut], on_open: Callable[[int], None], now: datetime | None
+    day: date,
+    events: list[EventOut],
+    on_open: Callable[[int], None],
+    now: datetime | None,
+    mark_of: Callable[[EventOut], str] = lambda _: "",
 ) -> None:
     """Les deux colonnes de la journée, avec les événements horaires (les journées entières sont affichées à
-    part, au-dessus)."""
+    part, au-dessus). ``mark_of`` : pictogramme de partage à placer devant le titre."""
     spans = [(event, *bounds(event)) for event in events]
     blocks = rules.agenda_layout(spans, day)
     with ui.element("div").classes("agenda-columns"):
@@ -66,7 +70,7 @@ def agenda_columns(
                 track._props["data-agenda-offset"] = str(offset)
                 with track:
                     for block in (b for b in blocks if b.column == column):
-                        _block(day, block, on_open)
+                        _block(day, block, on_open, mark_of(block.key))
                     if now is not None and now.date() == day:
                         minute = minutes_of(day, now) - offset
                         if 0 <= minute < rules.HALF_DAY:
@@ -75,7 +79,7 @@ def agenda_columns(
                             )
 
 
-def _block(day: date, block: rules.AgendaBlock, on_open: Callable[[int], None]) -> None:
+def _block(day: date, block: rules.AgendaBlock, on_open: Callable[[int], None], mark: str = "") -> None:
     event: EventOut = block.key
     start, end = bounds(event)
     first, last = minutes_of(day, start), minutes_of(day, end)
@@ -112,7 +116,7 @@ def _block(day: date, block: rules.AgendaBlock, on_open: Callable[[int], None]) 
             ui.element("div").classes("agenda-handle agenda-handle-start")._props["data-agenda-handle"] = (
                 "start"
             )
-        ui.label(event.title).classes("agenda-title")
+        ui.label(f"{mark} {event.title}" if mark else event.title).classes("agenda-title")
         if height >= 30:
             ui.label(f"{start:%H:%M} – {end:%H:%M}").classes("agenda-time")
         if height >= 60 and event.location:

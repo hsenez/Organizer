@@ -182,6 +182,32 @@ QUADRANT_META: dict[Quadrant, Meta] = {
     Quadrant.ELIMINATE: Meta("Éliminer", "🗑️", "Ni important ni urgent : à abandonner ?", "#adb5bd"),
 }
 
+
+class Ownership(StrEnum):
+    """À qui est une tâche / un événement, du point de vue de l'utilisateur (voir ``rules.ownership``)."""
+
+    MINE = "mine"  # à moi, partagé avec personne
+    SHARED_BY_ME = "shared_by_me"  # à moi, partagé avec d'autres
+    SHARED_WITH_ME = "shared_with_me"  # à un autre, partagé avec moi, modifiable
+    READ_ONLY = "read_only"  # à un autre, en lecture seule (partage non modifiable, ou public)
+
+    @property
+    def meta(self) -> Meta:
+        return OWNERSHIP_META[self]
+
+
+OWNERSHIP_META: dict[Ownership, Meta] = {
+    Ownership.MINE: Meta("À vous", "", "À vous, partagé avec personne", "#868e96"),
+    Ownership.SHARED_BY_ME: Meta("Partagé par vous", "👥", "À vous, partagé avec d'autres", "#4dabf7"),
+    Ownership.SHARED_WITH_ME: Meta(
+        "Partagé avec vous", "🤝", "Partagé avec vous : vous pouvez le modifier", "#40c057"
+    ),
+    Ownership.READ_ONLY: Meta(
+        "Lecture seule", "👁️", "Partagé avec vous en lecture seule, ou public", "#fd7e14"
+    ),
+}
+
+
 # Couleur d'un événement sans couleur choisie ni projet.
 EVENT_DEFAULT_COLOR = "#4c6ef5"
 # Couleurs proposées dans l'éditeur d'événement (en plus de « couleur du projet » et d'une couleur libre).

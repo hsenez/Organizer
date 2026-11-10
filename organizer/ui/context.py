@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
@@ -70,6 +71,16 @@ class UiContext:
     @property
     def user(self):
         return self.ds.user
+
+    def user_names(self) -> dict[int, str]:
+        """Noms affichés des utilisateurs (pictogrammes de partage), gardés quelques secondes : une page en
+        affiche beaucoup d'un coup."""
+        cached = getattr(self, "_user_names", None)
+        if cached is None or time.monotonic() - cached[0] > 30:
+            names = {u.id: u.display_name or u.username for u in self.ds.users_public()}
+            cached = (time.monotonic(), names)
+            self._user_names = cached
+        return cached[1]
 
     def today(self) -> date:
         return date.today()

@@ -294,6 +294,12 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `rules.agenda_layout` (`AgendaBlock`), pas `rules.AGENDA_STEP`. Marqueurs : `agenda`, `agenda-col-0|1`,
   `agenda-event-<id>`, `zoom-event-<id>` (journée entière), `zoom-tasks`, `zoom-prev`, `zoom-next`,
   `agenda-menu`, `agenda-new-event`. ⚠️ `ui.menu_item` n'a pas de `set_text` : mettre un `ui.label` dedans.
+- Sélection d'un élément (`CalendarView.selected_item`, `_selectable` : `click.stop`, classe
+  `calendar-item-selected`) ; `ui.keyboard` de la page (marqueur `calendar-keys`) : Suppr / ⌫ →
+  `delete_selected`. Tests : helper `press(user, "calendar-keys", "Delete")`.
+- Pictogrammes de partage : `components/ownership.py` (`ownership_emoji`, `ownership_text`,
+  `ownership_chip`) d'après `rules.ownership` / `Ownership` (enums) ; noms via `ctx.user_names()` (gardés
+  30 s). À utiliser pour tout nouvel affichage de tâche / d'événement.
 - Glisser un événement : `draggable_event` (`data-dnd-kind="event"`) ; `dnd.js` émet `drop` avec `kind`,
   `UiContext.handle_drop` aiguille vers `ctx.event_drop_handler`. `refusal()` (JS) refuse tout rattachement
   avec un événement (règle propre au JS : le serveur ne rattache que des tâches).
@@ -562,7 +568,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 414 tests au total (+1 réservé à Windows).
+- 416 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

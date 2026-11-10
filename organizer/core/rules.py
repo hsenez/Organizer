@@ -16,7 +16,16 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol, TypeVar
 from urllib.parse import parse_qs, quote, urlparse
 
-from organizer.core.enums import DueBucket, Importance, LinkKind, Quadrant, Status, TaskKind, Urgency
+from organizer.core.enums import (
+    DueBucket,
+    Importance,
+    LinkKind,
+    Ownership,
+    Quadrant,
+    Status,
+    TaskKind,
+    Urgency,
+)
 from organizer.core.errors import InvalidOperation
 
 IMPORTANT_THRESHOLD = 3  # importance >= 3 → « important » dans la matrice
@@ -630,3 +639,11 @@ def label_names(labels: Iterable[_Labelled]) -> dict[int, str]:
                 name = f"{name} {seen[name]}"
         names[label.id] = name
     return names
+
+
+def ownership(owner_id: int, me: int, shared_with: Iterable[int], can_edit: bool = True) -> Ownership:
+    """À qui est un élément, vu par ``me`` : à moi (partagé ou non), à un autre modifiable, ou en lecture
+    seule. (Une tâche visible est toujours modifiable ; un événement peut être en lecture seule.)"""
+    if owner_id == me:
+        return Ownership.SHARED_BY_ME if any(True for _ in shared_with) else Ownership.MINE
+    return Ownership.SHARED_WITH_ME if can_edit else Ownership.READ_ONLY

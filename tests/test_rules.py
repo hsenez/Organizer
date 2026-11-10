@@ -449,3 +449,13 @@ def test_label_names_disambiguate_same_names():
         4: "Sport (public)",  # casse différente : déjà distinct
     }
     assert rules.label_names([L(1, "A", True), L(2, "A", True)]) == {1: "A (public)", 2: "A (public) 2"}
+
+
+def test_ownership():
+    from organizer.core.enums import Ownership
+
+    assert rules.ownership(1, 1, []) is Ownership.MINE
+    assert rules.ownership(1, 1, [2]) is Ownership.SHARED_BY_ME
+    assert rules.ownership(2, 1, [1]) is Ownership.SHARED_WITH_ME
+    assert rules.ownership(2, 1, [1], can_edit=False) is Ownership.READ_ONLY
+    assert rules.ownership(2, 1, [], can_edit=False) is Ownership.READ_ONLY  # public

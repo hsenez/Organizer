@@ -292,6 +292,10 @@ body.agenda-dragging, body.agenda-dragging * { cursor: grabbing !important; user
 .notification-unread .notification-title { font-weight: 700; }
 .notification-dot { width: 10px; height: 10px; border-radius: 999px; background: #5c7cfa; flex: none; }
 
+/* Calendrier : tâche / événement sélectionné (Suppr pour le supprimer). */
+.calendar-item-selected { outline: 2px solid #1971c2; outline-offset: 1px; }
+.calendar-chips { padding: 3px; }
+
 /* Éditeur d'événement : pastilles de couleur. */
 .calendar-swatch { width: 22px; height: 22px; border-radius: 999px; cursor: pointer;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }

@@ -1331,3 +1331,64 @@ async def test_label_name_conflict_display_rename_and_merge(user: User):
     user.find(marker=f"notification-merge-{latest.id}").trigger("click.stop")
     assert [t.name for t in sv.tasks.get(task.id).tags] == ["Sport"]
     assert sv.tasks.get(task.id).tags[0].id == theirs.id
+
+
+def press(user: User, marker: str, key: str) -> None:
+    """Appui sur une touche, reçu par le ``ui.keyboard`` marqué ``marker``."""
+    args = {"action": "keydown", "repeat": False, "altKey": False, "ctrlKey": False, "metaKey": False,
+            "shiftKey": False, "key": key, "code": key, "location": 0}  # fmt: skip
+    user.find(marker=marker).trigger("key", args)
+
+
+async def test_calendar_select_item_delete_and_ownership_marks(user: User):
+    from datetime import date, time, timedelta
+
+    from organizer.core.schemas import EventCreate, ShareSpec
+
+    sv = await login(user)
+    show_calendar_tasks(sv)
+    bob = state().services_for(state().users.create_user("bob", "motdepasse-12", "Bob", by=sv.actor))
+    day = date.today() + timedelta(days=2)  # à venir : pas de tâche en retard
+    mine = sv.tasks.create(TaskCreate(title="Ranger", due_date=day))
+    shared_by_me = sv.agenda.create(EventCreate(title="Dîner", start_date=day, start_time=time(20)))
+    sv.agenda.set_shares(shared_by_me.id, [ShareSpec(user_id=bob.actor.id)])
+    with_me = bob.tasks.create(TaskCreate(title="Bricolage", due_date=day))
+    bob.tasks.set_shares(with_me.id, [sv.actor.id])
+    read_only = bob.agenda.create(EventCreate(title="Concert", start_date=day, start_time=time(21)))
+    bob.agenda.set_shares(read_only.id, [ShareSpec(user_id=sv.actor.id, can_edit=False)])
+
+    await user.open(f"/calendar?month={day:%Y-%m}")
+
+    def text(marker: str) -> str:
+        return next(iter(user.find(marker=marker).elements)).text
+
+    assert text(f"calendar-task-{mine.id}") == "Ranger"  # à moi, partagé avec personne : rien
+    assert text(f"calendar-event-{shared_by_me.id}") == "👥 20:00 Dîner"
+    assert text(f"calendar-task-{with_me.id}") == "🤝 Bricolage"
+    assert text(f"calendar-event-{read_only.id}") == "👁️ 21:00 Concert"
+
+    # Clic : sélection ; Suppr : suppression (Ctrl+Z annule).
+    user.find(marker=f"calendar-task-{mine.id}").trigger("click.stop")
+    assert (
+        "calendar-item-selected" in next(iter(user.find(marker=f"calendar-task-{mine.id}").elements)).classes
+    )
+    press(user, "calendar-keys", "Delete")
+    await settle()
+    assert [t.title for t in sv.tasks.list()] == ["Bricolage"]
+    await user.should_not_see(marker=f"calendar-task-{mine.id}")
+    user.find(marker="undo-button").click()
+    assert {t.title for t in sv.tasks.list()} == {"Ranger", "Bricolage"}
+    await settle()
+    user.find(marker=f"calendar-event-{shared_by_me.id}").trigger("click.stop")
+    press(user, "calendar-keys", "Backspace")
+    assert [e.title for e in sv.agenda.list()] == ["Concert"]
+    await settle()
+    # Lecture seule : pas supprimable.
+    user.find(marker=f"calendar-event-{read_only.id}").trigger("click.stop")
+    press(user, "calendar-keys", "Delete")
+    await user.should_see("Seul son propriétaire peut supprimer cet événement.")
+    assert [e.title for e in bob.agenda.list()] == ["Concert"]
+    # Un clic sur une case désélectionne.
+    user.find(marker=f"calendar-day-{day.isoformat()}").trigger("click")
+    press(user, "calendar-keys", "Delete")
+    assert [e.title for e in bob.agenda.list()] == ["Concert"]

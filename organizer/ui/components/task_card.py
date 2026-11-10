@@ -16,6 +16,7 @@ from organizer.core.enums import DueBucket, LinkKind, Status, Urgency
 from organizer.core.schemas import TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
 from organizer.ui.components.dnd import draggable
+from organizer.ui.components.ownership import ownership_chip
 from organizer.ui.components.tag_chips import tag_chip
 from organizer.ui.context import UiContext
 from organizer.ui.theme import IMPORTANCE_BORDER_PX
@@ -89,12 +90,7 @@ def task_card(task: TaskOut, ctx: UiContext, *, show_parent: bool = True, menu_e
                 kinds = {link.kind for link in task.links}
                 emoji = "📎" if kinds == {LinkKind.ATTACHMENT} else "🔗"
                 ui.label(f"{emoji} {len(task.links)}").classes("chip").tooltip(f"{len(task.links)} lien(s)")
-            if task.shared_with or task.owner_id != ctx.user.id:
-                ui.label("👥").classes("chip").tooltip(
-                    "Partagée avec moi"
-                    if task.owner_id != ctx.user.id
-                    else "Partagée avec d'autres personnes"
-                )
+            ownership_chip(task, ctx)
     return card
 
 
@@ -257,5 +253,6 @@ def task_row(task: TaskOut, ctx: UiContext, on_click, *, draggable_row: bool = F
                 ui.label(f"↳ {task.parent_title}").classes("text-xs text-gray-500 truncate w-full")
         if task.project is not None:
             ui.label(f"{task.project.emoji} {task.project.name}").classes("chip hidden sm:inline-flex")
+        ownership_chip(task, ctx)
         _due_chip(task, ctx)
     return row
