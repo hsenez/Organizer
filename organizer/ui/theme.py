@@ -155,7 +155,9 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .calendar-day-number { align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; min-width: 1.6rem;
     height: 1.6rem; padding: 0 4px; border-radius: 999px; font-size: .85rem; font-weight: 600; }
 .calendar-today .calendar-day-number { background: #5c7cfa; color: #fff; }
-.calendar-today { box-shadow: inset 0 0 0 2px rgba(92, 124, 250, .55); }
+/* Aujourd'hui : un fond (pas de contour, réservé à la sélection). */
+.calendar .calendar-cell.calendar-today { background: #fff6d6; }
+.body--dark .calendar .calendar-cell.calendar-today { background: #3a3218; }
 .body--dark .calendar { border-color: rgba(255, 255, 255, .10); background: rgba(255, 255, 255, .10); }
 .body--dark .calendar-head { color: #94a3b8; background: #161a23; }
 .body--dark .calendar-cell { background: #1a1e28; }
@@ -164,9 +166,9 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .body--dark .calendar-outside.calendar-cell { background: #15181f; }
 .calendar-cell { display: flex; flex-direction: column; gap: 2px; cursor: default; user-select: none; }
 .calendar-selected { box-shadow: inset 0 0 0 2px #5c7cfa !important; background: rgba(92, 124, 250, .07) !important; }
-.calendar-alarm { box-shadow: inset 0 0 0 2px #e03131; background: #fff5f5 !important; }
-.calendar-alarm.calendar-selected { box-shadow: inset 0 0 0 2px #e03131, inset 0 0 0 4px #5c7cfa !important; }
-.body--dark .calendar-alarm { background: #2c1517 !important; }
+/* Aujourd'hui avec des tâches en retard : fond rosé. */
+.calendar .calendar-cell.calendar-alarm { background: #ffe8e8; }
+.body--dark .calendar .calendar-cell.calendar-alarm { background: #3a1a1d; }
 .calendar-chips { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto;
     scrollbar-width: thin; }
 /* Pastille d'échéance : ellipse de la couleur de l'urgence, titre coupé par « … ». */

@@ -617,7 +617,8 @@ Page `/calendar` (pleine largeur, pleine hauteur) :
 
 - Grille classique du mois : **7 colonnes, du lundi au dimanche**, 4 à 6 semaines complètes ; les jours des
   mois voisins complètent la première et la dernière ligne (grisés), le week-end est légèrement teinté,
-  aujourd'hui est entouré.
+  aujourd'hui a un fond jaune pâle (et son numéro une pastille bleue) — pas de contour, réservé à la
+  sélection.
 - En-tête : ‹ › pour passer au mois précédent / suivant, nom du mois, bouton « Aujourd'hui » (grisé quand
   on est déjà sur le mois en cours). Le mois se choisit aussi par l'adresse : `/calendar?month=2026-11`.
 - **Échéances des tâches** (sous-tâches comprises) : petites pastilles elliptiques dans la case du jour,
@@ -628,7 +629,7 @@ Page `/calendar` (pleine largeur, pleine hauteur) :
   Ordre dans une journée : retards, puis urgence décroissante, heure, titre
   (`rules.calendar_days`). Tâches finies : à leur date, estompées et barrées ; annulées : absentes.
 - **Tâches en retard** (échéance passée, pas finie) : affichées **aujourd'hui** (et non plus à leur date),
-  pastille ⚠️ à rayures rouge sombre qui pulse ; la case du jour est bordée de rouge.
+  pastille ⚠️ à rayures rouge sombre qui pulse ; la case du jour prend un fond rosé.
 - **Barre de filtres** au-dessus de la grille : interrupteurs « 📅 Événements » (activé par défaut) et
   « 📋 Tâches » (échéances ; **désactivé par défaut**), mémorisés (préférence `view:calendar`) ; « De
   qui ? » (événements et tâches) : 👤 les miens, 🤝 partagés avec moi (et événements publics des autres),
@@ -1053,3 +1054,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.31 | **Tags / projets du même nom** (§4.5) : deux publics du même nom refusés ; noms rendus distincts dans les listes (`rules.label_names` : « x (privé) » / « x (public) », couleurs retrouvées sans confusion), nom tapé = son propre tag d'abord ; notification « conflict » au propriétaire du privé (Renommer / Fusionner dans le public) ; fusion de projets (`ProjectService.merge`, `POST /projects/{id}/merge`, bouton dans les réglages) ; 414 tests + vérifié dans Firefox |
 | 2026-11-10 | 1.32 | Calendrier : clic = sélection d'une tâche / d'un événement, **Suppr** pour le supprimer (Ctrl+Z annule) ; **pictogrammes de partage** (§7 bis : 👥 à moi partagé, 🤝 partagé avec moi, 👁️ lecture seule ; `Ownership`, `rules.ownership`, `components/ownership.py`) sur les cartes, lignes, pastilles, bandes, agenda, avec légende ; 416 tests + vérifié dans Firefox |
 | 2026-11-10 | 1.33 | Événements : un partage **modifiable** permet aussi de **supprimer** (le propriétaire est notifié ; lecture seule et public d'un autre : toujours impossible) ; 417 tests |
+| 2026-11-10 | 1.34 | Calendrier : aujourd'hui repéré par un **fond** (jaune pâle ; rosé s'il y a des tâches en retard) au lieu d'un contour, qui faisait croire à une sélection |
