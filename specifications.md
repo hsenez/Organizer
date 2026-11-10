@@ -272,7 +272,8 @@ logique) ; chacun a sa table (`task` / `event`) et ses tables de liaison (`event
 - **Couleur** : celle du projet, sinon un bleu par défaut ; une couleur choisie la remplace.
 - **Visibilité et droits** : privé (par défaut), **partagé** avec des personnes — chacune **modifiable** ou
   en **lecture seule** —, et/ou **public** (visible en lecture par tous les comptes du serveur).
-  Supprimer, partager, rendre public, transformer : propriétaire seulement. Comme pour les tâches, un tag
+  **Supprimer** : le propriétaire et les partages modifiables (pas la lecture seule ni un public d'un
+  autre). Partager, rendre public, transformer : propriétaire seulement. Comme pour les tâches, un tag
   privé d'un autre utilisateur est invisible et préservé.
 - **Conversion tâche ↔ événement** (une seule action, annulable) : titre, notes, projet, tags, partages et
   liens sont repris ; tâche → événement : début à l'échéance (ou aujourd'hui à 9 h), une heure ; événement
@@ -1051,3 +1052,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.30 | Calendrier : « De qui ? » n'est plus mémorisé, la page s'ouvre toujours sur « Tous » (le choix « Mes tâches » d'avant les événements, gardé, masquait les événements partagés) ; 409 tests |
 | 2026-11-10 | 1.31 | **Tags / projets du même nom** (§4.5) : deux publics du même nom refusés ; noms rendus distincts dans les listes (`rules.label_names` : « x (privé) » / « x (public) », couleurs retrouvées sans confusion), nom tapé = son propre tag d'abord ; notification « conflict » au propriétaire du privé (Renommer / Fusionner dans le public) ; fusion de projets (`ProjectService.merge`, `POST /projects/{id}/merge`, bouton dans les réglages) ; 414 tests + vérifié dans Firefox |
 | 2026-11-10 | 1.32 | Calendrier : clic = sélection d'une tâche / d'un événement, **Suppr** pour le supprimer (Ctrl+Z annule) ; **pictogrammes de partage** (§7 bis : 👥 à moi partagé, 🤝 partagé avec moi, 👁️ lecture seule ; `Ownership`, `rules.ownership`, `components/ownership.py`) sur les cartes, lignes, pastilles, bandes, agenda, avec légende ; 416 tests + vérifié dans Firefox |
+| 2026-11-10 | 1.33 | Événements : un partage **modifiable** permet aussi de **supprimer** (le propriétaire est notifié ; lecture seule et public d'un autre : toujours impossible) ; 417 tests |

@@ -273,8 +273,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Dates **locales** `start_date` / `start_time` / `end_date` / `end_time` (pas de `datetime` : pas de
   fuseau à gérer) ; `start_time is None` ⇔ toute la journée (`EventOut.all_day`). Toujours passer par
   `rules.event_span` pour normaliser. Jours touchés : `rules.event_days`.
-- Droits : `_get` (voir : propriétaire, partage, public), `_get_editable` (propriétaire ou
-  `EventShare.can_edit`), `_get_owned` (supprimer, partager, rendre public, transformer).
+- Droits : `_get` (voir : propriétaire, partage, public), `_get_editable` (modifier **et supprimer** :
+  propriétaire ou `EventShare.can_edit`), `_get_owned` (partager, rendre public, transformer).
 - Pièces jointes : `AttachmentService.upload_event` ; `_can_read` parcourt les liens des tâches **et** des
   événements. Suppression / fusion de tags et de projets : traiter `TaskTag` **et** `EventTag`, `Task`
   **et** `Event`.
@@ -568,7 +568,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 416 tests au total (+1 réservé à Windows).
+- 417 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

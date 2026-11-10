@@ -1386,7 +1386,7 @@ async def test_calendar_select_item_delete_and_ownership_marks(user: User):
     # Lecture seule : pas supprimable.
     user.find(marker=f"calendar-event-{read_only.id}").trigger("click.stop")
     press(user, "calendar-keys", "Delete")
-    await user.should_see("Seul son propriétaire peut supprimer cet événement.")
+    await user.should_see("Cet événement est en lecture seule pour vous : impossible de le supprimer.")
     assert [e.title for e in bob.agenda.list()] == ["Concert"]
     # Un clic sur une case désélectionne.
     user.find(marker=f"calendar-day-{day.isoformat()}").trigger("click")

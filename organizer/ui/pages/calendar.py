@@ -468,7 +468,9 @@ class CalendarView:
                 return
             if not event.can_delete:
                 ui.notify(
-                    "Seul son propriétaire peut supprimer cet événement.", type="warning", position="top"
+                    "Cet événement est en lecture seule pour vous : impossible de le supprimer.",
+                    type="warning",
+                    position="top",
                 )
                 return
             if self.ctx.attempt(self.ctx.ds.agenda.delete, item_id):

@@ -95,8 +95,7 @@ def test_visibility_shares_and_public(alice, bob):
         bob.agenda.add_link(shared.id, LinkIn(kind=LinkKind.URL, target="exemple.fr"))
     alice.agenda.set_shares(shared.id, [ShareSpec(user_id=bob.actor.id, can_edit=True)])
     assert bob.agenda.update(shared.id, EventPatch(title="Changé par Bob")).title == "Changé par Bob"
-    with pytest.raises(Forbidden):
-        bob.agenda.delete(shared.id)
+    assert bob.agenda.get(shared.id).can_delete  # modifiable ⇒ supprimable
     with pytest.raises(Forbidden):
         bob.agenda.set_shares(shared.id, [])
     with pytest.raises(Forbidden):
@@ -259,3 +258,22 @@ def test_conversion_applies_extra_fields_in_the_same_action(alice):
     assert (again.location, again.display_color, again.end_time) == ("Gymnase", "#e64980", time(15))
     alice.undo.undo()  # une seule action
     assert alice.tasks.get(task.id).importance == Importance.CRITICAL and alice.agenda.list() == []
+
+
+def test_editable_share_can_delete_read_only_cannot(alice, bob):
+    editable = meeting(alice, title="Modifiable")
+    read_only = meeting(alice, title="Lecture seule")
+    public = meeting(alice, title="Public", is_public=True)
+    alice.agenda.set_shares(editable.id, [ShareSpec(user_id=bob.actor.id, can_edit=True)])
+    alice.agenda.set_shares(read_only.id, [ShareSpec(user_id=bob.actor.id, can_edit=False)])
+    for event_id in (read_only.id, public.id):
+        assert not bob.agenda.get(event_id).can_delete
+        with pytest.raises(Forbidden):
+            bob.agenda.delete(event_id)
+    bob.agenda.delete(editable.id)
+    with pytest.raises(NotFound):
+        alice.agenda.get(editable.id)
+    latest = alice.notifications.list()[0]
+    assert (latest.kind, latest.actor_name, latest.title) == ("delete", "Bob", "Modifiable")
+    bob.undo.undo()  # Bob peut annuler sa suppression
+    assert alice.agenda.get(editable.id).shares == [ShareSpec(user_id=bob.actor.id, can_edit=True)]

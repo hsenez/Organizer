@@ -3,9 +3,9 @@
 Droits :
 - **voir** : le propriétaire, les utilisateurs avec qui l'événement est partagé, et tout le monde s'il est
   **public** ;
-- **modifier** (champs, tags, liens, pièces jointes) : le propriétaire, et les partages « modifiables » ;
-  un événement public ou partagé en lecture seule ne se modifie pas ;
-- **supprimer, partager, rendre public, transformer en tâche** : le propriétaire seulement.
+- **modifier** (champs, tags, liens, pièces jointes) **et supprimer** : le propriétaire, et les partages
+  « modifiables » ; un événement public ou partagé en lecture seule ne se modifie ni ne se supprime ;
+- **partager, rendre public, transformer en tâche** : le propriétaire seulement.
 
 Les dates et heures sont locales ; :func:`rules.event_span` normalise début et fin (toute la journée sans
 heure de début, une heure par défaut, fin après le début).
@@ -117,7 +117,7 @@ class AgendaService(ItemService):
                     shares=[ShareSpec(user_id=u, can_edit=mine[u].can_edit) for u in sorted(mine)],
                     created_at=e.created_at,
                     updated_at=e.updated_at,
-                    can_delete=e.owner_id == me,
+                    can_delete=can_edit,  # le propriétaire et les partages modifiables
                     start_date=e.start_date,
                     start_time=e.start_time,
                     end_date=e.end_date,
@@ -263,7 +263,7 @@ class AgendaService(ItemService):
         with self.uow() as probe:
             title = self._get(probe.session, event_id).title
         with self.uow(label=f"Supprimer l'événement {quoted(title)}") as w:
-            self._delete_row(w.session, self._get_owned(w.session, event_id, "supprimer"))
+            self._delete_row(w.session, self._get_editable(w.session, event_id))
 
     def set_shares(self, event_id: int, shares: list[ShareSpec]) -> EventOut:
         """Définit avec qui l'événement est partagé, et si chacun peut le modifier (réservé au
