@@ -511,7 +511,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
 
 ## Versions et mises à jour
 
-- `organizer/__init__.py` : `__version__` (**1.0.0** depuis le 9/11/2026 ; ensuite MINEUR = nouveauté,
+- `organizer/__init__.py` : `__version__` (**1.1.0** depuis le 10/11/2026 — calendrier, événements,
+  notifications ; 1.0.0 le 9/11/2026 ; ensuite MINEUR = nouveauté,
   CORRECTIF = correction, MAJEUR = incompatibilité) et `API_VERSION`.
   **À chaque version livrée** (passage sur `main` approuvé par l'utilisateur) : augmenter `__version__`, l'indiquer dans
   l'historique de `specifications.md`, proposer l'étiquette git `v<version>`. Augmenter `API_VERSION`
@@ -589,6 +590,8 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
   `PYTHONUTF8=1` dans le service généré et dans `restore.sh` (+ `PYTHONIOENCODING=utf-8`),
   `restore._utf8_output()`, et les tests du script lancés avec `PYTHONIOENCODING=latin-1`. Tout nouveau
   programme Python lancé en ligne de commande sur le Pi doit en faire autant.
+- ✅ **Version 1.1.0** (10/11/2026) : calendrier, événements (agenda, partage modifiable / lecture seule,
+  bascule tâche ↔ événement), notifications, pictogrammes de partage, conflits de noms tags / projets.
 - ✅ **Version 1.0.0** (9/11/2026) : migrations de la base en place ; client bureau validé sous Linux et
   Windows. Reste à faire par l'utilisateur : essai réel de la sauvegarde borg et d'une restauration (TODO).
 - Feuille de route complète : `specifications.md` §11.

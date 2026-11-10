@@ -993,6 +993,7 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 7 | ✅ Client bureau : fenêtre native, RemoteDataSource, ouverture de liens, notifications |
 | 8 | ✅ Temps réel (SSE), PWA, HTTPS facultatif, finitions (Rattacher à…, flèches dans Ctrl+K, défilement automatique, rappel par défaut à jour, compteur de filtres) |
 | 1.0.0 | ✅ Mise en ligne (Cloudflare Tunnel, durcissement), sauvegarde / restauration, pièces jointes par glisser-déposer, client bureau plus rapide et réseau local automatique, Windows, migrations de la base |
+| 1.1.0 | ✅ Calendrier (mois / semaine / 6 semaines, vue d'un jour avec agenda), événements (partage modifiable ou lecture seule, public, lieu Maps / Waze), éditeur commun tâche / événement, notifications, pictogrammes de partage |
 
 ---
 
@@ -1055,3 +1056,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.32 | Calendrier : clic = sélection d'une tâche / d'un événement, **Suppr** pour le supprimer (Ctrl+Z annule) ; **pictogrammes de partage** (§7 bis : 👥 à moi partagé, 🤝 partagé avec moi, 👁️ lecture seule ; `Ownership`, `rules.ownership`, `components/ownership.py`) sur les cartes, lignes, pastilles, bandes, agenda, avec légende ; 416 tests + vérifié dans Firefox |
 | 2026-11-10 | 1.33 | Événements : un partage **modifiable** permet aussi de **supprimer** (le propriétaire est notifié ; lecture seule et public d'un autre : toujours impossible) ; 417 tests |
 | 2026-11-10 | 1.34 | Calendrier : aujourd'hui repéré par un **fond** (jaune pâle ; rosé s'il y a des tâches en retard) au lieu d'un contour, qui faisait croire à une sélection |
+| 2026-11-10 | 1.35 | **🎉 Version 1.1.0** : calendrier, événements, notifications (voir `CHANGELOG.md`) ; `API_VERSION` inchangée (ajouts compatibles) ; branche `cloclo` fusionnée dans `main`, étiquette `v1.1.0` |

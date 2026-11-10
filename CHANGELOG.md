@@ -2,6 +2,53 @@
 
 Détail de chaque étape : historique de [`specifications.md`](specifications.md) (§12).
 
+## 1.1.0 — 10 novembre 2026
+
+Calendrier et événements.
+
+### Nouveautés
+
+- **📅 Calendrier** (colonne de gauche) : vues **mois**, **semaine** et **6 semaines** (défilement à la
+  semaine), du lundi au dimanche ; aujourd'hui sur fond jaune.
+  - **Échéances des tâches** (interrupteur « 📋 Tâches », masquées par défaut) : pastilles de la couleur de
+    l'**urgence**, pourtour de la couleur de l'**importance** ; tâches **en retard** ramenées à aujourd'hui
+    (pastille d'alerte) ; colonne **📥 Sans échéance** réglable et repliable ; glisser une pastille vers un
+    autre jour change l'échéance (ou la retire).
+  - **Événements** : **bandes** pour ceux qui durent toute la journée ou plusieurs jours, étiquettes
+    horaires pour les autres ; glisser vers un autre jour (horaires et durée gardés).
+  - Clic droit ou **clic-glisser** sur des jours → nouvel événement (toute la journée sur plusieurs jours)
+    ou nouvelle tâche ; clic sur un élément pour le **sélectionner**, **Suppr** pour le supprimer.
+  - **Vue d'un jour** (double-clic) : ses tâches + **agenda sur deux colonnes** (0-12 h, 12-24 h) où l'on
+    glisse un événement ou ses bords (pas de 15 min) ; double-clic sur une heure libre pour créer.
+  - Filtres « 📅 Événements », « 📋 Tâches » (mémorisés) et « De qui ? » (toujours « Tous » à l'ouverture).
+- **Événements** : début / fin ou journée entière, **lieu** avec boutons **Google Maps** et **Waze**,
+  couleur (celle du projet, une palette ou une couleur libre), projet, tags, liens et fichiers, notes ;
+  **partage** avec chaque personne en « peut modifier » (modifier et supprimer) ou « lecture seule », ou
+  **public** (lecture seule pour tous).
+- **Un seul éditeur** pour les tâches et les événements, avec une **bascule 📋 / 📅** : en création, les
+  champs communs sont gardés ; sur un élément existant, il est converti (Ctrl+Z annule).
+- **🔔 Notifications** (colonne de gauche, bulle avec le nombre de non lues) : ce que les autres ont fait qui
+  vous concerne — partage, modification, suppression ; clic pour ouvrir l'élément.
+- **Pictogrammes de partage** partout : 👥 à vous et partagé, 🤝 partagé avec vous, 👁️ lecture seule.
+- **Tags et projets du même nom** (votre privé, le public d'un autre) : affichés « x (privé) » / « x
+  (public) » sans mélange de couleurs ; une notification propose de renommer le vôtre ou de le fusionner
+  dans le public ; deux publics du même nom sont refusés. **Fusion de projets** dans les réglages.
+
+### Corrections
+
+- Client bureau : la configuration pouvait se perdre quand deux enregistrements avaient lieu en même temps.
+
+### Mise à jour depuis la 1.0.0
+
+Sur le Pi : `deploy/update.sh` (ou, si le Pi est sur la branche de test, `deploy/install_test.sh --main`).
+Les nouvelles tables sont créées au démarrage ; le schéma de la base ne change pas. Puis chaque poste :
+`install/linux/update.sh` ou `install\windows\update.bat`.
+
+### Limites connues
+
+- Agenda du jour : gestes à la souris seulement (pas encore au doigt).
+- Tâches partagées : toujours modifiables (pas de « lecture seule » par personne pour les tâches).
+
 ## 1.0.0 — 9 novembre 2026
 
 Première version stable.
