@@ -17,6 +17,7 @@ from organizer.core.schemas import (
     LinkPatch,
     ShareSpec,
     TaskOut,
+    TaskPatch,
 )
 from organizer.core.services import Services
 from organizer.server.api.deps import get_services
@@ -26,6 +27,11 @@ router = APIRouter(tags=["Événements"])
 
 class EventSharesIn(BaseModel):
     shares: list[ShareSpec]
+
+
+class ToEventIn(BaseModel):
+    times: EventTimes | None = None  # sans : à l'échéance, une heure
+    extra: EventPatch | None = None  # champs appliqués dans la même action (lieu, couleur…)
 
 
 @router.post("/agenda/query", response_model=list[EventOut])
@@ -87,12 +93,19 @@ def upload_event_attachment(
 
 
 @router.post("/agenda/{event_id}/to-task", response_model=TaskOut, status_code=201)
-def event_to_task(event_id: int, sv: Services = Depends(get_services)):
-    """Transforme l'événement en tâche (échéance = début)."""
-    return sv.agenda.to_task(event_id)
+def event_to_task(event_id: int, extra: TaskPatch | None = None, sv: Services = Depends(get_services)):
+    """Transforme l'événement en tâche (échéance = début) ; corps facultatif : champs de la tâche appliqués
+    dans la même action."""
+    return sv.agenda.to_task(event_id, _given(extra))
 
 
 @router.post("/tasks/{task_id}/to-event", response_model=EventOut, status_code=201)
-def task_to_event(task_id: int, times: EventTimes | None = None, sv: Services = Depends(get_services)):
-    """Transforme la tâche en événement (sans corps : il commence à l'échéance et dure une heure)."""
-    return sv.agenda.from_task(task_id, times)
+def task_to_event(task_id: int, data: ToEventIn | None = None, sv: Services = Depends(get_services)):
+    """Transforme la tâche en événement (sans ``times`` : il commence à l'échéance et dure une heure)."""
+    data = data or ToEventIn()
+    return sv.agenda.from_task(task_id, data.times, _given(data.extra))
+
+
+def _given(patch):
+    """Un patch vide (aucun champ fourni) équivaut à pas de patch."""
+    return patch if patch is not None and patch.model_fields_set else None

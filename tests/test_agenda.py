@@ -242,3 +242,20 @@ def test_deleting_or_merging_labels_updates_events(alice):
     alice.projects.delete(project.id)
     event = alice.agenda.get(event.id)
     assert event.tags == [] and event.project is None
+
+
+def test_conversion_applies_extra_fields_in_the_same_action(alice):
+    from organizer.core.enums import Importance
+    from organizer.core.schemas import TaskPatch
+
+    event = meeting(alice, location="Mairie")
+    task = alice.agenda.to_task(event.id, TaskPatch(importance=Importance.CRITICAL))
+    assert task.importance == Importance.CRITICAL
+    again = alice.agenda.from_task(
+        task.id,
+        EventTimes(start_date=D, start_time=time(14)),
+        EventPatch(location="Gymnase", color="#e64980"),
+    )
+    assert (again.location, again.display_color, again.end_time) == ("Gymnase", "#e64980", time(15))
+    alice.undo.undo()  # une seule action
+    assert alice.tasks.get(task.id).importance == Importance.CRITICAL and alice.agenda.list() == []

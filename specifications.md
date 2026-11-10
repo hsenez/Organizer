@@ -325,9 +325,10 @@ Partout où des tâches apparaissent en cartes (liste, kanbans, matrice, accueil
 
 ---
 
-## 6. Éditeur de tâche
+## 6. Éditeur de tâche (et d'événement)
 
-S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
+S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone). Le même panneau sert aux tâches et aux
+**événements** : la bascule **📋 Tâche / 📅 Événement** de l'en-tête passe de l'un à l'autre (§6.2).
 
 - **Titre** en grand, éditable directement.
 - **Curseurs (slide bars)** pour importance, urgence, statut et type : on peut glisser ou cliquer directement
@@ -383,6 +384,29 @@ S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone).
   ne donne à la page ni le contenu ni l'adresse (adresses `file://` masquées) ; la fenêtre capte les
   adresses côté GTK (`drag-data-received`, `client/window.py`) et les relaie à la page
   (`window.organizerNativeDrop`). Dépôts sans cible notés dans le journal.
+
+### 6.0 📅 Éditeur d'événement
+
+- **Début / fin** : interrupteur « 🌙 Toute la journée » (jours de début et de fin), sinon date et heure de
+  début et de fin ; résumé en clair avec la durée (« sam. 21 nov. 2026 · 20:00 → 22:30 (2 h 30) »).
+  Changer le début **garde la durée** (la fin suit) ; une fin avant le début est refusée.
+- **📍 Lieu** + boutons 🗺️ Google Maps et 🚗 Waze (§4.7).
+- **🎨 Couleur** : « Auto » (couleur du projet), 12 couleurs proposées, ou une couleur libre (pipette).
+- Projet, tags, liens et fichiers, notes : comme pour une tâche.
+- **📢 Public** (propriétaire) et **👥 Partager avec** : chaque personne est « ✏️ Peut modifier » ou
+  « 👁️ Lecture seule ».
+- **Lecture seule** (événement public d'un autre, ou partagé sans droit de modification) : affichage sans
+  champs de saisie (horaires, lieu avec Maps / Waze, projet, tags, liens, notes), « 👤 Appartient à … ».
+- Adresse directe : `?event=<id>` (ou `?event=new`), comme `?task=`.
+
+### 6.0 bis 🔁 Bascule tâche ↔ événement
+
+- **Brouillon** : on passe de l'un à l'autre en gardant titre, notes, projet et tags ; les champs propres à
+  l'un (curseurs, ou horaires / lieu…) sont gardés pour une rebascule. Une échéance devient un début (et
+  inversement).
+- **Élément existant** (propriétaire seulement ; pas pour une sous-tâche ni une tâche qui a des
+  sous-tâches) : il est **converti** (§4.7) en **une seule action** annulable ; si on rebascule dans la même
+  session, les champs propres d'avant sont repris dans la même action.
 
 ### 6.1 ↩️ Annuler / rétablir (général)
 
@@ -583,7 +607,11 @@ Page `/calendar` (pleine largeur, pleine hauteur) — **première étape** du ch
   tâche de « Sans échéance » déposée sur un jour la reçoit. Annulable (Ctrl+Z), toast de confirmation.
   Une tâche en retard reposée sur aujourd'hui prend la date du jour. Ctrl + dépôt sur une autre pastille :
   en faire une sous-tâche (comme partout).
-- **Clic** sur une case : la sélectionne (cadre bleu). **Double-clic sur une pastille** : ouvre l'éditeur
+- **Clic** sur une case : la sélectionne (cadre bleu). **Clic-glisser** d'une case à l'autre : sélectionne
+  la plage de jours. **Clic droit** : sélectionne la case (sauf si elle fait déjà partie de la sélection) et
+  ouvre un menu : « 📅 Nouvel événement » (un jour : de 9 h à 10 h ; plusieurs jours : toute la journée sur
+  la plage) et « 📋 Nouvelle tâche » (échéance le premier jour). Sur téléphone, le menu s'ouvre par un
+  appui long. **Double-clic sur une pastille** : ouvre l'éditeur
   de la tâche. **Double-clic ailleurs dans la case** (même vide) : la case s'agrandit à toute la fenêtre
   (animation depuis la case) et montre les **cartes complètes** de ses tâches (« ⚠️ En retard » puis
   « 📅 Échéance ce jour ») ; une carte s'ouvre dans l'éditeur, Échap ou ✕ referme.
@@ -944,3 +972,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.23 | Calendrier : pourtour des pastilles = importance ; colonne « 📥 Sans échéance » (à droite, sous la grille sur petit écran) ; glisser-déposer des pastilles entre les jours et vers / depuis « Sans échéance » pour changer ou retirer l'échéance (zones `day:<date>` et `undated`) ; 376 tests + glisser réel vérifié dans Firefox |
 | 2026-11-10 | 1.24 | Calendrier : colonne « 📥 Sans échéance » de largeur réglable (poignée à gauche ; `resize.js` : `data-resize-side="left"`) et repliable en bande étroite qui reste une zone de dépôt, mémorisé ; correction : deux dépôts rapides de suite sur la même tâche (le second était ignoré) ; 377 tests + vérifié à la souris dans Firefox |
 | 2026-11-10 | 1.25 | **Événements, étape 1** (§4.7) : tables `event`, `event_tag`, `event_share` (modifiable ou lecture seule), `event_link` ; base commune tâches / événements (`ItemBase`, `LinkBase`, `ItemOut`, `ItemService`) ; `AgendaService` (période, portée, texte, projets, tags ; droits ; liens et pièces jointes ; conversion tâche ↔ événement) ; règles `event_span`, `event_days`, `event_times_from_due`, `maps_url`, `waze_url` ; API `/agenda` et `RemoteAgenda` ; correction : enregistrement de `client.json` par deux fils à la fois (le client pouvait perdre sa configuration) ; 392 tests |
+| 2026-11-10 | 1.26 | **Événements, étape 2** (§6.0) : éditeur commun tâche / événement (`Editor` = panneau et aiguillage, `ItemEditor` = base, `TaskEditor`, `EventEditor`), bascule 📋 / 📅 (brouillon : champs communs gardés ; existant : conversion en une action, `extra` appliqué dans la même transaction), éditeur d'événement (journée entière, durée gardée, lieu + Maps / Waze, couleur, public, partage modifiable ou lecture seule, vue en lecture seule), `?event=` ; calendrier : sélection de plusieurs jours au clic-glisser (`day_select.js`), clic droit → nouvel événement / nouvelle tâche ; 397 tests + vérifié dans Firefox |

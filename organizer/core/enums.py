@@ -184,3 +184,8 @@ QUADRANT_META: dict[Quadrant, Meta] = {
 
 # Couleur d'un événement sans couleur choisie ni projet.
 EVENT_DEFAULT_COLOR = "#4c6ef5"
+# Couleurs proposées dans l'éditeur d'événement (en plus de « couleur du projet » et d'une couleur libre).
+EVENT_PALETTE = (
+    "#4c6ef5", "#15aabf", "#12b886", "#40c057", "#fab005", "#fd7e14",
+    "#fa5252", "#e64980", "#be4bdb", "#7950f2", "#868e96", "#495057",
+)  # fmt: skip

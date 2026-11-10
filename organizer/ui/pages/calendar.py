@@ -26,6 +26,7 @@ from organizer.core import rules
 from organizer.core.enums import Importance, Status, Urgency
 from organizer.core.schemas import TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
+from organizer.ui.components.day_select import DaySelect, selectable_day
 from organizer.ui.components.dnd import draggable, drop_zone
 from organizer.ui.components.resizer import Resizer, resizable, resize_handle
 from organizer.ui.components.task_card import task_card
@@ -55,7 +56,14 @@ def page(make_context):
         ctx = make_context(request)
         if isinstance(ctx, Response):
             return ctx
-        with app_frame(ctx, "/calendar", "Calendrier", open_task=request.query_params.get("task"), wide=True):
+        with app_frame(
+            ctx,
+            "/calendar",
+            "Calendrier",
+            open_task=request.query_params.get("task"),
+            open_event=request.query_params.get("event"),
+            wide=True,
+        ):
             CalendarView(ctx, parse_month(request.query_params.get("month")))
         return None
 
@@ -118,7 +126,7 @@ class CalendarView:
         self.year, self.month = month or (today.year, today.month)
         self.prefs = read_prefs(ctx.ds.account.get_pref(PREF_KEY))
         self.undated_panel: ui.element | None = None
-        self.selected: date | None = None
+        self.selection: tuple[date, date] | None = None  # jours sélectionnés (premier, dernier)
         self.cells: dict[date, ui.element] = {}
         self.zoomed: date | None = None
         self.tasks: dict[int, TaskOut] = {}  # tâches affichées, par identifiant (glisser-déposer)
@@ -147,6 +155,7 @@ class CalendarView:
         ctx.on_refresh(self.body.refresh)
         ctx.drop_handler = self._dropped
         Resizer(self._resized, min=UNDATED_MIN, max=UNDATED_MAX).mark("resizer")
+        DaySelect(self.select_range).mark("day-select")
 
         with (
             ui.dialog()
@@ -270,13 +279,65 @@ class CalendarView:
         self.body.refresh()
 
     def select(self, day: date) -> None:
-        """Sélectionne une case (sans reconstruire la grille)."""
-        previous = self.cells.get(self.selected) if self.selected else None
-        if previous is not None:
-            previous.classes(remove="calendar-selected")
-        self.selected = day
-        if day in self.cells:
-            self.cells[day].classes(add="calendar-selected")
+        """Sélectionne une case."""
+        self.select_range(day, day)
+
+    def select_range(self, first: date, last: date) -> None:
+        """Sélectionne les jours de ``first`` à ``last`` (sans reconstruire la grille)."""
+        first, last = min(first, last), max(first, last)
+        self.selection = (first, last)
+        for day, cell in self.cells.items():
+            wanted = first <= day <= last
+            if wanted != ("calendar-selected" in cell.classes):
+                cell.classes(add="calendar-selected") if wanted else cell.classes(remove="calendar-selected")
+        self._update_menu()
+
+    def is_selected(self, day: date) -> bool:
+        return self.selection is not None and self.selection[0] <= day <= self.selection[1]
+
+    # --- clic droit : créer ---
+
+    def _context(self, day: date) -> None:
+        """Clic droit : sélectionne la case, sauf si elle fait déjà partie de la sélection (le menu porte
+        alors sur toute la sélection)."""
+        if not self.is_selected(day):
+            self.select(day)
+
+    def _context_menu(self) -> None:
+        with ui.context_menu().mark("calendar-menu"):
+            self.menu_title = ui.label().classes("px-4 pt-2 pb-1 text-xs text-gray-500")
+            ui.menu_item("📅 Nouvel événement", on_click=self.new_event).mark("calendar-new-event")
+            ui.menu_item("📋 Nouvelle tâche (échéance ce jour)", on_click=self.new_task).mark(
+                "calendar-new-task"
+            )
+        self._update_menu()
+
+    def _update_menu(self) -> None:
+        title = getattr(self, "menu_title", None)
+        if title is None or title.is_deleted:
+            return
+        if self.selection is None:
+            title.set_text("")
+            return
+        first, last = self.selection
+        if first == last:
+            title.set_text(fmt.long_date(first))
+        else:
+            title.set_text(f"{fmt.long_date(first)} → {fmt.long_date(last)} ({(last - first).days + 1} j)")
+
+    def new_event(self) -> None:
+        """Nouvel événement sur la sélection : de 9 h à 10 h pour un jour, toute la journée pour plusieurs."""
+        first, last = self.selection or (self.ctx.today(), self.ctx.today())
+        if first == last:
+            self.ctx.editor.open_new_event(
+                start_date=first, start_time=rules.DEFAULT_EVENT_START, end_date=first, end_time=None
+            )
+        else:
+            self.ctx.editor.open_new_event(start_date=first, start_time=None, end_date=last, end_time=None)
+
+    def new_task(self) -> None:
+        first = self.selection[0] if self.selection else self.ctx.today()
+        self.ctx.editor.open_new(due_date=first)
 
     # --- grille ---
 
@@ -306,6 +367,7 @@ class CalendarView:
             for week in weeks:
                 for day in week:
                     self._cell(day, today, days.get(day, []))
+            self._context_menu()
 
     def _cell(self, day: date, today: date, tasks: list[TaskOut]) -> None:
         css = "calendar-cell"
@@ -317,7 +379,7 @@ class CalendarView:
             css += " calendar-today"
             if any(rules.is_overdue(task, today) for task in tasks):
                 css += " calendar-alarm"
-        if day == self.selected:
+        if self.is_selected(day):
             css += " calendar-selected"
         cell = (
             ui.element("div")
@@ -325,8 +387,10 @@ class CalendarView:
             .mark(f"calendar-day-{day.isoformat()}")
             .on("click", lambda _, d=day: self.select(d))
             .on("dblclick", lambda _, d=day: self.zoom(d), js_handler=ZOOM_ORIGIN_JS)
+            .on("contextmenu", lambda _, d=day: self._context(d))
         )
         drop_zone(cell, f"{DAY_ZONE}{day.isoformat()}")
+        selectable_day(cell, day)
         self.cells[day] = cell
         with cell:
             ui.label(str(day.day)).classes("calendar-day-number")

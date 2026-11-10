@@ -125,7 +125,7 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   - ✅ Pourtour = importance, colonne « 📥 Sans échéance » (réglable, repliable), glisser-déposer pour changer /
     retirer l'échéance.
   - Événements — feuille de route convenue le 10/11/2026 : ✅ 1. modèle, services, API, client bureau ;
-    2. éditeur commun + bascule tâche ↔ événement + création par clic droit (sélection d'une ou plusieurs
+    ✅ 2. éditeur commun + bascule tâche ↔ événement + création par clic droit (sélection d'une ou plusieurs
     cases, clic-glisser) ; 3. affichage dans le mois (bandes sur plusieurs jours), filtres, vues Mois /
     Semaine / 6 semaines (défilement à la semaine) ; 4. vue d'un jour : zone tâches + agenda 2 colonnes
     (0-12 h, 12-24 h), glisser l'événement ou ses bords (pas de 15 min) ; 5. **module 🔔 Notifications**

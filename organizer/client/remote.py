@@ -164,12 +164,18 @@ class RemoteAgenda(_Part):
     def remove_link(self, link_id: int) -> None:
         self.api.call("DELETE", f"/agenda-links/{link_id}")
 
-    def from_task(self, task_id: int, times: EventTimes | None = None) -> EventOut:
-        body = _full(times) if times is not None else None
+    def from_task(
+        self, task_id: int, times: EventTimes | None = None, extra: EventPatch | None = None
+    ) -> EventOut:
+        body = {
+            "times": _full(times) if times is not None else None,
+            "extra": _sent(extra) if extra is not None else None,
+        }
         return self.api.call("POST", f"/tasks/{task_id}/to-event", EventOut, json=body)
 
-    def to_task(self, event_id: int) -> TaskOut:
-        return self.api.call("POST", f"/agenda/{event_id}/to-task", TaskOut)
+    def to_task(self, event_id: int, extra: TaskPatch | None = None) -> TaskOut:
+        body = _sent(extra) if extra is not None else None
+        return self.api.call("POST", f"/agenda/{event_id}/to-task", TaskOut, json=body)
 
 
 class RemoteProjects(_Part):

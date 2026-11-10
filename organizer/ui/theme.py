@@ -213,6 +213,11 @@ body.dnd-active * { scroll-snap-type: none !important; }
 .calendar-zoom-head { border-bottom: 1px solid rgba(120, 130, 150, .25); }
 .calendar-zoom-number { font-size: 1.1rem; min-width: 2.2rem; height: 2.2rem; }
 .calendar-today-number { background: #5c7cfa; color: #fff; }
+/* Éditeur d'événement : pastilles de couleur. */
+.calendar-swatch { width: 22px; height: 22px; border-radius: 999px; cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
+.calendar-swatch:hover { transform: scale(1.12); }
+.calendar-swatch-on { outline: 3px solid #5c7cfa; outline-offset: 2px; }
 /* Infobulles sur plusieurs lignes (texte avec retours à la ligne). */
 .q-tooltip { white-space: pre-line; }
 @media (max-width: 599px) {

@@ -13,7 +13,7 @@ from nicegui import app, ui
 from nicegui.testing import User
 
 from organizer.core.enums import Importance, Status, Urgency
-from organizer.core.schemas import ProjectIn, TaskCreate, TaskFilter, TaskPatch
+from organizer.core.schemas import EventPatch, ProjectIn, TaskCreate, TaskFilter, TaskPatch
 
 
 @pytest.fixture(autouse=True)
@@ -242,6 +242,160 @@ async def test_calendar_shows_due_dates_overdue_today_and_filters(user: User):
     await user.should_see(marker=f"calendar-task-{mine.id}")
 
 
+async def test_calendar_right_click_creates_event_or_task(user: User):
+    from datetime import date, time, timedelta
+
+    sv = await login(user)
+    first = date.today().replace(day=1)
+    await user.open("/calendar")
+    day = f"calendar-day-{first.isoformat()}"
+    user.find(marker=day).trigger("contextmenu")
+    assert "calendar-selected" in next(iter(user.find(marker=day).elements)).classes
+    open_menu(user, "calendar-menu")
+    user.find(marker="calendar-new-event").click()
+    await user.should_see("✨ Nouvel événement")
+    user.find(marker="editor-title").type("Dentiste").trigger("blur")
+    event = sv.agenda.list()[0]
+    assert (event.title, event.start_date, event.start_time, event.end_time) == (
+        "Dentiste",
+        first,
+        time(9, 0),
+        time(10, 0),
+    )
+    user.find(marker="task-editor-dialog").trigger("hide")
+
+    # Plusieurs jours (clic-glisser) puis clic droit dans la sélection : toute la journée sur la plage.
+    last = first + timedelta(days=2)
+    user.find(marker="day-select").trigger("range", {"start": first.isoformat(), "end": last.isoformat()})
+    user.find(marker=f"calendar-day-{(first + timedelta(days=1)).isoformat()}").trigger("contextmenu")
+    for d in range(3):
+        cell = next(
+            iter(user.find(marker=f"calendar-day-{(first + timedelta(days=d)).isoformat()}").elements)
+        )
+        assert "calendar-selected" in cell.classes  # la sélection est gardée
+    open_menu(user, "calendar-menu")
+    user.find(marker="calendar-new-event").click()
+    user.find(marker="editor-title").type("Salon").trigger("blur")
+    salon = next(e for e in sv.agenda.list() if e.title == "Salon")
+    assert salon.all_day and (salon.start_date, salon.end_date) == (first, last)
+    user.find(marker="task-editor-dialog").trigger("hide")
+
+    # Nouvelle tâche : échéance le premier jour de la sélection.
+    open_menu(user, "calendar-menu")
+    user.find(marker="calendar-new-task").click()
+    await user.should_see("✨ Nouvelle tâche")
+    user.find(marker="editor-title").type("Préparer le salon").trigger("blur")
+    assert sv.tasks.list()[0].due_date == first
+
+
+async def test_editor_switches_between_task_and_event(user: User):
+    from datetime import date, time
+
+    sv = await login(user)
+    project = sv.projects.create(ProjectIn(name="Maison"))
+    await user.open("/calendar")
+    user.find(marker="fab-add").click()  # brouillon de tâche
+    select_value(user, "editor-project", project.id)
+    user.find(marker="slider-importance-4").click()
+    select_value(user, "editor-kind", "event")  # → brouillon d'événement, projet gardé
+    await user.should_see("✨ Nouvel événement")
+    select_value(user, "editor-kind", "task")  # retour : l'importance choisie est retrouvée
+    await user.should_see("✨ Nouvelle tâche")
+    select_value(user, "editor-kind", "event")
+    user.find(marker="editor-title").type("Réunion de chantier").trigger("blur")
+    event = sv.agenda.list()[0]
+    assert event.project.id == project.id and sv.tasks.list() == []
+
+    # Élément existant : conversion (une action), puis retour avec les champs propres retrouvés.
+    sv.agenda.update(event.id, EventPatch(location="Mairie"))
+    user.find(marker="task-editor-dialog").trigger("hide")
+    task = sv.tasks.create(
+        TaskCreate(title="Plombier", importance=Importance.CRITICAL, due_date=date(2026, 11, 20))
+    )
+    await user.open(f"/calendar?task={task.id}")
+    select_value(user, "editor-kind", "event")
+    await settle()
+    assert sv.tasks.list() == [] and {e.title for e in sv.agenda.list()} == {
+        "Réunion de chantier",
+        "Plombier",
+    }
+    converted = next(e for e in sv.agenda.list() if e.title == "Plombier")
+    assert converted.start_date == date(2026, 11, 20) and converted.start_time == time(9, 0)
+    select_value(user, "editor-kind", "task")
+    await settle()
+    back = sv.tasks.list()[0]
+    assert back.title == "Plombier" and back.importance == Importance.CRITICAL  # retrouvée
+    user.find(marker="undo-button").click()  # annule la dernière conversion
+    assert sv.tasks.list() == []
+
+
+async def test_event_editor_fields_and_sharing(user: User):
+    from datetime import date, time
+
+    from organizer.core.schemas import EventCreate, ShareSpec
+
+    sv = await login(user)
+    bob = state().users.create_user("bob", "motdepasse-12", "Bob", by=sv.actor)
+    event = sv.agenda.create(
+        EventCreate(
+            title="Cinéma", start_date=date(2026, 11, 12), start_time=time(20, 0), end_time=time(22, 0)
+        )
+    )
+    await user.open(f"/calendar?event={event.id}")  # ouvre l'éditeur de l'événement
+    await user.should_see(marker="editor-location")
+    # Début déplacé : la durée (2 h) est gardée.
+    with user.client:
+        next(iter(user.find(marker="editor-start-time").elements)).set_value("18:30")
+    moved = sv.agenda.get(event.id)
+    assert (moved.start_time, moved.end_time) == (time(18, 30), time(20, 30))
+    fill(user, "📍 Lieu", "Cinéma du centre")
+    user.find(marker="editor-location").trigger("blur")
+    assert sv.agenda.get(event.id).location == "Cinéma du centre"
+    await user.should_see(marker="editor-maps")
+    await user.should_see(marker="editor-waze")
+    user.find(marker="editor-color-#e64980").trigger("click")
+    assert sv.agenda.get(event.id).display_color == "#e64980"
+    select_value(user, "editor-all-day", True)
+    assert sv.agenda.get(event.id).all_day
+    # Partage en lecture seule, puis modifiable.
+    select_value(user, "editor-shares", [bob.id])
+    assert sv.agenda.get(event.id).shares == [ShareSpec(user_id=bob.id, can_edit=True)]
+    await settle()
+    select_value(user, f"editor-share-{bob.id}", False)
+    assert sv.agenda.get(event.id).shares == [ShareSpec(user_id=bob.id, can_edit=False)]
+    select_value(user, "editor-public", True)
+    assert sv.agenda.get(event.id).is_public
+
+
+async def test_event_read_only_for_viewers(user: User):
+    from datetime import date, time
+
+    from organizer.core.schemas import EventCreate, LinkIn, ShareSpec
+
+    bob = await login(user, "bob")
+    alice = state().services_for(state().users.create_user("alice", "motdepasse-12", "Alice", by=bob.actor))
+    event = alice.agenda.create(
+        EventCreate(
+            title="Anniversaire",
+            start_date=date(2026, 11, 12),
+            start_time=time(18),
+            location="Chez Alice",
+            notes="Apporter un **gâteau**",
+        )
+    )
+    alice.agenda.add_link(event.id, LinkIn(kind="url", target="exemple.fr"))
+    alice.agenda.set_shares(event.id, [ShareSpec(user_id=bob.actor.id, can_edit=False)])
+    await user.open(f"/calendar?event={event.id}")
+    await user.should_see(marker="editor-read-only")
+    await user.should_see("Anniversaire")
+    await user.should_see("📍 Chez Alice")
+    await user.should_see(marker="editor-waze")
+    await user.should_see("👤 Appartient à Alice")
+    await user.should_not_see(marker="editor-title")
+    await user.should_not_see(marker="editor-new-link")
+    await user.should_not_see(marker="editor-kind")
+
+
 async def test_calendar_select_zoom_and_open_editor(user: User):
     from datetime import date
 
@@ -454,11 +608,11 @@ async def test_double_click_on_note_link(user: User):
 
 
 async def test_note_web_link_is_opened_not_copied(user: User, monkeypatch):
-    from organizer.ui.components import task_editor
+    from organizer.ui.components import item_editor
 
     opened = []
     monkeypatch.setattr(
-        task_editor, "open_link", lambda kind, target, ds: opened.append((kind.value, target))
+        item_editor, "open_link", lambda kind, target, ds: opened.append((kind.value, target))
     )
     sv = await login(user)
     task = sv.tasks.create(TaskCreate(title="Lire", notes="[le site](google.fr) et https://example.org"))

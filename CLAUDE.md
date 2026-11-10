@@ -82,10 +82,18 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Pages de l'application dans `organizer/ui/pages/`, enregistrées par `register_app_pages(make_context)` :
   la fabrique reçoit la requête et renvoie un `UiContext` (ou une redirection). Le serveur fournit
   `server_context` (`server/pages.py`) ; le client bureau fournira la sienne.
-- **Éditeur** (`components/task_editor.py`) : `open(id)` pour une tâche existante, `open_new()` pour une
-  création (mode *brouillon* : `self.draft` contient les champs de `TaskCreate`, `self.task` un `TaskOut`
-  fictif d'id 0 construit par `_draft_out()` ; `_save()` alimente le brouillon tant qu'il n'y a pas de titre,
-  puis crée la tâche). Pas de création « à vide » en base.
+- **Éditeur** : `ctx.editor` = `Editor` (`components/item_editor.py` : le panneau, l'envoi de fichiers et
+  l'aiguillage) ; `open(id)` / `open_new(**draft)` (tâche), `open_event(id)` / `open_new_event(**draft)`.
+  Base `ItemEditor` (titre, projet, tags, liens, pièces jointes, notes, brouillon, `_save`) et sous-classes
+  `TaskEditor` (`task_editor.py`) et `EventEditor` (`event_editor.py`), qui partagent le **même** dialogue
+  (`self.dialog`, `self.body`, `self.upload` viennent de l'`Editor`). Brouillon : `self.draft` = champs du
+  schéma de création, `self.item` = objet fictif d'id 0 (`_draft_out()`) ; création au premier titre. Pas
+  de création « à vide » en base.
+  - Bascule (`Editor.switch`, marqueur `editor-kind`) : brouillon → `common_draft()` + `stash` des champs
+    propres ; existant → `convert_from` (`ds.agenda.from_task` / `to_task` avec `extra` : champs gardés,
+    même transaction donc **un** Ctrl+Z). Après un `_build()` déclenché par un élément de l'éditeur, cet
+    élément est supprimé : un `ui.notify` doit alors se faire `with self.dialog:`.
+  - `?event=<id|new>` : `app_frame(..., open_event=…)`.
 - **Éditeur markdown** (`components/markdown_editor.py` + `.js`) : composant Vue maison autour de
   CodeMirror 6 **tel que fourni par NiceGUI** (`import * as CM from "nicegui-codemirror"`, importer
   `nicegui.elements.codemirror` côté Python enregistre ce paquet). Le module `lang-markdown` (GFM, keymap des
@@ -263,6 +271,10 @@ Référence fonctionnelle complète : **`specifications.md`**.
   événements. Suppression / fusion de tags et de projets : traiter `TaskTag` **et** `EventTag`, `Task`
   **et** `Event`.
 - Tests : `tests/test_agenda.py` (services), `test_client.py::test_agenda_through_api_matches_local`.
+- Calendrier : sélection `self.selection = (premier, dernier)` ; `day_select.js` (`DaySelect`, marqueur
+  `day-select`, événement `range`) surligne pendant le clic-glisser et absorbe le clic final ; cases
+  `data-cal-day`. Clic droit : `contextmenu` sur la case (`_context`) + `ui.context_menu` de la grille
+  (marqueurs `calendar-menu`, `calendar-new-event`, `calendar-new-task`).
 
 ## Étape 7 : client bureau
 
@@ -510,7 +522,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 392 tests au total (+1 réservé à Windows).
+- 397 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

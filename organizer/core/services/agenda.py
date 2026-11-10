@@ -30,6 +30,7 @@ from organizer.core.schemas import (
     EventTimes,
     ShareSpec,
     TaskOut,
+    TaskPatch,
 )
 from organizer.core.services.base import ServiceContext, quoted
 from organizer.core.services.items import ItemService
@@ -216,36 +217,40 @@ class AgendaService(ItemService):
         with self.uow(label=label, group_key=group_key) as w:
             s = w.session
             event = self._get_editable(s, event_id)
-            if (
-                "is_public" in fields
-                and fields["is_public"] != event.is_public
-                and event.owner_id != self.actor.id
-            ):
-                raise Forbidden("Seul le propriétaire peut rendre cet événement public ou privé.")
-            if "title" in fields:
-                title = fields["title"].strip()
-                if not title:
-                    raise InvalidOperation("Le titre est obligatoire.")
-                event.title = title
-            if any(key in fields for key in _TIME_FIELDS):
-                # Sans heure de début : toute la journée ; une journée entière qui prend une heure de début
-                # (sans heure de fin) dure une heure.
-                span = rules.event_span(*(fields.get(key, getattr(event, key)) for key in _TIME_FIELDS))
-                for key, value in zip(_TIME_FIELDS, span, strict=True):
-                    setattr(event, key, value)
-            for key in ("notes", "color", "is_public"):
-                if key in fields:
-                    setattr(event, key, fields[key])
-            if "location" in fields:
-                event.location = fields["location"].strip()
-            if "project_id" in fields:
-                self._check_project(s, fields["project_id"])
-                event.project_id = fields["project_id"]
-            if "tag_ids" in fields:
-                self._set_tags(s, event, fields["tag_ids"] or [])
-            self._touch(s, event)
+            self._apply(s, event, fields)
             s.flush()
             return self._out(s, event)
+
+    def _apply(self, s: Session, event: Event, fields: dict) -> None:
+        """Applique des champs d'``EventPatch`` à ``event`` (sans enregistrer)."""
+        if (
+            "is_public" in fields
+            and fields["is_public"] != event.is_public
+            and event.owner_id != self.actor.id
+        ):
+            raise Forbidden("Seul le propriétaire peut rendre cet événement public ou privé.")
+        if "title" in fields:
+            title = fields["title"].strip()
+            if not title:
+                raise InvalidOperation("Le titre est obligatoire.")
+            event.title = title
+        if any(key in fields for key in _TIME_FIELDS):
+            # Sans heure de début : toute la journée ; une journée entière qui prend une heure de début
+            # (sans heure de fin) dure une heure.
+            span = rules.event_span(*(fields.get(key, getattr(event, key)) for key in _TIME_FIELDS))
+            for key, value in zip(_TIME_FIELDS, span, strict=True):
+                setattr(event, key, value)
+        for key in ("notes", "color", "is_public"):
+            if key in fields:
+                setattr(event, key, fields[key])
+        if "location" in fields:
+            event.location = fields["location"].strip()
+        if "project_id" in fields:
+            self._check_project(s, fields["project_id"])
+            event.project_id = fields["project_id"]
+        if "tag_ids" in fields:
+            self._set_tags(s, event, fields["tag_ids"] or [])
+        self._touch(s, event)
 
     def _delete_row(self, s: Session, event: Event) -> None:
         for model in (EventTag, EventShare, EventLink):
@@ -291,9 +296,12 @@ class AgendaService(ItemService):
     # Conversion tâche ↔ événement (un seul pas d'annulation)
     # ==================================================================================================
 
-    def from_task(self, task_id: int, times: EventTimes | None = None) -> EventOut:
+    def from_task(
+        self, task_id: int, times: EventTimes | None = None, extra: EventPatch | None = None
+    ) -> EventOut:
         """Transforme une tâche en événement : titre, notes, projet, tags, partages (modifiables) et liens
-        sont repris ; sans ``times``, il commence à l'échéance (ou aujourd'hui à 9 h) et dure une heure."""
+        sont repris ; sans ``times``, il commence à l'échéance (ou aujourd'hui à 9 h) et dure une heure.
+        ``extra`` : champs appliqués dans la même action (ceux d'avant une conversion aller-retour)."""
         tasks = self.tasks
         with self.uow() as probe:
             title = tasks._get(probe.session, task_id).title
@@ -325,11 +333,14 @@ class AgendaService(ItemService):
                 s.add(EventShare(event_id=event.id, user_id=share.user_id, can_edit=True))
             s.flush()
             tasks._delete_row(s, task)
+            if extra is not None and extra.model_fields_set:
+                self._apply(s, event, {k: getattr(extra, k) for k in extra.model_fields_set})
             s.flush()
             return self._out(s, event)
 
-    def to_task(self, event_id: int) -> TaskOut:
-        """Transforme un événement en tâche (échéance = début) ; tags, partages et liens sont repris."""
+    def to_task(self, event_id: int, extra: TaskPatch | None = None) -> TaskOut:
+        """Transforme un événement en tâche (échéance = début) ; tags, partages et liens sont repris.
+        ``extra`` : champs de la tâche appliqués dans la même action."""
         tasks = self.tasks
         with self.uow() as probe:
             title = self._get(probe.session, event_id).title
@@ -353,6 +364,8 @@ class AgendaService(ItemService):
                 s.add(TaskShare(task_id=task.id, user_id=share.user_id))
             s.flush()
             self._delete_row(s, event)
+            if extra is not None and extra.model_fields_set:
+                tasks._apply(s, task, {k: getattr(extra, k) for k in extra.model_fields_set})
             s.flush()
             return tasks._out(s, task)
 

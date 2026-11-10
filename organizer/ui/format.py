@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 DAYS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
 MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
@@ -70,3 +70,31 @@ def due_text(d: date, t: time | None, today: date) -> str:
 def local_datetime(dt: datetime) -> str:
     """Date-heure UTC convertie dans le fuseau du système : « 07/11/2026 à 21:54 »."""
     return dt.astimezone().strftime("%d/%m/%Y à %H:%M")
+
+
+def duration(delta: timedelta) -> str:
+    """« 45 min », « 1 h », « 1 h 30 », « 2 j »."""
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 60:
+        return f"{minutes} min"
+    if minutes % (24 * 60) == 0:
+        return f"{minutes // (24 * 60)} j"
+    hours, rest = divmod(minutes, 60)
+    return f"{hours} h {rest:02d}" if rest else f"{hours} h"
+
+
+def event_range(start_date: date, start_time: time | None, end_date: date, end_time: time | None) -> str:
+    """« jeu. 12 nov. 2026 · 09:00 → 10:30 (1 h 30) », « jeu. 12 nov. 2026 · toute la journée »,
+    « du jeu. 12 nov. au sam. 14 nov. 2026 (3 j) »."""
+    if start_time is None:
+        if start_date == end_date:
+            return f"{long_date(start_date)} · toute la journée"
+        days = (end_date - start_date).days + 1
+        first = long_date(start_date) if start_date.year != end_date.year else long_date(start_date)[:-5]
+        return f"du {first} au {long_date(end_date)} ({days} j)"
+    start = datetime.combine(start_date, start_time)
+    end = datetime.combine(end_date, end_time or start_time)
+    span = duration(end - start)
+    if start_date == end_date:
+        return f"{long_date(start_date)} · {start_time:%H:%M} → {end_time:%H:%M} ({span})"
+    return f"{long_date(start_date)} {start_time:%H:%M} → {long_date(end_date)} {end_time:%H:%M} ({span})"

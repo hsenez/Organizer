@@ -160,8 +160,13 @@ def test_agenda_through_api_matches_local(remote, local, state):
     again = remote.agenda.from_task(task.id)  # sans corps : à l'échéance, une heure
     assert again.start_date == day and not again.all_day
     task = remote.agenda.to_task(again.id)
-    custom = remote.agenda.from_task(task.id, EventTimes(start_date=day, end_date=date(2026, 11, 14)))
-    assert custom.all_day and custom.end_date == date(2026, 11, 14)
+    custom = remote.agenda.from_task(
+        task.id, EventTimes(start_date=day, end_date=date(2026, 11, 14)), EventPatch(location="Là-bas")
+    )
+    assert custom.all_day and custom.end_date == date(2026, 11, 14) and custom.location == "Là-bas"
+    back = remote.agenda.to_task(custom.id, TaskPatch(importance=Importance(4)))
+    assert back.importance == 4
+    custom = remote.agenda.from_task(back.id)
     remote.agenda.delete(custom.id)
     with pytest.raises(NotFound, match="introuvable"):
         remote.agenda.get(custom.id)

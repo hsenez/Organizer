@@ -15,8 +15,8 @@ from organizer.core.services.users import MIN_PASSWORD_LENGTH, WEAK_PASSWORD_PRE
 from organizer.ui.components.connection_badge import connection_badge
 from organizer.ui.components.dnd import DragDrop
 from organizer.ui.components.file_drop import FileDrop
+from organizer.ui.components.item_editor import Editor
 from organizer.ui.components.search_dialog import SearchDialog
-from organizer.ui.components.task_editor import TaskEditor
 from organizer.ui.context import Banner, UiContext
 from organizer.ui.theme import apply_theme
 
@@ -45,19 +45,26 @@ SETTINGS = Module("/settings", "⚙️", "Réglages", "Profil, projets, tags, ap
 
 @contextmanager
 def app_frame(
-    ctx: UiContext, active: str, title: str, open_task: str | None = None, *, wide: bool = False
+    ctx: UiContext,
+    active: str,
+    title: str,
+    open_task: str | None = None,
+    *,
+    wide: bool = False,
+    open_event: str | None = None,
 ) -> Iterator[ui.column]:
     """Construit le cadre ; le contenu de la page se place dans la colonne renvoyée.
 
     ``open_task`` : paramètre d'URL ``?task=`` — identifiant d'une tâche dont l'éditeur s'ouvre au chargement,
-    ou ``new`` pour ouvrir l'éditeur sur une nouvelle tâche.
+    ou ``new`` pour ouvrir l'éditeur sur une nouvelle tâche. ``open_event`` : paramètre ``?event=``
+    (identifiant d'un événement, ou ``new``).
     ``wide`` : contenu sur toute la largeur et toute la hauteur de la fenêtre (kanbans) ; le dernier enfant
     de la colonne renvoyée peut s'étirer jusqu'en bas avec la classe ``page-fill-grow``.
     """
     apply_theme()
     ctx.dark = ui.dark_mode(THEMES.get(ctx.user.theme))
     ui.page_title(f"{title} · Organizer")
-    ctx.editor = TaskEditor(ctx)
+    ctx.editor = Editor(ctx)
     search = SearchDialog(ctx)
     DragDrop(on_drop=ctx.handle_drop, on_attach=ctx.attach, on_state=ctx.set_dragging).mark("dnd")
     FileDrop(ctx).mark("file-drop")  # fichiers du système déposés sur la page (pièces jointes)
@@ -154,6 +161,10 @@ def app_frame(
         ctx.editor.open_new()
     elif open_task and open_task.isdigit():
         ctx.editor.open(int(open_task))
+    if open_event == "new":
+        ctx.editor.open_new_event()
+    elif open_event and open_event.isdigit():
+        ctx.editor.open_event(int(open_event))
     if wide:
         ui.query(".nicegui-content").classes("page-fill")
         classes = "page-fill-column w-full p-3 sm:px-5 sm:py-4 gap-4"

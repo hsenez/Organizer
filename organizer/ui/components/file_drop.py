@@ -106,13 +106,15 @@ def local_path(uri: str) -> Path:
     return Path(path)
 
 
-def attach_local_files(ctx: UiContext, task_id: int, paths: list[Path]) -> list[str]:
-    """Joint des fichiers du poste à une tâche ; renvoie les noms joints (erreurs affichées)."""
+def attach_local_files(ctx: UiContext, item_id: int, paths: list[Path], upload=None) -> list[str]:
+    """Joint des fichiers du poste à une tâche (ou, avec ``upload=ds.attachments.upload_event``, à un
+    événement) ; renvoie les noms joints (erreurs affichées)."""
+    upload = upload or ctx.ds.attachments.upload
     names = []
     for path in paths:
         try:
             with path.open("rb") as stream:
-                link = ctx.call(ctx.ds.attachments.upload, task_id, path.name, stream, None)
+                link = ctx.call(upload, item_id, path.name, stream, None)
         except OSError as exc:
             ui.notify(f"📁 Lecture impossible : {path} ({exc.strerror})", type="negative", position="top")
             continue
