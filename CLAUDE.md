@@ -278,7 +278,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
   les cases (`--lane`), pastilles décalées sous les bandes (`--lanes` par case) ; `body.dnd-active` coupe
   les clics sur les bandes pendant un glisser (la case dessous reçoit le dépôt). Vues : `prefs.view`
   (`month` : `year` / `month` ; `week` / `six` : `anchor` = lundi). `view:calendar` =
-  `{tasks, events, scope, view, undated}` (`CalendarPrefs`).
+  `{tasks, events, view, undated}` (`CalendarPrefs`) ; « De qui ? » (`CalendarView.scope`) **n'est pas
+  mémorisé** (toujours « Tous » à l'ouverture : demandé par l'utilisateur).
 - Vue d'un jour (`_zoom_content`) : `components/agenda.py` (`Agenda`, `agenda_columns`) + `agenda.js` :
   colonnes `[data-agenda-track]` (`data-agenda-offset` 0 / 720), blocs `[data-agenda-event]`
   (`data-start` / `data-end` en minutes depuis minuit, `data-editable`), poignées

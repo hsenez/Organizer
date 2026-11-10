@@ -604,10 +604,11 @@ Page `/calendar` (pleine largeur, pleine hauteur) :
   (`rules.calendar_days`). Tâches finies : à leur date, estompées et barrées ; annulées : absentes.
 - **Tâches en retard** (échéance passée, pas finie) : affichées **aujourd'hui** (et non plus à leur date),
   pastille ⚠️ à rayures rouge sombre qui pulse ; la case du jour est bordée de rouge.
-- **Barre de filtres** au-dessus de la grille, mémorisée (préférence `view:calendar`) : interrupteurs
-  « 📅 Événements » (activé par défaut) et « 📋 Tâches » (échéances ; **désactivé par défaut**), et « De
+- **Barre de filtres** au-dessus de la grille : interrupteurs « 📅 Événements » (activé par défaut) et
+  « 📋 Tâches » (échéances ; **désactivé par défaut**), mémorisés (préférence `view:calendar`) ; « De
   qui ? » (événements et tâches) : 👤 les miens, 🤝 partagés avec moi (et événements publics des autres),
-  👥 tous. Légende des couleurs à droite.
+  👥 tous — **pas mémorisé** : la page s'ouvre toujours sur « 👥 Tous » (un filtre resté sur « les miens »
+  cachait les événements partagés). Légende des couleurs à droite.
 - **📥 Sans échéance** : colonne à droite de la grille (sous la grille sous 1024 px de large) avec les tâches
   ouvertes sans échéance, les plus prioritaires d'abord, dans les mêmes pastilles. **Largeur réglable**
   (poignée sur son bord gauche, 160 à 560 px ; double-clic : largeur par défaut) et **repliable** (⇥) en
@@ -1018,3 +1019,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.27 | **Événements, étape 3** : événements dans le calendrier — bandes sur plusieurs jours (`rules.band_layout`, `is_band`), étiquettes horaires, glisser vers un autre jour (`dnd.js` : `data-dnd-kind="event"`, `ctx.event_drop_handler`), double-clic → éditeur ; filtres « 📅 Événements » et « De qui ? » ; « 📋 Tâches » désactivé par défaut ; vues Mois / Semaine / 6 semaines (défilement à la semaine) ; 400 tests + vérifié dans Firefox (clair, sombre, téléphone) |
 | 2026-11-10 | 1.28 | **Événements, étape 4** : vue d'un jour — zone tâches compacte + agenda sur deux colonnes (0-12 h, 12-24 h ; `rules.agenda_layout` : coupure à midi, chevauchements côte à côte), journées entières en bandeau, glisser un événement ou ses bords par pas de 15 min (`agenda.js`), double-clic / clic droit sur une heure libre pour créer, jour précédent / suivant, heure actuelle ; correction : libellé d'entrée de menu modifiable (NiceGUI 4) ; 402 tests + gestes vérifiés à la souris dans Firefox |
 | 2026-11-10 | 1.29 | **🔔 Notifications** (§8.4 ter) : table `notification`, créées dans la transaction de chaque action enregistrée (`UnitOfWork.before_commit` → `notifications.record` : concernés = propriétaire + partages, parent d'une sous-tâche ; types partage / modification / fin de partage / suppression ; regroupement 15 min), `NotificationService`, API `/notifications`, `RemoteNotifications` (nombre de non lues gardé en mémoire), module dans la colonne de gauche avec bulle, page `/notifications` (non lues mises en valeur, clic = ouvrir + lu, tout marquer comme lu) ; 409 tests |
+| 2026-11-10 | 1.30 | Calendrier : « De qui ? » n'est plus mémorisé, la page s'ouvre toujours sur « Tous » (le choix « Mes tâches » d'avant les événements, gardé, masquait les événements partagés) ; 409 tests |

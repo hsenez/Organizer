@@ -7,8 +7,9 @@
 
 - Échéances des tâches en petites pastilles de la couleur de leur **urgence** (``rules.calendar_days``) ;
   une tâche **en retard** (échéance passée, pas finie) s'affiche **aujourd'hui**, en rouge clignotant.
-- Barre de filtres : événements / tâches affichés ou non (tâches masquées par défaut), et de qui (les
-  miens, partagés avec moi, tous). Mémorisée dans la préférence ``view:calendar`` (avec la vue).
+- Barre de filtres : événements / tâches affichés ou non (tâches masquées par défaut ; mémorisé dans la
+  préférence ``view:calendar``, avec la vue), et de qui (les miens, partagés avec moi, tous) : **pas**
+  mémorisé, la page s'ouvre toujours sur « Tous ».
 - Pourtour des pastilles : couleur et épaisseur de l'**importance**.
 - Colonne « 📥 Sans échéance » (à droite ; sous la grille sur petit écran) : tâches ouvertes sans échéance.
 - Glisser une pastille vers un autre jour change son échéance ; vers « Sans échéance », la retire (et
@@ -100,7 +101,6 @@ class CalendarPrefs:
 
     show_tasks: bool = False  # les échéances des tâches s'ajoutent d'un clic
     show_events: bool = True
-    scope: str = "all"
     view: str = "month"
     undated_width: int | None = None  # None = largeur par défaut
     undated_collapsed: bool = False
@@ -109,7 +109,6 @@ class CalendarPrefs:
         return {
             "tasks": self.show_tasks,
             "events": self.show_events,
-            "scope": self.scope,
             "view": self.view,
             "undated": {"width": self.undated_width, "collapsed": self.undated_collapsed},
         }
@@ -123,8 +122,6 @@ def read_prefs(data) -> CalendarPrefs:
         prefs.show_tasks = data["tasks"]
     if isinstance(data.get("events"), bool):
         prefs.show_events = data["events"]
-    if data.get("scope") in SCOPES:
-        prefs.scope = data["scope"]
     if data.get("view") in VIEWS:
         prefs.view = data["view"]
     undated = data.get("undated") if isinstance(data.get("undated"), dict) else {}
@@ -142,6 +139,9 @@ class CalendarView:
         today = ctx.today()
         self.year, self.month = month or (today.year, today.month)
         self.prefs = read_prefs(ctx.ds.account.get_pref(PREF_KEY))
+        # « De qui ? » n'est pas mémorisé : la page s'ouvre toujours sur « Tous » (un filtre oublié cachait
+        # les événements partagés).
+        self.scope = "all"
         if month is not None:  # ?month= : le mois demandé
             self.prefs.view = "month"
         self.anchor = rules.week_start(today)  # premier lundi affiché (vues Semaine et 6 semaines)
@@ -211,7 +211,7 @@ class CalendarView:
                 "dense"
             ).tooltip("Afficher les échéances des tâches dans le calendrier").mark("calendar-show-tasks")
             self.scope_toggle = (
-                ui.toggle(SCOPES, value=self.prefs.scope, on_change=self._scope_changed)
+                ui.toggle(SCOPES, value=self.scope, on_change=self._scope_changed)
                 .props("no-caps unelevated dense")
                 .tooltip("De qui ? (événements et tâches)")
                 .mark("calendar-scope")
@@ -271,8 +271,8 @@ class CalendarView:
         self._save_prefs()
 
     def _scope_changed(self, e) -> None:
-        self.prefs.scope = e.value if e.value in SCOPES else "all"
-        self._save_prefs()
+        self.scope = e.value if e.value in SCOPES else "all"
+        self.body.refresh()
 
     def _save_prefs(self, refresh: bool = True) -> None:
         self.ctx.ds.account.set_pref(PREF_KEY, self.prefs.dump())
@@ -309,7 +309,7 @@ class CalendarView:
         if not self.prefs.show_events:
             self.events = {}
             return []
-        events = self.ctx.ds.agenda.list(EventFilter(start=first, end=last, scope=self.prefs.scope))
+        events = self.ctx.ds.agenda.list(EventFilter(start=first, end=last, scope=self.scope))
         self.events = {event.id: event for event in events}
         return events
 
@@ -319,7 +319,7 @@ class CalendarView:
         if not self.prefs.show_tasks:
             self.tasks = {}
             return {}, []
-        flt = TaskFilter(scope=self.prefs.scope, include_subtasks=True, status=SHOWN_STATUSES)
+        flt = TaskFilter(scope=self.scope, include_subtasks=True, status=SHOWN_STATUSES)
         tasks = self.ctx.ds.tasks.list(flt, TaskSort(key="priority"))
         self.tasks = {task.id: task for task in tasks}
         undated = [task for task in tasks if task.due_date is None and not task.status.is_closed]
@@ -726,12 +726,12 @@ class CalendarView:
     def _day_tasks(self, day: date) -> list[TaskOut]:
         """Tâches dont l'échéance est ce jour (et, aujourd'hui, celles en retard), selon « De qui ? » — même
         si les tâches sont masquées dans la grille."""
-        flt = TaskFilter(scope=self.prefs.scope, include_subtasks=True, status=SHOWN_STATUSES)
+        flt = TaskFilter(scope=self.scope, include_subtasks=True, status=SHOWN_STATUSES)
         tasks = self.ctx.ds.tasks.list(flt, TaskSort(key="priority"))
         return rules.calendar_days(tasks, self.ctx.today()).get(day, [])
 
     def _day_events(self, day: date) -> list[EventOut]:
-        events = self.ctx.ds.agenda.list(EventFilter(start=day, end=day, scope=self.prefs.scope))
+        events = self.ctx.ds.agenda.list(EventFilter(start=day, end=day, scope=self.scope))
         events = [
             e for e in events if day in rules.event_days(e.start_date, e.start_time, e.end_date, e.end_time)
         ]

@@ -235,17 +235,18 @@ async def test_calendar_shows_due_dates_overdue_today_and_filters(user: User):
     await settle()
     await user.should_see(marker=f"calendar-task-{theirs.id}")
     await user.should_not_see(marker=f"calendar-task-{mine.id}")
-    assert sv.users.get_pref(sv.actor.id, "view:calendar")["scope"] == "shared"
-    # Tâches masquées.
+    assert "scope" not in sv.users.get_pref(sv.actor.id, "view:calendar")  # pas mémorisé
+    # Tâches masquées (mémorisé).
     select_value(user, "calendar-show-tasks", False)
     await settle()
     await user.should_not_see(marker=f"calendar-task-{theirs.id}")
     await user.open("/calendar")
     await user.should_not_see(marker=f"calendar-task-{theirs.id}")
     select_value(user, "calendar-show-tasks", True)
-    select_value(user, "calendar-scope", "all")
     await settle()
+    # De retour sur la page, « De qui ? » est revenu à « Tous ».
     await user.should_see(marker=f"calendar-task-{mine.id}")
+    await user.should_see(marker=f"calendar-task-{theirs.id}")
 
 
 async def test_calendar_right_click_creates_event_or_task(user: User):
@@ -673,7 +674,7 @@ async def test_calendar_undated_column_resizes_and_collapses(user: User):
     assert read_prefs({"tasks": True, "scope": "mine"}).undated_width is None
     assert read_prefs({"undated": {"width": 9999, "collapsed": "oui"}}).undated_width == 560
     assert read_prefs({"undated": "abîmé"}).undated_collapsed is False
-    assert read_prefs(None).scope == "all"
+    assert read_prefs(None).view == "month"
 
 
 # --- ajout rapide, éditeur, annuler -----------------------------------------------------------------------
