@@ -39,7 +39,14 @@ MODULES = [
     Module("/matrix", "🎯", "Matrice", "Matrice d'Eisenhower : important × urgent"),
     Module("/calendar", "📅", "Calendrier", "Le mois en un coup d'œil, du lundi au dimanche"),
     Module("/search", "🔍", "Recherche", "Rechercher dans les titres, notes, tags et projets (Ctrl+K)"),
+    Module(
+        "/notifications",
+        "🔔",
+        "Notifications",
+        "Ce que les autres ont fait qui vous concerne : partages, modifications",
+    ),
 ]
+NOTIFICATIONS = "/notifications"
 SETTINGS = Module("/settings", "⚙️", "Réglages", "Profil, projets, tags, appareils, utilisateurs")
 
 
@@ -130,6 +137,11 @@ def app_frame(
                     ui.label(module.emoji).classes("text-xl")
                 with ui.item_section():
                     ui.label(module.label)
+                if module.path == NOTIFICATIONS:
+                    with ui.item_section().props("side"):
+                        notification_badge = (
+                            ui.badge().props("rounded color=negative").mark("notifications-badge")
+                        )
     menu_button.on_click(drawer.toggle)
 
     connection_badge(ctx)
@@ -155,8 +167,15 @@ def app_frame(
     # ``ignore`` : dans un champ texte, Ctrl+Z reste l'annulation de frappe du navigateur.
     ui.keyboard(on_key=on_key, ignore=["input", "select", "button", "textarea"])
 
+    def update_notification_badge() -> None:
+        count = ctx.ds.notifications.unread_count()
+        notification_badge.set_text(str(count) if count < 100 else "99+")
+        notification_badge.set_visibility(count > 0)
+
     ctx.on_refresh(update_undo_buttons, light=True)
+    ctx.on_refresh(update_notification_badge, light=True)
     update_undo_buttons()
+    update_notification_badge()
     if open_task == "new":
         ctx.editor.open_new()
     elif open_task and open_task.isdigit():

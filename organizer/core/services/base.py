@@ -51,7 +51,14 @@ class BaseService:
             label=label,
             group_key=group_key,
             on_commit=self.notify,
+            before_commit=self._notify_people if label else None,
         )
+
+    def _notify_people(self, session, label: str, changes) -> None:
+        """Prévient les autres utilisateurs concernés par cette action (voir ``notifications.record``)."""
+        from organizer.core.services.notifications import record
+
+        record(session, self.actor.id, label, changes)
 
     def notify(self, tables: set[str]) -> None:
         """Diffuse « ces tables ont changé » aux autres écrans."""

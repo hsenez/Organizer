@@ -132,9 +132,11 @@ fichiers (PC Linux, PC Windows, téléphone) ?
     ✅ 2. éditeur commun + bascule tâche ↔ événement + création par clic droit (sélection d'une ou plusieurs
     cases, clic-glisser) ; ✅ 3. affichage dans le mois (bandes sur plusieurs jours), filtres, vues Mois /
     Semaine / 6 semaines (défilement à la semaine) ; ✅ 4. vue d'un jour : zone tâches + agenda 2 colonnes
-    (0-12 h, 12-24 h), glisser l'événement ou ses bords (pas de 15 min) ; 5. **module 🔔 Notifications**
+    (0-12 h, 12-24 h), glisser l'événement ou ses bords (pas de 15 min) ; ✅ 5. **module 🔔 Notifications**
     (colonne de gauche) : ce que d'autres ont fait qui me concerne (partage avec moi, modification d'une
     tâche / d'un événement qui me concerne), bulle avec le nombre de non lues, non lues mises en valeur.
+  - Notifications : plus tard, peut-être une notification système sur le client bureau, et un réglage
+    pour choisir ce qui notifie.
   - Plus tard : **récurrence** (événements **et** tâches) ; événements qui **contiennent des tâches** ;
     **rappels / notifications** des événements (client bureau) ; droit « modifiable ou lecture seule » par
     personne **aussi pour les tâches** (aujourd'hui : toujours modifiable).

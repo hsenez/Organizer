@@ -278,6 +278,24 @@ class EventFilter(_Schema):
     tag_ids: list[int] = Field(default_factory=list)
 
 
+# --- Notifications ----------------------------------------------------------------------------------------
+
+
+class NotificationOut(_Schema):
+    id: int
+    actor_id: int
+    actor_name: str
+    kind: str  # share | unshare | change | delete
+    item_type: str  # task | event
+    item_id: int
+    title: str
+    text: str  # libellé de l'action
+    created_at: datetime
+    updated_at: datetime  # dernière action regroupée
+    read: bool
+    available: bool  # l'élément existe et est visible : on peut l'ouvrir
+
+
 # --- Boards personnalisés ---------------------------------------------------------------------------------
 
 

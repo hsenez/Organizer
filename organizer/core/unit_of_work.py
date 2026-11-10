@@ -164,11 +164,14 @@ class UnitOfWork:
         label: str | None = None,
         group_key: str | None = None,
         on_commit: Callable[[set[str]], None] | None = None,
+        before_commit: Callable[[Session, str, list[Change]], None] | None = None,
     ):
         """``on_commit`` : appelé après la validation avec les tables modifiées (si ``label`` est fourni et
-        qu'il y a eu des modifications) — diffusion en temps réel."""
+        qu'il y a eu des modifications) — diffusion en temps réel. ``before_commit`` : appelé dans la
+        transaction, juste avant la validation, avec le libellé et les modifications (notifications)."""
         self.engine = engine
         self.on_commit = on_commit
+        self.before_commit = before_commit
         self.user_id = user_id
         self.policy = policy
         self.label = label
@@ -186,6 +189,9 @@ class UnitOfWork:
             if exc_type is None:
                 self.session.flush()
                 self._store_history()
+                if self.before_commit is not None and self.recorder is not None and self.recorder.changes:
+                    self.before_commit(self.session, self.label or "", self.recorder.changes)
+                    self.session.flush()
                 self.session.commit()
                 if self.on_commit is not None and self.recorder is not None and self.recorder.changes:
                     self.on_commit({change.table for change in self.recorder.changes})

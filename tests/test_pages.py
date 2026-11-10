@@ -1263,3 +1263,32 @@ async def test_connection_badge_on_every_page(user: User):
         await user.should_see(marker="connection-badge")
     (badge,) = user.find(marker="connection-badge").elements
     assert badge.text in ("🏠", "🌍")
+
+
+# --- notifications ----------------------------------------------------------------------------------------
+
+
+async def test_notifications_page_badge_and_open(user: User):
+    sv = await login(user)
+    bob = state().services_for(state().users.create_user("bob", "motdepasse-12", "Bob", by=sv.actor))
+    task = bob.tasks.create(TaskCreate(title="Courses communes"))
+    bob.tasks.set_shares(task.id, [sv.actor.id])
+    bob.tasks.update(task.id, TaskPatch(title="Courses du week-end"))
+    await user.open("/")
+    badge = next(iter(user.find(marker="notifications-badge").elements))
+    assert badge.text == "2" and badge.visible
+    await user.open("/notifications")
+    await user.should_see("Bob a partagé « Courses communes » avec vous")
+    await user.should_see("Bob a modifié « Courses du week-end »")
+    latest, _first = sv.notifications.list()
+    row = next(iter(user.find(marker=f"notification-{latest.id}").elements))
+    assert "notification-unread" in row.classes
+    user.find(marker=f"notification-{latest.id}").click()  # ouvre la tâche et marque comme lue
+    await user.should_see(marker="editor-title")
+    assert sv.notifications.unread_count() == 1
+    user.find(marker="task-editor-dialog").trigger("hide")
+    await settle()
+    user.find(marker="notifications-read-all").click()
+    assert sv.notifications.unread_count() == 0
+    await settle()
+    await user.should_not_see(marker="notifications-badge")  # bulle masquée

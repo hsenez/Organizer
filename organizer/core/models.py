@@ -285,6 +285,25 @@ class Attachment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class Notification(SQLModel, table=True):
+    """Ce qu'un autre utilisateur a fait qui concerne ``user_id`` (partage, modification, suppression d'une
+    tâche ou d'un événement). Hors de l'historique annuler / rétablir."""
+
+    __tablename__ = "notification"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)  # destinataire
+    actor_id: int = Field(foreign_key="user.id")  # auteur de l'action
+    kind: str  # share | unshare | change | delete
+    item_type: str  # task | event
+    item_id: int
+    title: str  # titre de l'élément au moment de l'action
+    text: str  # libellé de l'action (celui de l'historique : « Changer l'échéance de « … » »)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)  # dernière action regroupée dans celle-ci
+    read_at: datetime | None = None
+
+
 class UserPref(SQLModel, table=True):
     """Préférence d'affichage d'un utilisateur (filtres, tri, regroupement d'une vue…), valeur JSON."""
 

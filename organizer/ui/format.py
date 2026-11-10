@@ -72,6 +72,19 @@ def local_datetime(dt: datetime) -> str:
     return dt.astimezone().strftime("%d/%m/%Y à %H:%M")
 
 
+def ago(moment: datetime, now: datetime | None = None) -> str:
+    """« à l'instant », « il y a 5 min », « il y a 3 h », sinon la date et l'heure locales."""
+    now = now or datetime.now(moment.tzinfo)
+    seconds = (now - moment).total_seconds()
+    if seconds < 60:
+        return "à l'instant"
+    if seconds < 3600:
+        return f"il y a {int(seconds // 60)} min"
+    if seconds < 24 * 3600:
+        return f"il y a {int(seconds // 3600)} h"
+    return local_datetime(moment)
+
+
 def duration(delta: timedelta) -> str:
     """« 45 min », « 1 h », « 1 h 30 », « 2 j »."""
     minutes = int(delta.total_seconds() // 60)

@@ -295,6 +295,20 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `data-cal-day`. Clic droit : `contextmenu` sur la case (`_context`) + `ui.context_menu` de la grille
   (marqueurs `calendar-menu`, `calendar-new-event`, `calendar-new-task`).
 
+## Notifications
+
+- `core/services/notifications.py` : `record(session, actor_id, label, changes)` est appelée par
+  `BaseService.uow` (`UnitOfWork(before_commit=…)`, dans la transaction, après l'historique) pour **toute**
+  action avec libellé : les lignes modifiées (`Change`) donnent les éléments touchés (`_ITEM_OF` : tables →
+  type d'élément + colonne) ; concernés = propriétaire + partages (+ parent pour une sous-tâche), moins
+  l'auteur. Nouvelle table liée à une tâche / un événement : l'ajouter à `_ITEM_OF`. Table `notification`
+  **hors** historique (pas `__undoable__`). Annuler / rétablir (session directe) ne notifie pas.
+- `NotificationService` (`ds.notifications`) : `list`, `unread_count`, `mark_read(ids | None)` (renvoie le
+  nombre de non lues restantes). Client : `unread_count` en cache (`NOTIFICATIONS_KEY`, oublié à chaque
+  événement temps réel). Bulle : `layout.update_notification_badge` (rafraîchissement léger), marqueur
+  `notifications-badge` ; page `ui/pages/notifications.py` (marqueurs `notification-<id>`,
+  `notifications-read-all`).
+
 ## Étape 7 : client bureau
 
 - `organizer/client/` : **aucune** dépendance au serveur (`organizer.server`) hors tests. `app.py`
@@ -541,7 +555,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 402 tests au total (+1 réservé à Windows).
+- 409 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

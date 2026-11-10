@@ -11,7 +11,7 @@ from nicegui import ui
 
 from organizer import FAVICON
 from organizer.ui.context import UiContext
-from organizer.ui.pages import calendar, home, kanban, matrix, settings, tasks
+from organizer.ui.pages import calendar, home, kanban, matrix, notifications, settings, tasks
 
 ContextFactory = Callable[[Request], "UiContext | Response"]
 
@@ -25,3 +25,4 @@ def register_app_pages(make_context: ContextFactory) -> None:
     ui.page("/kanban", title="Kanbans · Organizer", **common)(kanban.page(make_context))
     ui.page("/matrix", title="Matrice · Organizer", **common)(matrix.page(make_context))
     ui.page("/calendar", title="Calendrier · Organizer", **common)(calendar.page(make_context))
+    ui.page("/notifications", title="Notifications · Organizer", **common)(notifications.page(make_context))

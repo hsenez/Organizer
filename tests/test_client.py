@@ -174,6 +174,22 @@ def test_agenda_through_api_matches_local(remote, local, state):
         remote.agenda.create(EventCreate(title="X", start_date=day, start_time=time(9), end_time=time(8)))
 
 
+def test_notifications_through_api_match_local(remote, local, state):
+    bob_user = state.users.create_user("bob", "motdepasse-12", "Bob", by=local.actor)
+    bob = state.services_for(bob_user)
+    task = bob.tasks.create(TaskCreate(title="Commun"))
+    bob.tasks.set_shares(task.id, [local.actor.id])
+    assert remote.notifications.unread_count() == 1
+    assert remote.notifications.list() == local.notifications.list()
+    assert remote.notifications.list()[0].kind == "share"
+    bob.tasks.update(task.id, TaskPatch(title="Commun (modifié)"))
+    remote.api.cache.on_change(["task"])  # (le temps réel prévient le client)
+    assert remote.notifications.unread_count() == 2
+    first = remote.notifications.list()[-1].id
+    assert remote.notifications.mark_read([first]) == 1 and remote.notifications.unread_count() == 1
+    assert remote.notifications.mark_read() == 0 and local.notifications.unread_count() == 0
+
+
 def test_subtasks_links_shares_and_errors(remote, state, local):
     a = remote.tasks.create(TaskCreate(title="A"))
     b = remote.tasks.create(TaskCreate(title="B"))

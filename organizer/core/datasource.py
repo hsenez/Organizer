@@ -24,6 +24,7 @@ from organizer.core.services.agenda import AgendaService
 from organizer.core.services.attachments import AttachmentService
 from organizer.core.services.boards import BoardService
 from organizer.core.services.labels import ProjectService, TagService
+from organizer.core.services.notifications import NotificationService
 from organizer.core.services.tasks import TaskService
 from organizer.core.services.undo import UndoService
 
@@ -36,6 +37,7 @@ class DataSource(Protocol):
     projects: ProjectService
     tags: TagService
     undo: UndoService
+    notifications: NotificationService
     attachments: AttachmentService
     boards: BoardService
     account: AccountService  # profil, mot de passe, appareils, comptes (admin)
@@ -61,6 +63,7 @@ class LocalDataSource:
         self.projects = services.projects
         self.tags = services.tags
         self.undo = services.undo
+        self.notifications = services.notifications
         self.attachments = services.attachments
         self.boards = services.boards
 

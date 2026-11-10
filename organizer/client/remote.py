@@ -42,6 +42,7 @@ from organizer.core.schemas import (
     LinkIn,
     LinkOut,
     LinkPatch,
+    NotificationOut,
     PasswordChange,
     ProfilePatch,
     ProjectIn,
@@ -63,6 +64,8 @@ from organizer.core.schemas import (
     UserOut,
     UserPublic,
 )
+
+NOTIFICATIONS_KEY = "notifications:unread"
 
 
 def _sent(model: BaseModel) -> dict[str, Any]:
@@ -243,6 +246,23 @@ class RemoteUndo(_Part):
         return self.api.call("POST", "/redo", UndoResult)
 
 
+class RemoteNotifications(_Part):
+    def list(self) -> list[NotificationOut]:
+        return self.api.call("GET", "/notifications", list[NotificationOut])
+
+    def unread_count(self) -> int:
+        # Demandé à chaque rafraîchissement de page (bulle de la colonne de gauche) : gardé en mémoire,
+        # oublié à chaque modification signalée par le temps réel.
+        return self.api.cache.get(
+            NOTIFICATIONS_KEY, lambda: self.api.call("GET", "/notifications/unread-count", int), [EVERYTHING]
+        )
+
+    def mark_read(self, ids: list[int] | None = None) -> int:
+        count = self.api.call("POST", "/notifications/read", int, json={"ids": ids})
+        self.api.cache.put(NOTIFICATIONS_KEY, count, [EVERYTHING])
+        return count
+
+
 class RemoteAttachments(_Part):
     def upload(
         self, task_id: int, filename: str, stream: BinaryIO, content_type: str | None = None
@@ -387,6 +407,7 @@ class RemoteDataSource:
         self.projects = RemoteProjects(api)
         self.tags = RemoteTags(api)
         self.undo = RemoteUndo(api)
+        self.notifications = RemoteNotifications(api)
         self.attachments = RemoteAttachments(api)
         self.boards = RemoteBoards(api)
         self.account = RemoteAccount(api)

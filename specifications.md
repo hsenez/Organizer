@@ -73,7 +73,7 @@ organizer/
     rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche, calendrier
     unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
     services/            # users, auth, account, labels (projets + tags), items (base commune), tasks,
-                         # agenda (événements), boards, attachments, undo ;
+                         # agenda (événements), boards, attachments, undo, notifications ;
                          # façade `Services`
     datasource.py        # interface DataSource + LocalDataSource (serveur)
   server/                # ✅ étape 2
@@ -461,9 +461,10 @@ sous-tâches, on demande s'il faut les supprimer aussi ou les garder.
 2. 📋 **Toutes les tâches** — liste générale
 3. 📊 **Kanbans** — boards prédéfinis + personnalisés
 4. 🎯 **Matrice d'Eisenhower**
-5. 📅 **Calendrier** — grille du mois
+5. 📅 **Calendrier** — mois / semaine / 6 semaines, événements et échéances
 6. 🔍 **Recherche** (aussi accessible partout par `Ctrl+K`)
-7. ⚙️ **Réglages**
+7. 🔔 **Notifications** — bulle rouge avec le nombre de non lues
+8. ⚙️ **Réglages**
 
 Bouton flottant **➕ Nouvelle tâche** sur tous les écrans (raccourci **N**) : ouvre l'éditeur complet en
 mode création (voir §6).
@@ -638,6 +639,25 @@ Page `/calendar` (pleine largeur, pleine hauteur) :
   appui long. **Double-clic sur une pastille** : ouvre l'éditeur de la tâche. **Double-clic ailleurs dans
   la case** (même vide) : vue d'un jour (ci-dessus ; animation depuis la case, Échap ou ✕ referme).
 - Téléphone : mêmes 7 colonnes, cases plus basses, pastilles plus petites ; légende masquée.
+
+### 8.4 ter 🔔 Notifications
+
+Page `/notifications` : ce que **les autres** ont fait qui me concerne. Je suis concerné par une tâche ou
+un événement dont je suis propriétaire ou avec qui il est partagé (pour une sous-tâche : aussi par la
+tâche parente). Types : 🤝 « Bob a partagé « … » avec vous », ✏️ « Bob a modifié « … » » (avec le détail
+de l'action, celui de l'historique : « Changer l'échéance de … »), 🚫 « ne partage plus », 🗑️ « a
+supprimé ». Une conversion tâche ↔ événement compte comme une modification.
+
+- Créées dans la transaction de chaque action enregistrée dans l'historique (donc pour toutes les actions,
+  y compris celles ajoutées plus tard) ; annuler / rétablir ne notifie pas ; on n'est jamais notifié de ses
+  propres actions.
+- Les actions identiques rapprochées (moins de 15 min, ex. notes enregistrées au fil de la frappe) sont
+  regroupées dans la notification non lue précédente.
+- **Non lues** mises en valeur (fond, liseré, point bleu) et comptées dans la **bulle** de la colonne de
+  gauche ; un clic ouvre l'élément (s'il existe encore et m'est visible) et marque la notification comme
+  lue ; « ✔ Tout marquer comme lu ».
+- API : `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read` (`{ids}` ou
+  toutes).
 
 ### 8.5 Barre de filtres
 
@@ -997,3 +1017,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.26 | **Événements, étape 2** (§6.0) : éditeur commun tâche / événement (`Editor` = panneau et aiguillage, `ItemEditor` = base, `TaskEditor`, `EventEditor`), bascule 📋 / 📅 (brouillon : champs communs gardés ; existant : conversion en une action, `extra` appliqué dans la même transaction), éditeur d'événement (journée entière, durée gardée, lieu + Maps / Waze, couleur, public, partage modifiable ou lecture seule, vue en lecture seule), `?event=` ; calendrier : sélection de plusieurs jours au clic-glisser (`day_select.js`), clic droit → nouvel événement / nouvelle tâche ; 397 tests + vérifié dans Firefox |
 | 2026-11-10 | 1.27 | **Événements, étape 3** : événements dans le calendrier — bandes sur plusieurs jours (`rules.band_layout`, `is_band`), étiquettes horaires, glisser vers un autre jour (`dnd.js` : `data-dnd-kind="event"`, `ctx.event_drop_handler`), double-clic → éditeur ; filtres « 📅 Événements » et « De qui ? » ; « 📋 Tâches » désactivé par défaut ; vues Mois / Semaine / 6 semaines (défilement à la semaine) ; 400 tests + vérifié dans Firefox (clair, sombre, téléphone) |
 | 2026-11-10 | 1.28 | **Événements, étape 4** : vue d'un jour — zone tâches compacte + agenda sur deux colonnes (0-12 h, 12-24 h ; `rules.agenda_layout` : coupure à midi, chevauchements côte à côte), journées entières en bandeau, glisser un événement ou ses bords par pas de 15 min (`agenda.js`), double-clic / clic droit sur une heure libre pour créer, jour précédent / suivant, heure actuelle ; correction : libellé d'entrée de menu modifiable (NiceGUI 4) ; 402 tests + gestes vérifiés à la souris dans Firefox |
+| 2026-11-10 | 1.29 | **🔔 Notifications** (§8.4 ter) : table `notification`, créées dans la transaction de chaque action enregistrée (`UnitOfWork.before_commit` → `notifications.record` : concernés = propriétaire + partages, parent d'une sous-tâche ; types partage / modification / fin de partage / suppression ; regroupement 15 min), `NotificationService`, API `/notifications`, `RemoteNotifications` (nombre de non lues gardé en mémoire), module dans la colonne de gauche avec bulle, page `/notifications` (non lues mises en valeur, clic = ouvrir + lu, tout marquer comme lu) ; 409 tests |

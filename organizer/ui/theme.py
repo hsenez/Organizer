@@ -286,6 +286,12 @@ body.agenda-dragging, body.agenda-dragging * { cursor: grabbing !important; user
     .agenda-hours { width: 32px; }
 }
 
+/* Notifications : non lues mises en valeur (fond, liseré, point). */
+.notification-row:hover { background: rgba(120, 130, 150, .10); }
+.notification-unread { background: rgba(92, 124, 250, .10); box-shadow: inset 3px 0 0 #5c7cfa; }
+.notification-unread .notification-title { font-weight: 700; }
+.notification-dot { width: 10px; height: 10px; border-radius: 999px; background: #5c7cfa; flex: none; }
+
 /* Éditeur d'événement : pastilles de couleur. */
 .calendar-swatch { width: 22px; height: 22px; border-radius: 999px; cursor: pointer;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
