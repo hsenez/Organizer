@@ -11,8 +11,9 @@ import random
 import re
 import unicodedata
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from typing import Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 from urllib.parse import parse_qs, quote, urlparse
 
 from organizer.core.enums import DueBucket, Importance, LinkKind, Quadrant, Status, TaskKind, Urgency
@@ -516,3 +517,86 @@ def band_layout(
             lane_ends[lane] = end
         placed.append((key, start, end, lane, before, after))
     return placed
+
+
+# --- Vue d'un jour : agenda sur deux colonnes ---------------------------------------------------------------
+
+DAY_MINUTES = 24 * 60
+HALF_DAY = 12 * 60
+AGENDA_STEP = 15  # pas du glisser-déposer dans l'agenda (minutes)
+
+
+@dataclass(frozen=True)
+class AgendaBlock:
+    """Morceau d'un événement dans une colonne de l'agenda (0 : 0-12 h, 1 : 12-24 h). ``top`` / ``bottom`` :
+    minutes depuis le haut de la colonne ; ``lane`` / ``lanes`` : place parmi les événements qui se
+    chevauchent ; ``starts`` / ``ends`` : le vrai début / la vraie fin de l'événement sont dans ce morceau."""
+
+    key: Any
+    column: int
+    top: int
+    bottom: int
+    lane: int
+    lanes: int
+    starts: bool
+    ends: bool
+
+
+def agenda_layout(spans: Iterable[tuple[Any, datetime, datetime]], day: date) -> list[AgendaBlock]:
+    """Découpe les événements (``(clé, début, fin)``) qui touchent ``day`` en morceaux pour les deux colonnes
+    de l'agenda (coupure à midi ; ce qui dépasse la journée est coupé), et place côte à côte ceux qui se
+    chevauchent dans une même colonne."""
+    origin = datetime.combine(day, time(0))
+    parts: list[dict] = []
+    for key, start, end in spans:
+        first = int((start - origin).total_seconds() // 60)
+        last = int((end - origin).total_seconds() // 60)
+        lo, hi = max(first, 0), min(last, DAY_MINUTES)
+        for column, (begin, finish) in enumerate(((0, HALF_DAY), (HALF_DAY, DAY_MINUTES))):
+            a, b = max(lo, begin), min(hi, finish)
+            if a < b:
+                parts.append(
+                    {
+                        "key": key,
+                        "column": column,
+                        "top": a - begin,
+                        "bottom": b - begin,
+                        "starts": a == first,
+                        "ends": b == last,
+                    }
+                )
+    blocks: list[AgendaBlock] = []
+    for column in (0, 1):
+        items = sorted((p for p in parts if p["column"] == column), key=lambda p: (p["top"], -p["bottom"]))
+        cluster: list[dict] = []
+        cluster_end = -1
+        for item in [*items, None]:
+            if item is None or item["top"] >= cluster_end:
+                blocks.extend(_place_cluster(cluster))
+                cluster, cluster_end = [], -1
+                if item is None:
+                    break
+            cluster.append(item)
+            cluster_end = max(cluster_end, item["bottom"])
+    return blocks
+
+
+def _place_cluster(cluster: list[dict]) -> list[AgendaBlock]:
+    """Événements qui se chevauchent (de proche en proche) : chacun sur la première file libre ; tous ont la
+    même largeur (1 / nombre de files)."""
+    lane_ends: list[int] = []
+    lanes: list[int] = []
+    for item in cluster:
+        lane = next((i for i, used in enumerate(lane_ends) if used <= item["top"]), len(lane_ends))
+        if lane == len(lane_ends):
+            lane_ends.append(item["bottom"])
+        else:
+            lane_ends[lane] = item["bottom"]
+        lanes.append(lane)
+    count = len(lane_ends)
+    return [AgendaBlock(lane=lane, lanes=count, **item) for item, lane in zip(cluster, lanes, strict=True)]
+
+
+def snap_minutes(minutes: float, step: int = AGENDA_STEP) -> int:
+    """Arrondit au pas le plus proche, dans la journée (0 à 24 h)."""
+    return max(0, min(DAY_MINUTES, round(minutes / step) * step))

@@ -279,6 +279,14 @@ Référence fonctionnelle complète : **`specifications.md`**.
   les clics sur les bandes pendant un glisser (la case dessous reçoit le dépôt). Vues : `prefs.view`
   (`month` : `year` / `month` ; `week` / `six` : `anchor` = lundi). `view:calendar` =
   `{tasks, events, scope, view, undated}` (`CalendarPrefs`).
+- Vue d'un jour (`_zoom_content`) : `components/agenda.py` (`Agenda`, `agenda_columns`) + `agenda.js` :
+  colonnes `[data-agenda-track]` (`data-agenda-offset` 0 / 720), blocs `[data-agenda-event]`
+  (`data-start` / `data-end` en minutes depuis minuit, `data-editable`), poignées
+  `[data-agenda-handle=start|end]` ; le JS fait tout le geste (aperçu `.agenda-preview`) et n'envoie que
+  `change {id, start, end}` ; `create` / `slot {minute}` pour le double-clic / clic droit. Disposition :
+  `rules.agenda_layout` (`AgendaBlock`), pas `rules.AGENDA_STEP`. Marqueurs : `agenda`, `agenda-col-0|1`,
+  `agenda-event-<id>`, `zoom-event-<id>` (journée entière), `zoom-tasks`, `zoom-prev`, `zoom-next`,
+  `agenda-menu`, `agenda-new-event`. ⚠️ `ui.menu_item` n'a pas de `set_text` : mettre un `ui.label` dedans.
 - Glisser un événement : `draggable_event` (`data-dnd-kind="event"`) ; `dnd.js` émet `drop` avec `kind`,
   `UiContext.handle_drop` aiguille vers `ctx.event_drop_handler`. `refusal()` (JS) refuse tout rattachement
   avec un événement (règle propre au JS : le serveur ne rattache que des tâches).
@@ -533,7 +541,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 400 tests au total (+1 réservé à Windows).
+- 402 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

@@ -523,16 +523,81 @@ async def test_calendar_select_zoom_and_open_editor(user: User):
     user.find(marker=f"calendar-task-{task.id}").trigger("dblclick.stop")
     await user.should_see(marker="editor-title")
     user.find(marker="task-editor-dialog").trigger("hide")
-    # Double-clic dans la case → case agrandie avec la carte complète.
+    # Double-clic dans la case → vue du jour : zone tâches (lignes compactes) + agenda.
     user.find(marker=day).trigger("dblclick")
     await user.should_see(marker="calendar-zoom")
-    with user.scope(marker="calendar-zoom"):
-        await user.should_see(marker=f"task-card-{task.id}")
+    with user.scope(marker="zoom-tasks"):
+        await user.should_see(marker=f"task-row-{task.id}")
+    await user.should_see(marker="agenda-col-0")
+    await user.should_see(marker="agenda-col-1")
     user.find(marker="calendar-zoom-close").click()
     # Une case sans tâche s'agrandit aussi, vide.
     other = next(m for m in (f"calendar-day-{today.replace(day=d).isoformat()}" for d in (1, 2)) if m != day)
     user.find(marker=other).trigger("dblclick")
     await user.should_see("Aucune échéance ce jour-là.")
+
+
+async def test_day_view_agenda_moves_resizes_and_creates(user: User):
+    from datetime import date, time, timedelta
+
+    from organizer.core.schemas import EventCreate
+
+    sv = await login(user)
+    day = date.today().replace(day=1) + timedelta(days=3)
+    meeting = sv.agenda.create(
+        EventCreate(title="Réunion", start_date=day, start_time=time(11, 0), end_time=time(13, 0))
+    )
+    holiday = sv.agenda.create(EventCreate(title="Pont", start_date=day, end_date=day + timedelta(days=1)))
+    await user.open("/calendar")
+    user.find(marker=f"calendar-day-{day.isoformat()}").trigger("dblclick")
+    await user.should_see(marker="agenda")
+    # Chevauche midi : un morceau dans chaque colonne ; la journée entière est au-dessus.
+    with user.scope(marker="agenda-col-0"):
+        await user.should_see(marker=f"agenda-event-{meeting.id}")
+    with user.scope(marker="agenda-col-1"):
+        await user.should_see(marker=f"agenda-event-{meeting.id}")
+    await user.should_see(marker=f"zoom-event-{holiday.id}")
+    block = next(iter(user.find(marker=f"agenda-event-{meeting.id}").elements))
+    assert (block.props["data-start"], block.props["data-end"], block.props["data-editable"]) == (
+        "660",
+        "780",
+        "1",
+    )
+
+    agenda = user.find(marker="agenda")
+    agenda.trigger("change", {"id": meeting.id, "start": 14 * 60, "end": 16 * 60})  # déplacé, même durée
+    moved = sv.agenda.get(meeting.id)
+    assert (moved.start_date, moved.start_time, moved.end_time) == (day, time(14), time(16))
+    agenda.trigger("change", {"id": meeting.id, "start": 14 * 60, "end": 17 * 60 + 15})  # bord du bas
+    assert sv.agenda.get(meeting.id).end_time == time(17, 15)
+    agenda.trigger("change", {"id": meeting.id, "start": 22 * 60, "end": 24 * 60})  # finit à minuit
+    late = sv.agenda.get(meeting.id)
+    assert (late.end_date, late.end_time) == (day + timedelta(days=1), time(0))
+    user.find(marker="undo-button").click()  # (des modifications rapprochées comptent pour une)
+    assert sv.agenda.get(meeting.id).end_date == day and sv.agenda.get(meeting.id).end_time != time(0)
+
+    # Double-clic sur une heure libre : nouvel événement (brouillon) à cette heure.
+    await settle()
+    user.find(marker="agenda").trigger("create", {"minute": 8 * 60 + 30})
+    await user.should_see("✨ Nouvel événement")
+    user.find(marker="editor-title").type("Café").trigger("blur")
+    cafe = next(e for e in sv.agenda.list() if e.title == "Café")
+    assert (cafe.start_date, cafe.start_time, cafe.end_time) == (day, time(8, 30), time(9, 30))
+    user.find(marker="task-editor-dialog").trigger("hide")
+    # Clic droit sur une heure : le menu propose cette heure.
+    await settle()
+    user.find(marker="agenda").trigger("slot", {"minute": 18 * 60})
+    open_menu(user, "agenda-menu")
+    await user.should_see("📅 Nouvel événement à 18:00")
+    user.find(marker="agenda-new-event").click()
+    await user.should_see("✨ Nouvel événement")
+    user.find(marker="task-editor-dialog").trigger("hide")
+    # Jour suivant.
+    user.find(marker="zoom-next").click()
+    await settle()
+    with user.scope(marker="agenda-col-0"):
+        await user.should_not_see(marker=f"agenda-event-{meeting.id}")
+    await user.should_see(marker=f"zoom-event-{holiday.id}")  # le pont continue
 
 
 async def test_calendar_drag_changes_due_date_and_importance_ring(user: User):

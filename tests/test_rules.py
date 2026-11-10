@@ -390,3 +390,45 @@ def test_band_layout_and_weeks():
     assert rules.is_band(monday, None, monday, None)
     assert rules.is_band(monday, time(22), date(2026, 11, 10), time(1))
     assert not rules.is_band(monday, time(9), monday, time(10))
+
+
+def test_agenda_layout_splits_at_noon_and_places_overlaps():
+    from datetime import datetime
+
+    day = date(2026, 11, 12)
+
+    def at(h, m=0, d=day):
+        return datetime.combine(d, time(h, m))
+
+    blocks = rules.agenda_layout(
+        [
+            ("midi", at(11), at(13)),  # chevauche midi : deux morceaux
+            ("a", at(9), at(10)),
+            ("b", at(9, 30), at(10, 30)),  # chevauche « a »
+            ("c", at(10, 30), at(11)),  # touche « b » et « midi » sans les chevaucher
+            ("nuit", at(22, 0, date(2026, 11, 11)), at(1)),  # commence la veille
+            ("soir", at(23), at(2, 0, date(2026, 11, 13))),  # finit le lendemain
+            ("ailleurs", at(9, 0, date(2026, 11, 13)), at(10, 0, date(2026, 11, 13))),
+        ],
+        day,
+    )
+    by = {(b.key, b.column): b for b in blocks}
+    assert set(by) == {("midi", 0), ("midi", 1), ("a", 0), ("b", 0), ("c", 0), ("nuit", 0), ("soir", 1)}
+    assert (by["midi", 0].top, by["midi", 0].bottom, by["midi", 0].starts, by["midi", 0].ends) == (
+        660,
+        720,
+        True,
+        False,
+    )
+    assert (by["midi", 1].top, by["midi", 1].bottom, by["midi", 1].starts, by["midi", 1].ends) == (
+        0,
+        60,
+        False,
+        True,
+    )
+    assert (by["a", 0].lane, by["b", 0].lane, by["a", 0].lanes) == (0, 1, 2)
+    assert (by["c", 0].lane, by["c", 0].lanes, by["midi", 0].lanes) == (0, 1, 1)  # pleine largeur
+    assert (by["nuit", 0].top, by["nuit", 0].bottom, by["nuit", 0].starts) == (0, 60, False)
+    assert (by["soir", 1].top, by["soir", 1].bottom, by["soir", 1].ends) == (660, 720, False)
+    assert rules.snap_minutes(9 * 60 + 7) == 9 * 60 + 0 and rules.snap_minutes(9 * 60 + 8) == 9 * 60 + 15
+    assert rules.snap_minutes(-30) == 0 and rules.snap_minutes(1500) == 1440

@@ -21,7 +21,7 @@ Le mois affiché se choisit aussi par l'adresse : ``/calendar?month=2026-11``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import Request
 from fastapi.responses import Response
@@ -31,12 +31,13 @@ from organizer.core import rules
 from organizer.core.enums import Importance, Status, Urgency
 from organizer.core.schemas import EventFilter, EventOut, EventPatch, TaskFilter, TaskOut, TaskPatch, TaskSort
 from organizer.ui import format as fmt
+from organizer.ui.components.agenda import Agenda, agenda_columns, moment_of
 from organizer.ui.components.day_select import DaySelect, selectable_day
 from organizer.ui.components.dnd import draggable, draggable_event, drop_zone
 from organizer.ui.components.resizer import Resizer, resizable, resize_handle
-from organizer.ui.components.task_card import task_card
+from organizer.ui.components.task_card import task_row
 from organizer.ui.context import UiContext
-from organizer.ui.layout import app_frame, card_grid, empty_state, section_title
+from organizer.ui.layout import app_frame
 from organizer.ui.theme import IMPORTANCE_CHIP_BORDER_PX, hex_to_rgba, readable_text
 
 PREF_KEY = "view:calendar"
@@ -702,7 +703,7 @@ class CalendarView:
         )
         draggable(chip, task)
 
-    # --- case agrandie ---
+    # --- vue d'un jour (case agrandie) ---
 
     def zoom(self, day: date) -> None:
         self.select(day)
@@ -717,74 +718,157 @@ class CalendarView:
         if self.zoomed is not None:
             self.zoom_body.refresh()
 
+    def _zoom_go(self, delta: int) -> None:
+        self.zoomed += timedelta(days=delta)
+        self.select(self.zoomed)
+        self.zoom_body.refresh()
+
+    def _day_tasks(self, day: date) -> list[TaskOut]:
+        """Tâches dont l'échéance est ce jour (et, aujourd'hui, celles en retard), selon « De qui ? » — même
+        si les tâches sont masquées dans la grille."""
+        flt = TaskFilter(scope=self.prefs.scope, include_subtasks=True, status=SHOWN_STATUSES)
+        tasks = self.ctx.ds.tasks.list(flt, TaskSort(key="priority"))
+        return rules.calendar_days(tasks, self.ctx.today()).get(day, [])
+
+    def _day_events(self, day: date) -> list[EventOut]:
+        events = self.ctx.ds.agenda.list(EventFilter(start=day, end=day, scope=self.prefs.scope))
+        events = [
+            e for e in events if day in rules.event_days(e.start_date, e.start_time, e.end_date, e.end_time)
+        ]
+        self.events.update({e.id: e for e in events})
+        return events
+
     def _zoom_content(self) -> None:
         day = self.zoomed
         if day is None:
             return
         today = self.ctx.today()
-        tasks = self._load()[0].get(day, [])
-        day_events = [
-            e
-            for e in self._load_events(day, day)
-            if day in rules.event_days(e.start_date, e.start_time, e.end_date, e.end_time)
-        ]
-        late = [task for task in tasks if rules.is_overdue(task, today)]
-        due = [task for task in tasks if not rules.is_overdue(task, today)]
-        with ui.row().classes("calendar-zoom-head w-full items-center gap-2 px-4 py-3 no-wrap"):
+        with ui.row().classes("calendar-zoom-head w-full items-center gap-2 px-4 py-2 no-wrap"):
+            ui.button(icon="chevron_left", on_click=lambda: self._zoom_go(-1)).props(
+                "flat round dense"
+            ).tooltip("Jour précédent").mark("zoom-prev")
+            ui.button(icon="chevron_right", on_click=lambda: self._zoom_go(1)).props(
+                "flat round dense"
+            ).tooltip("Jour suivant").mark("zoom-next")
             ui.label(str(day.day)).classes(
                 "calendar-day-number calendar-zoom-number"
                 + (" calendar-today-number" if day == today else "")
             )
-            ui.label(
-                f"{fmt.DAY_NAMES[day.weekday()].capitalize()} {day.day} {fmt.MONTH_NAMES[day.month - 1]} "
-                f"{day.year}"
-            ).classes("text-xl font-bold")
+            weekday, month = fmt.DAY_NAMES[day.weekday()].capitalize(), fmt.MONTH_NAMES[day.month - 1]
+            ui.label(f"{weekday} {day.day} {month} {day.year}").classes("text-lg sm:text-xl font-bold").mark(
+                "zoom-title"
+            )
             if day != today:
-                ui.label(fmt.distance(day, today)).classes("text-sm text-gray-500")
+                ui.label(fmt.distance(day, today)).classes("text-sm text-gray-500 max-sm:hidden")
             ui.space()
             ui.button(icon="close", on_click=self.zoom_dialog.close).props("flat round").tooltip(
                 "Fermer (Échap)"
             ).mark("calendar-zoom-close")
-        with ui.column().classes("w-full p-4 gap-4 overflow-auto").mark("calendar-zoom"):
-            if day_events:
-                section_title("📅", "Événements", len(day_events))
-                with ui.column().classes("w-full gap-1"):
-                    for event in day_events:
-                        self._event_row(event)
-            if not self.prefs.show_tasks:
-                if not day_events:
-                    empty_state("🙈", "Les tâches sont masquées (filtre 📋 Tâches).")
-                return
-            if not tasks:
-                if not day_events:
-                    empty_state("🌤️", "Aucune échéance ce jour-là.")
-                return
-            if late:
-                section_title("⚠️", "En retard", len(late), "Échéance passée et tâche pas finie")
-                with card_grid():
-                    for task in late:
-                        task_card(task, self.ctx)
-            if due:
-                section_title("📅", "Échéance ce jour", len(due))
-                with card_grid():
-                    for task in due:
-                        task_card(task, self.ctx)
+        events = self._day_events(day)
+        whole = [e for e in events if e.all_day]
+        timed = [e for e in events if not e.all_day]
+        with ui.element("div").classes("zoom-layout").mark("calendar-zoom"):
+            self._zoom_tasks(day, today)
+            with ui.column().classes("zoom-agenda gap-2"):
+                with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                    ui.label("📅 Agenda").classes("font-semibold")
+                    ui.label(
+                        "double-clic sur une heure : nouvel événement · glisser : déplacer, bords : durée"
+                    ).classes("text-xs text-gray-500 max-sm:hidden")
+                if whole:
+                    with ui.row().classes("w-full gap-1"):
+                        for event in whole:
+                            self._whole_day_bar(event)
+                agenda = Agenda(
+                    on_change=self._agenda_changed, on_create=self._agenda_create, on_slot=self._agenda_slot
+                )
+                agenda.classes("w-full").mark("agenda")
+                with agenda:
+                    agenda_columns(
+                        day, timed, self.ctx.editor.open_event, datetime.now() if day == today else None
+                    )
+                    with ui.context_menu().mark("agenda-menu"):
+                        with ui.menu_item(on_click=self._agenda_menu_event).mark("agenda-new-event"):
+                            self.slot_label = ui.label("📅 Nouvel événement")
+                        ui.menu_item(
+                            "📋 Nouvelle tâche (échéance ce jour)",
+                            on_click=lambda: self.ctx.editor.open_new(due_date=self.zoomed),
+                        )
 
-    def _event_row(self, event: EventOut) -> None:
+    def _zoom_tasks(self, day: date, today: date) -> None:
+        tasks = self._day_tasks(day)
+        late = [t for t in tasks if rules.is_overdue(t, today)]
+        due = [t for t in tasks if not rules.is_overdue(t, today)]
+        with ui.column().classes("zoom-tasks gap-1").mark("zoom-tasks"):
+            with ui.row().classes("w-full items-center gap-2"):
+                ui.label("📋 Tâches").classes("font-semibold")
+                ui.badge(str(len(tasks))).props("rounded color=grey-5 text-color=black")
+            if not tasks:
+                ui.label("Aucune échéance ce jour-là.").classes("text-sm text-gray-500")
+            if late:
+                ui.label("⚠️ En retard").classes("text-xs font-semibold text-red-600 mt-1")
+                for task in late:
+                    task_row(task, self.ctx, lambda _, t=task.id: self.ctx.editor.open(t))
+            if late and due:
+                ui.label("📅 Échéance ce jour").classes("text-xs font-semibold text-gray-500 mt-1")
+            for task in due:
+                task_row(task, self.ctx, lambda _, t=task.id: self.ctx.editor.open(t))
+
+    def _whole_day_bar(self, event: EventOut) -> None:
         color = event.display_color
-        with (
-            ui.row()
-            .classes("w-full items-center gap-3 p-2 rounded-lg cursor-pointer no-wrap")
-            .style(f"border-left: 4px solid {color}; background: {hex_to_rgba(color, 0.1)}")
+        text = event.title
+        if event.start_date != event.end_date:
+            text += f" ({fmt.event_range(event.start_date, None, event.end_date, None).split('(')[-1]}"
+        (
+            ui.label(text)
+            .classes("calendar-band zoom-whole-day")
+            .style(f"background: {color}; color: {readable_text(color)}")
             .on("click", lambda i=event.id: self.ctx.editor.open_event(i))
+            .tooltip(self._event_tooltip(event))
             .mark(f"zoom-event-{event.id}")
-        ):
-            ui.label(event.title).classes("font-semibold")
-            ui.label(
-                fmt.event_range(event.start_date, event.start_time, event.end_date, event.end_time)
-            ).classes("text-sm text-gray-500")
-            if event.location:
-                ui.label(f"📍 {event.location}").classes("text-sm text-gray-500 truncate")
+        )
+
+    # --- agenda : glisser, créer ---
+
+    def _agenda_changed(self, event_id: int, start: int, end: int) -> None:
+        """Événement déplacé (ou un de ses bords) dans l'agenda du jour : minutes depuis minuit."""
+        day = self.zoomed
+        event = self.events.get(event_id) or self.ctx.call(self.ctx.ds.agenda.get, event_id)
+        if day is None or event is None:
+            return
+        begin, finish = moment_of(day, start), moment_of(day, end)
+        patch = EventPatch(
+            start_date=begin.date(), start_time=begin.time(), end_date=finish.date(), end_time=finish.time()
+        )
+        updated = self.ctx.call(self.ctx.ds.agenda.update, event_id, patch)
+        if updated is None:
+            self.zoom_body.refresh()  # remet l'événement à sa place
+            return
+        self.events[event_id] = updated
+        with self.zoom_dialog:
+            ui.notify(
+                f"🕐 « {updated.title} » : {begin:%H:%M} → {finish:%H:%M} (Ctrl+Z pour annuler)",
+                position="top",
+            )
+        self.ctx.refresh()
+
+    def _agenda_create(self, minute: int) -> None:
+        """Double-clic sur une heure libre : nouvel événement d'une heure à cette heure-là."""
+        if self.zoomed is None:
+            return
+        begin = moment_of(self.zoomed, minute)
+        self.ctx.editor.open_new_event(
+            start_date=begin.date(), start_time=begin.time(), end_date=begin.date(), end_time=None
+        )
+
+    def _agenda_slot(self, minute: int) -> None:
+        """Clic droit sur une heure libre : le menu propose un événement à cette heure."""
+        self.slot_minute = minute
+        if getattr(self, "slot_label", None) is not None and not self.slot_label.is_deleted:
+            self.slot_label.set_text(f"📅 Nouvel événement à {moment_of(self.zoomed, minute):%H:%M}")
+
+    def _agenda_menu_event(self) -> None:
+        self._agenda_create(getattr(self, "slot_minute", 9 * 60))
 
 
 def _last_day(event: EventOut) -> date:

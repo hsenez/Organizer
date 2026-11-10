@@ -618,14 +618,25 @@ Page `/calendar` (pleine largeur, pleine hauteur) :
   tâche de « Sans échéance » déposée sur un jour la reçoit. Annulable (Ctrl+Z), toast de confirmation.
   Une tâche en retard reposée sur aujourd'hui prend la date du jour. Ctrl + dépôt sur une autre pastille :
   en faire une sous-tâche (comme partout).
+- **Vue d'un jour** (double-clic dans une case, hors pastille) : la case s'agrandit à toute la fenêtre
+  (‹ › : jour précédent / suivant), avec deux zones :
+  - **📋 Tâches** (petite zone, lignes compactes) : échéances du jour — et, aujourd'hui, les tâches en
+    retard —, selon « De qui ? », même si les tâches sont masquées dans la grille ;
+  - **📅 Agenda** : la journée sur **deux colonnes, 0-12 h et 12-24 h** ; les journées entières dans un
+    bandeau au-dessus ; chaque événement est un bloc placé selon son début et sa fin (un événement qui
+    chevauche midi est coupé en deux morceaux ; ce qui déborde sur la veille ou le lendemain est coupé), les
+    événements qui se chevauchent côte à côte ; ligne rouge à l'heure actuelle (aujourd'hui).
+    **Glisser un bloc** : déplacé (même durée, d'une colonne à l'autre) ; **glisser un bord** : début ou
+    fin ; pas de 15 min, aperçu pendant le geste, Ctrl+Z annule. Pas pour un événement en lecture seule ni
+    pour celui qui déborde de la journée (à modifier dans l'éditeur). **Double-clic sur une heure libre** :
+    nouvel événement d'une heure à cette heure-là ; **clic droit** : menu « 📅 Nouvel événement à HH:MM » /
+    « 📋 Nouvelle tâche ». Clic sur un bloc : éditeur. Gestes à la souris (le doigt viendra plus tard).
 - **Clic** sur une case : la sélectionne (cadre bleu). **Clic-glisser** d'une case à l'autre : sélectionne
   la plage de jours. **Clic droit** : sélectionne la case (sauf si elle fait déjà partie de la sélection) et
   ouvre un menu : « 📅 Nouvel événement » (un jour : de 9 h à 10 h ; plusieurs jours : toute la journée sur
   la plage) et « 📋 Nouvelle tâche » (échéance le premier jour). Sur téléphone, le menu s'ouvre par un
-  appui long. **Double-clic sur une pastille** : ouvre l'éditeur
-  de la tâche. **Double-clic ailleurs dans la case** (même vide) : la case s'agrandit à toute la fenêtre
-  (animation depuis la case) et montre les **cartes complètes** de ses tâches (« ⚠️ En retard » puis
-  « 📅 Échéance ce jour ») ; une carte s'ouvre dans l'éditeur, Échap ou ✕ referme.
+  appui long. **Double-clic sur une pastille** : ouvre l'éditeur de la tâche. **Double-clic ailleurs dans
+  la case** (même vide) : vue d'un jour (ci-dessus ; animation depuis la case, Échap ou ✕ referme).
 - Téléphone : mêmes 7 colonnes, cases plus basses, pastilles plus petites ; légende masquée.
 
 ### 8.5 Barre de filtres
@@ -985,3 +996,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.25 | **Événements, étape 1** (§4.7) : tables `event`, `event_tag`, `event_share` (modifiable ou lecture seule), `event_link` ; base commune tâches / événements (`ItemBase`, `LinkBase`, `ItemOut`, `ItemService`) ; `AgendaService` (période, portée, texte, projets, tags ; droits ; liens et pièces jointes ; conversion tâche ↔ événement) ; règles `event_span`, `event_days`, `event_times_from_due`, `maps_url`, `waze_url` ; API `/agenda` et `RemoteAgenda` ; correction : enregistrement de `client.json` par deux fils à la fois (le client pouvait perdre sa configuration) ; 392 tests |
 | 2026-11-10 | 1.26 | **Événements, étape 2** (§6.0) : éditeur commun tâche / événement (`Editor` = panneau et aiguillage, `ItemEditor` = base, `TaskEditor`, `EventEditor`), bascule 📋 / 📅 (brouillon : champs communs gardés ; existant : conversion en une action, `extra` appliqué dans la même transaction), éditeur d'événement (journée entière, durée gardée, lieu + Maps / Waze, couleur, public, partage modifiable ou lecture seule, vue en lecture seule), `?event=` ; calendrier : sélection de plusieurs jours au clic-glisser (`day_select.js`), clic droit → nouvel événement / nouvelle tâche ; 397 tests + vérifié dans Firefox |
 | 2026-11-10 | 1.27 | **Événements, étape 3** : événements dans le calendrier — bandes sur plusieurs jours (`rules.band_layout`, `is_band`), étiquettes horaires, glisser vers un autre jour (`dnd.js` : `data-dnd-kind="event"`, `ctx.event_drop_handler`), double-clic → éditeur ; filtres « 📅 Événements » et « De qui ? » ; « 📋 Tâches » désactivé par défaut ; vues Mois / Semaine / 6 semaines (défilement à la semaine) ; 400 tests + vérifié dans Firefox (clair, sombre, téléphone) |
+| 2026-11-10 | 1.28 | **Événements, étape 4** : vue d'un jour — zone tâches compacte + agenda sur deux colonnes (0-12 h, 12-24 h ; `rules.agenda_layout` : coupure à midi, chevauchements côte à côte), journées entières en bandeau, glisser un événement ou ses bords par pas de 15 min (`agenda.js`), double-clic / clic droit sur une heure libre pour créer, jour précédent / suivant, heure actuelle ; correction : libellé d'entrée de menu modifiable (NiceGUI 4) ; 402 tests + gestes vérifiés à la souris dans Firefox |
