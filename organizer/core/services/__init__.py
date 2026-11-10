@@ -9,6 +9,7 @@ from sqlalchemy import Engine
 
 from organizer.config import Settings
 from organizer.core.events import EventBus
+from organizer.core.services.agenda import AgendaService
 from organizer.core.services.attachments import AttachmentService
 from organizer.core.services.auth import AuthService
 from organizer.core.services.base import Actor, ServiceContext
@@ -45,10 +46,15 @@ class Services:
         self.projects = ProjectService(ctx)
         self.tags = TagService(ctx)
         self.tasks = TaskService(ctx, self.projects, self.tags)
+        self.agenda = AgendaService(ctx, self.projects, self.tags, self.tasks)
         self.undo = UndoService(ctx)
         self.boards = BoardService(ctx, self.tasks)
         self.attachments = AttachmentService(
-            ctx, self.tasks, settings.uploads_dir, max_bytes=settings.max_upload_mb * 1024 * 1024
+            ctx,
+            self.tasks,
+            settings.uploads_dir,
+            max_bytes=settings.max_upload_mb * 1024 * 1024,
+            agenda=self.agenda,
         )
 
     @classmethod

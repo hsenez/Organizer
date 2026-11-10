@@ -11,8 +11,9 @@ import random
 import re
 import unicodedata
 from collections.abc import Iterable
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Protocol, TypeVar
+from urllib.parse import parse_qs, quote, urlparse
 
 from organizer.core.enums import DueBucket, Importance, LinkKind, Quadrant, Status, TaskKind, Urgency
 from organizer.core.errors import InvalidOperation
@@ -383,3 +384,87 @@ def calendar_days(tasks: Iterable[_Dated], today: date) -> dict[date, list[_Date
     for listed in days.values():
         listed.sort(key=order)
     return days
+
+
+# --- Événements -------------------------------------------------------------------------------------------
+
+DEFAULT_EVENT_DURATION = timedelta(hours=1)
+DEFAULT_EVENT_START = time(9, 0)
+
+
+def event_span(
+    start_date: date, start_time: time | None, end_date: date | None, end_time: time | None
+) -> tuple[date, time | None, date, time | None]:
+    """Normalise le début et la fin d'un événement.
+
+    - sans heure de début : **toute la journée**, de ``start_date`` à ``end_date`` inclus (heures effacées) ;
+    - avec heure de début : sans heure de fin, il dure une heure ; la fin doit être après le début.
+    """
+    end_date = end_date or start_date
+    if start_time is None:
+        if end_date < start_date:
+            raise InvalidOperation("Le dernier jour doit être après le premier.")
+        return start_date, None, end_date, None
+    start = datetime.combine(start_date, start_time)
+    end = datetime.combine(end_date, end_time) if end_time is not None else start + DEFAULT_EVENT_DURATION
+    if end <= start:
+        raise InvalidOperation("La fin doit être après le début.")
+    return start_date, start_time, end.date(), end.time()
+
+
+def event_days(
+    start_date: date, start_time: time | None, end_date: date, end_time: time | None
+) -> list[date]:
+    """Jours touchés par un événement (pour l'afficher dans le calendrier). Un événement qui finit à minuit
+    pile ne déborde pas sur le jour suivant."""
+    last = end_date
+    if start_time is not None and end_time == time(0, 0) and end_date > start_date:
+        last = end_date - timedelta(days=1)
+    return [start_date + timedelta(days=i) for i in range((last - start_date).days + 1)]
+
+
+def event_times_from_due(
+    due_date: date | None, due_time: time | None, fallback: date
+) -> tuple[date, time, date, time]:
+    """Tâche → événement : il commence à l'échéance (ou le jour ``fallback``, à 9 h) et dure une heure."""
+    start = datetime.combine(due_date or fallback, due_time or DEFAULT_EVENT_START)
+    end = start + DEFAULT_EVENT_DURATION
+    return start.date(), start.time(), end.date(), end.time()
+
+
+_COORDS_RE = re.compile(r"(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)")
+
+
+def _is_address_link(location: str) -> bool:
+    text = location.strip()
+    return bool(_SCHEME_RE.match(text)) or text.lower().startswith(
+        ("www.", "maps.", "goo.gl/", "maps.app.goo.gl")
+    )
+
+
+def maps_url(location: str) -> str | None:
+    """Lien à ouvrir pour un lieu : le lien lui-même s'il en est un (Google Maps…), sinon une recherche
+    Google Maps de ce texte. ``None`` pour un lieu vide."""
+    text = location.strip()
+    if not text:
+        return None
+    if _is_address_link(text):
+        return normalize_url(text)
+    return "https://www.google.com/maps/search/?api=1&query=" + quote(text)
+
+
+def waze_url(location: str) -> str | None:
+    """Navigation Waze vers un lieu : par l'adresse pour un texte, par les coordonnées pour un lien qui en
+    contient (``…/@48.85,2.35,17z``, ``?q=48.85,2.35``) ; ``None`` sinon (lien court sans coordonnées)."""
+    text = location.strip()
+    if not text:
+        return None
+    if not _is_address_link(text):
+        return f"https://waze.com/ul?q={quote(text)}&navigate=yes"
+    url = urlparse(normalize_url(text))
+    candidates = [url.path] + [value for values in parse_qs(url.query).values() for value in values]
+    for candidate in candidates:
+        match = _COORDS_RE.search(candidate)
+        if match:
+            return f"https://waze.com/ul?ll={match.group(1)},{match.group(2)}&navigate=yes"
+    return None

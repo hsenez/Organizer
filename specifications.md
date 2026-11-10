@@ -72,7 +72,8 @@ organizer/
     errors.py            # erreurs métier (message français affichable)
     rules.py             # règles pures : échéances, rappels, matrice, Ctrl+drop, recherche, calendrier
     unit_of_work.py      # transactions + capture automatique de l'historique annuler / rétablir
-    services/            # users, auth, account, labels (projets + tags), tasks, boards, attachments, undo ;
+    services/            # users, auth, account, labels (projets + tags), items (base commune), tasks,
+                         # agenda (événements), boards, attachments, undo ;
                          # façade `Services`
     datasource.py        # interface DataSource + LocalDataSource (serveur)
   server/                # ✅ étape 2
@@ -244,6 +245,35 @@ Retirer le lien (annulable) conserve le fichier.
 - **Board** : nom, emoji, propriétaire, partages, type (prédéfini / personnalisé), filtres enregistrés.
 - **Colonne** (boards personnalisés) : nom, emoji, couleur, position.
 - **Placement** : (board, colonne, tâche, position). Une tâche peut être sur plusieurs boards personnalisés.
+
+### 4.7 📅 Événements (agenda)
+
+Un événement ressemble à une tâche sans importance, urgence ni statut. Les **champs communs** (titre, notes,
+projet, tags, partage, liens et pièces jointes, propriétaire, dates de création / modification) viennent
+d'une base commune (`ItemBase` pour les tables, `ItemOut` pour les objets échangés, `ItemService` pour la
+logique) ; chacun a sa table (`task` / `event`) et ses tables de liaison (`event_tag`, `event_share`,
+`event_link`).
+
+- **Début et fin** : dates et heures **locales**. Sans heure : **toute la journée**, du premier au dernier
+  jour inclus (plusieurs jours possibles). Avec heures : la fin doit être après le début ; sans heure de
+  fin, il dure **une heure** ; il peut passer minuit (un événement qui finit à minuit pile ne déborde pas
+  sur le lendemain).
+- **Lieu** : texte libre ou lien. Un lien (Google Maps…) s'ouvre tel quel ; un texte ouvre une recherche
+  Google Maps. **Waze** : navigation vers l'adresse, ou vers les coordonnées d'un lien qui en contient
+  (`…/@48.85,2.35,…`, `?q=48.85,2.35`) ; pas de Waze pour un lien court sans coordonnées.
+- **Couleur** : celle du projet, sinon un bleu par défaut ; une couleur choisie la remplace.
+- **Visibilité et droits** : privé (par défaut), **partagé** avec des personnes — chacune **modifiable** ou
+  en **lecture seule** —, et/ou **public** (visible en lecture par tous les comptes du serveur).
+  Supprimer, partager, rendre public, transformer : propriétaire seulement. Comme pour les tâches, un tag
+  privé d'un autre utilisateur est invisible et préservé.
+- **Conversion tâche ↔ événement** (une seule action, annulable) : titre, notes, projet, tags, partages et
+  liens sont repris ; tâche → événement : début à l'échéance (ou aujourd'hui à 9 h), une heure ; événement
+  → tâche : échéance = début. Réservé au propriétaire ; impossible pour une sous-tâche ou une tâche qui a
+  des sous-tâches.
+- API : `/api/v1/agenda` (`/events` est déjà le flux temps réel) — `POST /agenda/query` (période, portée,
+  texte, projets, tags), `POST /agenda`, `GET|PATCH|DELETE /agenda/{id}`, `PUT /agenda/{id}/shares`,
+  `POST /agenda/{id}/links`, `PATCH|DELETE /agenda-links/{id}`, `POST /agenda/{id}/attachments`,
+  `POST /agenda/{id}/to-task`, `POST /tasks/{id}/to-event`.
 
 ---
 
@@ -913,3 +943,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.22 | Calendrier : échéances des tâches en pastilles de la couleur de l'urgence, tâches en retard ramenées à aujourd'hui (pastille d'alerte), filtres « 📋 Tâches » et « Tâches de qui ? » mémorisés, sélection d'une case, double-clic = éditeur (pastille) ou case agrandie avec les cartes complètes ; `rules.calendar_days` / `rules.is_overdue`, `theme.readable_text`, `format.distance` ; 375 tests + parcours vérifié dans Firefox |
 | 2026-11-10 | 1.23 | Calendrier : pourtour des pastilles = importance ; colonne « 📥 Sans échéance » (à droite, sous la grille sur petit écran) ; glisser-déposer des pastilles entre les jours et vers / depuis « Sans échéance » pour changer ou retirer l'échéance (zones `day:<date>` et `undated`) ; 376 tests + glisser réel vérifié dans Firefox |
 | 2026-11-10 | 1.24 | Calendrier : colonne « 📥 Sans échéance » de largeur réglable (poignée à gauche ; `resize.js` : `data-resize-side="left"`) et repliable en bande étroite qui reste une zone de dépôt, mémorisé ; correction : deux dépôts rapides de suite sur la même tâche (le second était ignoré) ; 377 tests + vérifié à la souris dans Firefox |
+| 2026-11-10 | 1.25 | **Événements, étape 1** (§4.7) : tables `event`, `event_tag`, `event_share` (modifiable ou lecture seule), `event_link` ; base commune tâches / événements (`ItemBase`, `LinkBase`, `ItemOut`, `ItemService`) ; `AgendaService` (période, portée, texte, projets, tags ; droits ; liens et pièces jointes ; conversion tâche ↔ événement) ; règles `event_span`, `event_days`, `event_times_from_due`, `maps_url`, `waze_url` ; API `/agenda` et `RemoteAgenda` ; correction : enregistrement de `client.json` par deux fils à la fois (le client pouvait perdre sa configuration) ; 392 tests |

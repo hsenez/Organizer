@@ -124,6 +124,16 @@ fichiers (PC Linux, PC Windows, téléphone) ?
     Quand les événements existeront : passer « 📋 Tâches » à **désactivé par défaut**.
   - ✅ Pourtour = importance, colonne « 📥 Sans échéance » (réglable, repliable), glisser-déposer pour changer /
     retirer l'échéance.
+  - Événements — feuille de route convenue le 10/11/2026 : ✅ 1. modèle, services, API, client bureau ;
+    2. éditeur commun + bascule tâche ↔ événement + création par clic droit (sélection d'une ou plusieurs
+    cases, clic-glisser) ; 3. affichage dans le mois (bandes sur plusieurs jours), filtres, vues Mois /
+    Semaine / 6 semaines (défilement à la semaine) ; 4. vue d'un jour : zone tâches + agenda 2 colonnes
+    (0-12 h, 12-24 h), glisser l'événement ou ses bords (pas de 15 min) ; 5. **module 🔔 Notifications**
+    (colonne de gauche) : ce que d'autres ont fait qui me concerne (partage avec moi, modification d'une
+    tâche / d'un événement qui me concerne), bulle avec le nombre de non lues, non lues mises en valeur.
+  - Plus tard : **récurrence** (événements **et** tâches) ; événements qui **contiennent des tâches** ;
+    **rappels / notifications** des événements (client bureau) ; droit « modifiable ou lecture seule » par
+    personne **aussi pour les tâches** (aujourd'hui : toujours modifiable).
   - À vérifier sur téléphone : le double-clic (double tape) n'est pas émis par tous les navigateurs mobiles ;
     prévoir sans doute un appui long ou un bouton dans la case sélectionnée.
 - **Définir les cartes simples, partielles et complètes des tâches** (demandé le 10/11/2026) : quelles

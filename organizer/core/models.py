@@ -8,6 +8,8 @@ Conventions :
 - ``__undoable__ = True`` marque les tables suivies par l'historique annuler / rétablir.
 - Pas de relations ORM « many-to-many » : les tables de liaison sont manipulées explicitement, pour que
   chaque modification soit visible par l'historique.
+- Tâches et événements partagent leurs champs communs par héritage (:class:`ItemBase`, :class:`LinkBase`,
+  classes sans table) ; chacun a sa table et ses tables de liaison (tags, partages, liens).
 """
 
 from __future__ import annotations
@@ -66,15 +68,35 @@ class Tag(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
-class Task(SQLModel, table=True):
+class ItemBase(SQLModel):
+    """Champs communs aux tâches et aux événements (pas de table)."""
+
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    title: str
+    notes: str = Field(default="", sa_type=Text)
+    project_id: int | None = Field(default=None, foreign_key="project.id", index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class LinkBase(SQLModel):
+    """Lien d'une tâche ou d'un événement (pas de table)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    kind: str  # url | path | attachment
+    target: str  # URL, chemin local, ou identifiant de pièce jointe
+    label: str = ""
+    position: float = 0.0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Task(ItemBase, table=True):
     __tablename__ = "task"
     __undoable__ = True
 
     id: int | None = Field(default=None, primary_key=True)
-    owner_id: int = Field(foreign_key="user.id", index=True)
     parent_id: int | None = Field(default=None, foreign_key="task.id", index=True)
     position: float = 0.0
-    title: str
     importance: int = 2
     urgency: int = 2
     due_date: date | None = None
@@ -84,10 +106,6 @@ class Task(SQLModel, table=True):
     # Rappel (type Suivi) : décalage en jours avant l'échéance, ou date manuelle si le décalage est nul.
     reminder_offset_days: int | None = None
     reminder_manual_date: date | None = None
-    notes: str = Field(default="", sa_type=Text)
-    project_id: int | None = Field(default=None, foreign_key="project.id", index=True)
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
     completed_at: datetime | None = None
 
 
@@ -107,17 +125,53 @@ class TaskShare(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", primary_key=True)
 
 
-class TaskLink(SQLModel, table=True):
+class TaskLink(LinkBase, table=True):
     __tablename__ = "task_link"
     __undoable__ = True
 
-    id: int | None = Field(default=None, primary_key=True)
     task_id: int = Field(foreign_key="task.id", index=True)
-    kind: str  # url | path | attachment
-    target: str  # URL, chemin local, ou identifiant de pièce jointe
-    label: str = ""
-    position: float = 0.0
-    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Event(ItemBase, table=True):
+    """Événement du calendrier. Dates et heures **locales** (comme les échéances) : sans heure de début ni
+    de fin, il dure toute la journée (du jour de début au jour de fin inclus) ; avec heures, la fin est
+    l'instant où il se termine."""
+
+    __tablename__ = "event"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    start_date: date = Field(index=True)
+    start_time: time | None = None
+    end_date: date = Field(index=True)
+    end_time: time | None = None
+    location: str = ""  # texte libre ou lien (Google Maps…)
+    color: str | None = None  # couleur choisie ; sinon celle du projet
+    is_public: bool = False  # visible (en lecture) par tous les comptes
+
+
+class EventTag(SQLModel, table=True):
+    __tablename__ = "event_tag"
+    __undoable__ = True
+
+    event_id: int = Field(foreign_key="event.id", primary_key=True)
+    tag_id: int = Field(foreign_key="tag.id", primary_key=True)
+
+
+class EventShare(SQLModel, table=True):
+    __tablename__ = "event_share"
+    __undoable__ = True
+
+    event_id: int = Field(foreign_key="event.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    can_edit: bool = True  # sinon : lecture seule
+
+
+class EventLink(LinkBase, table=True):
+    __tablename__ = "event_link"
+    __undoable__ = True
+
+    event_id: int = Field(foreign_key="event.id", index=True)
 
 
 class Board(SQLModel, table=True):
@@ -271,5 +325,9 @@ UNDOABLE_TABLES: dict[str, type[SQLModel]] = {
         BoardColumn,
         BoardCard,
         BoardShare,
+        Event,
+        EventTag,
+        EventShare,
+        EventLink,
     )
 }

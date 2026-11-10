@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
+import threading
 from dataclasses import asdict, dataclass, field, fields
 from ipaddress import ip_address
 from pathlib import Path
@@ -81,6 +83,9 @@ def normalize_server_url(text: str) -> str:
     return f"{scheme.lower()}://{host}" + (f"/{path}" if path else "")
 
 
+_SAVE_LOCK = threading.Lock()
+
+
 class ConfigStore:
     def __init__(self, directory: Path) -> None:
         self.directory = directory
@@ -95,9 +100,18 @@ class ConfigStore:
         return ClientConfig(**{k: v for k, v in data.items() if k in known})
 
     def save(self, config: ClientConfig) -> None:
+        """Écriture atomique. Plusieurs fils peuvent enregistrer en même temps (bascule réseau local en
+        arrière-plan) : chaque écriture a son propre fichier temporaire, créé en 600 (le jeton donne accès
+        au compte), et un verrou les met à la file."""
         self.directory.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(asdict(config), ensure_ascii=False, indent=2), encoding="utf-8")
-        if os.name == "posix":
-            tmp.chmod(0o600)  # le jeton donne accès au compte
-        tmp.replace(self.path)
+        text = json.dumps(asdict(config), ensure_ascii=False, indent=2)
+        with _SAVE_LOCK:
+            fd, name = tempfile.mkstemp(dir=self.directory, prefix="client.", suffix=".tmp")
+            tmp = Path(name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as out:
+                    out.write(text)
+                tmp.replace(self.path)
+            except BaseException:
+                tmp.unlink(missing_ok=True)
+                raise

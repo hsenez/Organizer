@@ -317,3 +317,53 @@ def test_calendar_days_places_overdue_tasks_today():
     assert date(2026, 10, 1) not in days and date(2026, 11, 5) not in days
     assert rules.is_overdue(late, today) and not rules.is_overdue(done_past, today)
     assert not rules.is_overdue(today_low, today)
+
+
+# --- Événements -------------------------------------------------------------------------------------------
+
+
+def test_event_span():
+    d = date(2026, 11, 12)
+    # Toute la journée (plusieurs jours) ; heures de fin ignorées.
+    assert rules.event_span(d, None, date(2026, 11, 14), time(10, 0)) == (d, None, date(2026, 11, 14), None)
+    assert rules.event_span(d, None, None, None) == (d, None, d, None)
+    with pytest.raises(InvalidOperation):
+        rules.event_span(d, None, date(2026, 11, 10), None)
+    # Avec heures : une heure par défaut, passage de minuit.
+    assert rules.event_span(d, time(9, 0), None, None) == (d, time(9, 0), d, time(10, 0))
+    assert rules.event_span(d, time(23, 30), None, None) == (d, time(23, 30), date(2026, 11, 13), time(0, 30))
+    assert rules.event_span(d, time(9, 0), None, time(11, 15)) == (d, time(9, 0), d, time(11, 15))
+    for end in (time(9, 0), time(8, 0)):
+        with pytest.raises(InvalidOperation):
+            rules.event_span(d, time(9, 0), d, end)
+
+
+def test_event_days():
+    d = date(2026, 11, 12)
+    assert rules.event_days(d, None, date(2026, 11, 14), None) == [d, date(2026, 11, 13), date(2026, 11, 14)]
+    assert rules.event_days(d, time(22, 0), date(2026, 11, 13), time(0, 0)) == [d]  # finit à minuit pile
+    assert rules.event_days(d, time(22, 0), date(2026, 11, 13), time(1, 0)) == [d, date(2026, 11, 13)]
+
+
+def test_event_times_from_due():
+    d = date(2026, 11, 12)
+    assert rules.event_times_from_due(d, time(14, 30), date(2026, 1, 1)) == (d, time(14, 30), d, time(15, 30))
+    assert rules.event_times_from_due(None, None, d) == (d, time(9, 0), d, time(10, 0))
+
+
+def test_maps_and_waze_links():
+    assert rules.maps_url("") is None and rules.waze_url("  ") is None
+    assert rules.maps_url("12 rue de la Paix, Paris") == (
+        "https://www.google.com/maps/search/?api=1&query=12%20rue%20de%20la%20Paix%2C%20Paris"
+    )
+    assert rules.waze_url("12 rue de la Paix, Paris") == (
+        "https://waze.com/ul?q=12%20rue%20de%20la%20Paix%2C%20Paris&navigate=yes"
+    )
+    place = "https://www.google.com/maps/place/Tour+Eiffel/@48.8583701,2.2944813,17z/data=x"
+    assert rules.maps_url(place) == place
+    assert rules.waze_url(place) == "https://waze.com/ul?ll=48.8583701,2.2944813&navigate=yes"
+    assert rules.waze_url("https://maps.google.com/?q=45.75,4.85") == (
+        "https://waze.com/ul?ll=45.75,4.85&navigate=yes"
+    )
+    assert rules.maps_url("maps.app.goo.gl/AbCdE") == "https://maps.app.goo.gl/AbCdE"
+    assert rules.waze_url("https://maps.app.goo.gl/AbCdE") is None  # lien court : pas de coordonnées

@@ -1,7 +1,7 @@
-"""Pièces jointes : fichiers envoyés sur le serveur et rattachés à une tâche par un lien de type
-``attachment`` (cible = identifiant de la pièce jointe).
+"""Pièces jointes : fichiers envoyés sur le serveur et rattachés à une tâche ou à un événement par un lien de
+type ``attachment`` (cible = identifiant de la pièce jointe).
 
-- Accès : le déposant, et quiconque voit une tâche qui référence la pièce jointe.
+- Accès : le déposant, et quiconque voit une tâche ou un événement qui référence la pièce jointe.
 - Retirer le lien (annulable) ne supprime pas le fichier : un Ctrl+Z doit pouvoir le retrouver.
 """
 
@@ -16,9 +16,10 @@ from sqlmodel import select
 
 from organizer.core.enums import LinkKind
 from organizer.core.errors import InvalidOperation, NotFound
-from organizer.core.models import Attachment, TaskLink
+from organizer.core.models import Attachment
 from organizer.core.schemas import AttachmentOut, LinkOut
 from organizer.core.services.base import BaseService, ServiceContext, quoted
+from organizer.core.services.items import ItemService
 from organizer.core.services.tasks import TaskService
 
 CHUNK = 1024 * 1024
@@ -32,11 +33,22 @@ def clean_filename(name: str) -> str:
 
 
 class AttachmentService(BaseService):
-    def __init__(self, ctx: ServiceContext, tasks: TaskService, uploads_dir: Path, max_bytes: int):
+    def __init__(
+        self,
+        ctx: ServiceContext,
+        tasks: TaskService,
+        uploads_dir: Path,
+        max_bytes: int,
+        agenda: ItemService | None = None,
+    ):
         super().__init__(ctx)
         self.tasks = tasks
+        self.agenda = agenda
         self.uploads_dir = uploads_dir
         self.max_bytes = max_bytes
+
+    def _owners(self) -> list[ItemService]:
+        return [self.tasks] + ([self.agenda] if self.agenda is not None else [])
 
     def path_of(self, attachment_id: str) -> Path:
         if not attachment_id.isalnum():
@@ -47,9 +59,22 @@ class AttachmentService(BaseService):
         self, task_id: int, filename: str, stream: BinaryIO, content_type: str | None = None
     ) -> LinkOut:
         """Enregistre le fichier et l'ajoute aux liens de la tâche."""
+        return self._upload(self.tasks, task_id, filename, stream, content_type)
+
+    def upload_event(
+        self, event_id: int, filename: str, stream: BinaryIO, content_type: str | None = None
+    ) -> LinkOut:
+        """Enregistre le fichier et l'ajoute aux liens de l'événement."""
+        if self.agenda is None:
+            raise NotFound("Événement introuvable.")
+        return self._upload(self.agenda, event_id, filename, stream, content_type)
+
+    def _upload(
+        self, owner: ItemService, item_id: int, filename: str, stream: BinaryIO, content_type: str | None
+    ) -> LinkOut:
         name = clean_filename(filename)
         with self.uow() as probe:
-            task_title = self.tasks._get(probe.session, task_id).title
+            item_title = owner._get_editable(probe.session, item_id).title
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         attachment_id = secrets.token_hex(16)
         final = self.path_of(attachment_id)
@@ -70,9 +95,9 @@ class AttachmentService(BaseService):
 
         guessed = content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
         try:
-            with self.uow(label=f"Joindre {quoted(name)} à {quoted(task_title)}") as w:
+            with self.uow(label=f"Joindre {quoted(name)} à {quoted(item_title)}") as w:
                 s = w.session
-                task = self.tasks._get(s, task_id)
+                item = owner._get_editable(s, item_id)
                 s.add(
                     Attachment(
                         id=attachment_id,
@@ -83,15 +108,8 @@ class AttachmentService(BaseService):
                     )
                 )
                 s.flush()
-                link = TaskLink(
-                    task_id=task.id,
-                    kind=str(LinkKind.ATTACHMENT),
-                    target=attachment_id,
-                    label=name,
-                    position=self.tasks._next_link_position(s, task.id),
-                )
-                s.add(link)
-                self.tasks._touch(s, task)
+                link = owner._new_link(s, item.id, str(LinkKind.ATTACHMENT), attachment_id, name)
+                owner._touch(s, item)
                 s.flush()
                 return LinkOut.model_validate(link)
         except Exception:
@@ -113,15 +131,17 @@ class AttachmentService(BaseService):
     def _can_read(self, s, row: Attachment) -> bool:
         if row.owner_id == self.actor.id:
             return True
-        task_ids = s.exec(
-            select(TaskLink.task_id).where(
-                TaskLink.kind == str(LinkKind.ATTACHMENT), TaskLink.target == row.id
-            )
-        ).all()
-        for task_id in task_ids:
-            try:
-                self.tasks._get(s, task_id)
-                return True
-            except NotFound:
-                continue
+        for owner in self._owners():
+            model = owner.link_model
+            item_ids = s.exec(
+                select(owner._column(model)).where(
+                    model.kind == str(LinkKind.ATTACHMENT), model.target == row.id
+                )
+            ).all()
+            for item_id in item_ids:
+                try:
+                    owner._get(s, item_id)
+                    return True
+                except NotFound:
+                    continue
         return False

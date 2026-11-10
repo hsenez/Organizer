@@ -8,7 +8,6 @@ est réservée au propriétaire de la tâche ou de son parent.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
 from datetime import date, time
 
 from sqlalchemy import func, or_
@@ -16,13 +15,11 @@ from sqlalchemy.orm import aliased
 from sqlmodel import Session, select
 
 from organizer.core import rules
-from organizer.core.enums import LinkKind, Status, TaskKind
+from organizer.core.enums import Status, TaskKind
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
 from organizer.core.models import (
     BoardCard,
     BoardShare,
-    Project,
-    Tag,
     Task,
     TaskLink,
     TaskRank,
@@ -32,28 +29,25 @@ from organizer.core.models import (
     utcnow,
 )
 from organizer.core.schemas import (
-    LinkIn,
-    LinkOut,
-    LinkPatch,
-    ProjectOut,
-    TagOut,
     TaskCreate,
     TaskFilter,
     TaskOut,
     TaskPatch,
     TaskSort,
 )
-from organizer.core.services.base import BaseService, ServiceContext, quoted
-from organizer.core.services.labels import ProjectService, TagService
+from organizer.core.services.base import quoted
+from organizer.core.services.items import ItemService
 
 _REQUIRED_FIELDS = {"title", "importance", "urgency", "status", "kind", "notes"}
 
 
-class TaskService(BaseService):
-    def __init__(self, ctx: ServiceContext, projects: ProjectService, tags: TagService):
-        super().__init__(ctx)
-        self.projects = projects
-        self.tags = tags
+class TaskService(ItemService):
+    model = Task
+    tag_model = TaskTag
+    share_model = TaskShare
+    link_model = TaskLink
+    fk = "task_id"
+    not_found = "Tâche introuvable."
 
     # ==================================================================================================
     # Visibilité
@@ -101,30 +95,13 @@ class TaskService(BaseService):
         ids = [t.id for t in tasks]
         me = self.actor.id
 
-        visible_projects = {
-            p.id: p for p in s.exec(select(Project).where(self.projects._visible_clause())).all()
-        }
-        visible_tags = {t.id: t for t in s.exec(select(Tag).where(self.tags._visible_clause())).all()}
-
-        tags_by_task: dict[int, list[TagOut]] = defaultdict(list)
-        for link in s.exec(select(TaskTag).where(TaskTag.task_id.in_(ids))).all():
-            tag = visible_tags.get(link.tag_id)
-            if tag is not None:
-                tags_by_task[link.task_id].append(
-                    TagOut.model_validate(tag).model_copy(update={"can_edit": self.tags.can_edit(tag)})
-                )
-
-        links_by_task: dict[int, list[LinkOut]] = defaultdict(list)
-        for link in s.exec(
-            select(TaskLink).where(TaskLink.task_id.in_(ids)).order_by(TaskLink.position, TaskLink.id)
-        ).all():
-            links_by_task[link.task_id].append(LinkOut.model_validate(link))
+        visible_projects = self._visible_projects(s)
+        tags_by_task = self._tags_by_item(s, ids)
+        links_by_task = self._links_by_item(s, ids)
 
         ranks = {r.task_id: r.rank for r in s.exec(select(TaskRank).where(TaskRank.task_id.in_(ids))).all()}
 
-        shares_by_task: dict[int, list[int]] = defaultdict(list)
-        for share in s.exec(select(TaskShare).where(TaskShare.task_id.in_(ids))).all():
-            shares_by_task[share.task_id].append(share.user_id)
+        shares_by_task = self._shares_by_item(s, ids)
 
         sub_count: dict[int, int] = defaultdict(int)
         sub_total: dict[int, int] = defaultdict(int)
@@ -154,7 +131,6 @@ class TaskService(BaseService):
         for t in tasks:
             parent = parents.get(t.parent_id) if t.parent_id is not None else None
             kind = TaskKind(t.kind)
-            project = visible_projects.get(t.project_id) if t.project_id is not None else None
             outs.append(
                 TaskOut(
                     id=t.id,
@@ -175,16 +151,10 @@ class TaskService(BaseService):
                         kind, t.due_date, t.reminder_offset_days, t.reminder_manual_date
                     ),
                     notes=t.notes,
-                    project=(
-                        ProjectOut.model_validate(project).model_copy(
-                            update={"can_edit": self.projects.can_edit(project)}
-                        )
-                        if project
-                        else None
-                    ),
-                    tags=sorted(tags_by_task[t.id], key=lambda tag: (tag.position, tag.name)),
+                    project=self._project_out(visible_projects, t.project_id),
+                    tags=tags_by_task[t.id],
                     links=links_by_task[t.id],
-                    shared_with=sorted(shares_by_task[t.id]),
+                    shared_with=sorted(share.user_id for share in shares_by_task[t.id]),
                     subtask_count=sub_count[t.id],
                     subtask_total=sub_total[t.id],
                     subtask_done=sub_done[t.id],
@@ -279,30 +249,6 @@ class TaskService(BaseService):
         query = query.where(Task.parent_id.is_(None) if parent_id is None else Task.parent_id == parent_id)
         current = s.exec(query).one()
         return (current or 0.0) + 1.0
-
-    def _check_project(self, s: Session, project_id: int | None) -> None:
-        if project_id is not None and project_id not in self.projects.visible_ids(s):
-            raise NotFound("Projet introuvable.")
-
-    def _check_tags(self, s: Session, tag_ids: Iterable[int]) -> set[int]:
-        wanted = set(tag_ids)
-        unknown = wanted - self.tags.visible_ids(s)
-        if unknown:
-            raise NotFound("Tag introuvable.")
-        return wanted
-
-    def _set_tags(self, s: Session, task: Task, tag_ids: Iterable[int]) -> None:
-        """Remplace les tags *visibles* de la tâche ; les tags privés d'autres utilisateurs sont conservés."""
-        wanted = self._check_tags(s, tag_ids)
-        visible = self.tags.visible_ids(s)
-        current = {
-            link.tag_id: link for link in s.exec(select(TaskTag).where(TaskTag.task_id == task.id)).all()
-        }
-        for tag_id, link in current.items():
-            if tag_id in visible and tag_id not in wanted:
-                s.delete(link)
-        for tag_id in wanted - current.keys():
-            s.add(TaskTag(task_id=task.id, tag_id=tag_id))
 
     def _set_status(self, s: Session, task: Task, status: Status) -> None:
         if task.status == status:
@@ -565,67 +511,6 @@ class TaskService(BaseService):
                 s.add(subs[task_id])
         return self.subtasks(parent_id)
 
-    # --- liens ---
-
-    def _touch(self, s: Session, task: Task) -> None:
-        task.updated_at = utcnow()
-        s.add(task)
-
-    def _next_link_position(self, s: Session, task_id: int) -> float:
-        current = s.exec(select(func.max(TaskLink.position)).where(TaskLink.task_id == task_id)).one()
-        return (current or 0.0) + 1.0
-
-    def add_link(self, task_id: int, data: LinkIn) -> LinkOut:
-        with self.uow() as probe:
-            title = self._get(probe.session, task_id).title
-        with self.uow(label=f"Ajouter un lien à {quoted(title)}") as w:
-            s = w.session
-            task = self._get(s, task_id)
-            if data.kind is LinkKind.ATTACHMENT:
-                raise InvalidOperation("Une pièce jointe s'ajoute en envoyant le fichier.")
-            link = TaskLink(
-                task_id=task_id,
-                kind=str(data.kind),
-                target=data.target.strip(),
-                label=data.label.strip(),
-                position=self._next_link_position(s, task_id),
-            )
-            s.add(link)
-            self._touch(s, task)
-            s.flush()
-            return LinkOut.model_validate(link)
-
-    def _get_link(self, s: Session, link_id: int) -> tuple[TaskLink, Task]:
-        link = s.get(TaskLink, link_id)
-        if link is None:
-            raise NotFound("Lien introuvable.")
-        return link, self._get(s, link.task_id)
-
-    def update_link(self, link_id: int, patch: LinkPatch) -> LinkOut:
-        with self.uow() as probe:
-            _, task = self._get_link(probe.session, link_id)
-            title = task.title
-        with self.uow(label=f"Modifier un lien de {quoted(title)}") as w:
-            s = w.session
-            link, task = self._get_link(s, link_id)
-            for key, value in patch.model_dump(exclude_unset=True).items():
-                if value is not None:
-                    setattr(link, key, value.strip())
-            s.add(link)
-            self._touch(s, task)
-            s.flush()
-            return LinkOut.model_validate(link)
-
-    def remove_link(self, link_id: int) -> None:
-        with self.uow() as probe:
-            _, task = self._get_link(probe.session, link_id)
-            title = task.title
-        with self.uow(label=f"Retirer un lien de {quoted(title)}") as w:
-            s = w.session
-            link, task = self._get_link(s, link_id)
-            s.delete(link)
-            self._touch(s, task)
-
     # --- duplication ---
 
     _COPIED_FIELDS = (
@@ -654,20 +539,8 @@ class TaskService(BaseService):
             copy.project_id = None  # projet privé d'un autre utilisateur
         s.add(copy)
         s.flush()
-        visible_tags = self.tags.visible_ids(s)
-        for link in s.exec(select(TaskTag).where(TaskTag.task_id == source.id)).all():
-            if link.tag_id in visible_tags:
-                s.add(TaskTag(task_id=copy.id, tag_id=link.tag_id))
-        for link in s.exec(select(TaskLink).where(TaskLink.task_id == source.id)).all():
-            s.add(
-                TaskLink(
-                    task_id=copy.id,
-                    kind=link.kind,
-                    target=link.target,
-                    label=link.label,
-                    position=link.position,
-                )
-            )
+        self._copy_tags(s, self, source.id, copy.id, all_tags=False)
+        self._copy_links(s, self, source.id, copy.id)
         return copy
 
     def duplicate(self, task_id: int) -> TaskOut:

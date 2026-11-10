@@ -7,7 +7,7 @@ import io
 import json
 import os
 import tarfile
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -32,9 +32,15 @@ from organizer.core.errors import (
 from organizer.core.schemas import (
     BoardIn,
     ColumnIn,
+    EventCreate,
+    EventFilter,
+    EventPatch,
+    EventTimes,
     LinkIn,
+    LinkPatch,
     ProfilePatch,
     ProjectIn,
+    ShareSpec,
     TagIn,
     TaskCreate,
     TaskFilter,
@@ -123,6 +129,44 @@ def test_tasks_through_api_match_local(remote, local):
     remote.tasks.delete(copy.id, with_subtasks=True)
     with pytest.raises(NotFound, match="introuvable"):
         remote.tasks.get(copy.id)
+
+
+def test_agenda_through_api_matches_local(remote, local, state):
+    bob = state.users.create_user("bob", "motdepasse-12", "Bob", by=local.actor)
+    tag = remote.tags.create(TagIn(name="sport"))
+    day = date(2026, 11, 12)
+    event = remote.agenda.create(
+        EventCreate(title="Piscine", start_date=day, start_time=time(18, 0), tag_ids=[tag.id], location="Ici")
+    )
+    assert (event.end_date, event.end_time) == (day, time(19, 0))  # une heure par défaut
+    assert remote.agenda.get(event.id) == local.agenda.get(event.id)
+    flt = EventFilter(start=day, end=day, text="pisc")
+    assert remote.agenda.list(flt) == local.agenda.list(flt) and len(remote.agenda.list(flt)) == 1
+    # Patch partiel : seule l'heure de fin change ; ``None`` explicite = toute la journée.
+    assert remote.agenda.update(event.id, EventPatch(end_time=time(20, 0))).start_time == time(18, 0)
+    assert remote.agenda.update(event.id, EventPatch(start_time=None)).all_day
+    shared = remote.agenda.set_shares(event.id, [ShareSpec(user_id=bob.id, can_edit=False)])
+    assert shared.shares == [ShareSpec(user_id=bob.id, can_edit=False)]
+
+    link = remote.agenda.add_link(event.id, LinkIn(kind=LinkKind.URL, target="exemple.fr"))
+    assert link.event_id == event.id
+    assert remote.agenda.update_link(link.id, LinkPatch(label="Site")).label == "Site"
+    remote.agenda.remove_link(link.id)
+    file = remote.attachments.upload_event(event.id, "plan.txt", io.BytesIO(b"plan"), "text/plain")
+    assert local.agenda.get(event.id).links[0].target == file.target
+
+    task = remote.agenda.to_task(event.id)
+    assert task.title == "Piscine" and task.due_date == day
+    again = remote.agenda.from_task(task.id)  # sans corps : à l'échéance, une heure
+    assert again.start_date == day and not again.all_day
+    task = remote.agenda.to_task(again.id)
+    custom = remote.agenda.from_task(task.id, EventTimes(start_date=day, end_date=date(2026, 11, 14)))
+    assert custom.all_day and custom.end_date == date(2026, 11, 14)
+    remote.agenda.delete(custom.id)
+    with pytest.raises(NotFound, match="introuvable"):
+        remote.agenda.get(custom.id)
+    with pytest.raises(InvalidOperation):
+        remote.agenda.create(EventCreate(title="X", start_date=day, start_time=time(9), end_time=time(8)))
 
 
 def test_subtasks_links_shares_and_errors(remote, state, local):

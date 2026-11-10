@@ -20,6 +20,7 @@ from typing import Protocol
 from organizer.core.schemas import UserOut, UserPublic
 from organizer.core.services import Services
 from organizer.core.services.account import AccountService
+from organizer.core.services.agenda import AgendaService
 from organizer.core.services.attachments import AttachmentService
 from organizer.core.services.boards import BoardService
 from organizer.core.services.labels import ProjectService, TagService
@@ -31,6 +32,7 @@ class DataSource(Protocol):
     user: UserOut
     is_desktop: bool  # True : client bureau (peut ouvrir les fichiers locaux)
     tasks: TaskService
+    agenda: AgendaService  # événements du calendrier
     projects: ProjectService
     tags: TagService
     undo: UndoService
@@ -55,6 +57,7 @@ class LocalDataSource:
         self.user = user
         self.account = account
         self.tasks = services.tasks
+        self.agenda = services.agenda
         self.projects = services.projects
         self.tags = services.tags
         self.undo = services.undo

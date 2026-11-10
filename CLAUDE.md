@@ -243,6 +243,27 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `dblclick.stop` : dans le simulateur, `trigger("dblclick.stop")` (nom exact de l'écouteur).
 - Noms des jours / mois : `ui/format.py` (`DAYS`, `MONTHS` abrégés ; `DAY_NAMES`, `MONTH_NAMES` complets).
 
+## Événements (agenda)
+
+- **Héritage** : `models.ItemBase` / `LinkBase` (SQLModel sans table : champs communs) → `Task`, `Event`,
+  `TaskLink`, `EventLink` ; `schemas.ItemOut` → `TaskOut`, `EventOut` ; `services/items.py`
+  `ItemService` (projet, tags avec préservation des tags privés, liens, copie de tags / liens d'un type à
+  l'autre, lecture groupée) → `TaskService`, `AgendaService`. Une sous-classe déclare `model`,
+  `tag_model`, `share_model`, `link_model`, `fk` (`task_id` / `event_id`), `_get` (visible) et
+  `_get_editable`. `LinkOut` porte `task_id` **ou** `event_id`.
+- Nommage : service `sv.agenda` / `ds.agenda` (`AgendaService`, `RemoteAgenda`), routes `/api/v1/agenda`
+  — `events` désigne déjà le bus temps réel (`core/events.py`, `ServiceContext.events`) et
+  `/api/v1/events` le flux SSE. La table reste `event`.
+- Dates **locales** `start_date` / `start_time` / `end_date` / `end_time` (pas de `datetime` : pas de
+  fuseau à gérer) ; `start_time is None` ⇔ toute la journée (`EventOut.all_day`). Toujours passer par
+  `rules.event_span` pour normaliser. Jours touchés : `rules.event_days`.
+- Droits : `_get` (voir : propriétaire, partage, public), `_get_editable` (propriétaire ou
+  `EventShare.can_edit`), `_get_owned` (supprimer, partager, rendre public, transformer).
+- Pièces jointes : `AttachmentService.upload_event` ; `_can_read` parcourt les liens des tâches **et** des
+  événements. Suppression / fusion de tags et de projets : traiter `TaskTag` **et** `EventTag`, `Task`
+  **et** `Event`.
+- Tests : `tests/test_agenda.py` (services), `test_client.py::test_agenda_through_api_matches_local`.
+
 ## Étape 7 : client bureau
 
 - `organizer/client/` : **aucune** dépendance au serveur (`organizer.server`) hors tests. `app.py`
@@ -254,6 +275,8 @@ Référence fonctionnelle complète : **`specifications.md`**.
   signature. Ajouter une méthode de service utilisée par l'UI = ajouter sa route API **et** sa version
   distante **et** un test dans `tests/test_client.py` (comparaison avec le service local quand c'est possible).
   Liste des appels de l'UI : `grep -rhoE "ds\.[a-z_]+\.[a-z_]+" organizer/ui | sort -u`.
+- `ConfigStore.save` : fichier temporaire unique (`mkstemp`, 600) + verrou — plusieurs fils enregistrent
+  `client.json` (bascule réseau local en arrière-plan).
 - Envoi : `_sent()` = `exclude_unset` (patchs partiels, héritage des sous-tâches) ; `ApiClient.call(...,
   json=None)` envoie `null` (``NO_BODY`` = pas de corps).
 - Liens côté bureau : `open_link` (task_editor) délègue à `ds.open_url / open_path / open_attachment` quand
@@ -487,7 +510,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 377 tests au total (+1 réservé à Windows).
+- 392 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

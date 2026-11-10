@@ -181,3 +181,6 @@ QUADRANT_META: dict[Quadrant, Meta] = {
     ),
     Quadrant.ELIMINATE: Meta("Éliminer", "🗑️", "Ni important ni urgent : à abandonner ?", "#adb5bd"),
 }
+
+# Couleur d'un événement sans couleur choisie ni projet.
+EVENT_DEFAULT_COLOR = "#4c6ef5"

@@ -34,6 +34,11 @@ from organizer.core.schemas import (
     BoardPatch,
     ColumnIn,
     ColumnPatch,
+    EventCreate,
+    EventFilter,
+    EventOut,
+    EventPatch,
+    EventTimes,
     LinkIn,
     LinkOut,
     LinkPatch,
@@ -43,6 +48,7 @@ from organizer.core.schemas import (
     ProjectOut,
     ProjectPatch,
     SessionOut,
+    ShareSpec,
     TagIn,
     TagOut,
     TagPatch,
@@ -127,6 +133,45 @@ class RemoteTasks(_Part):
         self.api.call("DELETE", f"/links/{link_id}")
 
 
+class RemoteAgenda(_Part):
+    """Événements du calendrier (``AgendaService``)."""
+
+    def get(self, event_id: int) -> EventOut:
+        return self.api.call("GET", f"/agenda/{event_id}", EventOut)
+
+    def list(self, flt: EventFilter | None = None) -> list[EventOut]:
+        return self.api.call("POST", "/agenda/query", list[EventOut], json=_full(flt or EventFilter()))
+
+    def create(self, data: EventCreate) -> EventOut:
+        return self.api.call("POST", "/agenda", EventOut, json=_sent(data))
+
+    def update(self, event_id: int, patch: EventPatch) -> EventOut:
+        return self.api.call("PATCH", f"/agenda/{event_id}", EventOut, json=_sent(patch))
+
+    def delete(self, event_id: int) -> None:
+        self.api.call("DELETE", f"/agenda/{event_id}")
+
+    def set_shares(self, event_id: int, shares: list[ShareSpec]) -> EventOut:
+        body = {"shares": [_full(share) for share in shares]}
+        return self.api.call("PUT", f"/agenda/{event_id}/shares", EventOut, json=body)
+
+    def add_link(self, event_id: int, data: LinkIn) -> LinkOut:
+        return self.api.call("POST", f"/agenda/{event_id}/links", LinkOut, json=_sent(data))
+
+    def update_link(self, link_id: int, patch: LinkPatch) -> LinkOut:
+        return self.api.call("PATCH", f"/agenda-links/{link_id}", LinkOut, json=_sent(patch))
+
+    def remove_link(self, link_id: int) -> None:
+        self.api.call("DELETE", f"/agenda-links/{link_id}")
+
+    def from_task(self, task_id: int, times: EventTimes | None = None) -> EventOut:
+        body = _full(times) if times is not None else None
+        return self.api.call("POST", f"/tasks/{task_id}/to-event", EventOut, json=body)
+
+    def to_task(self, event_id: int) -> TaskOut:
+        return self.api.call("POST", f"/agenda/{event_id}/to-task", TaskOut)
+
+
 class RemoteProjects(_Part):
     def list(self, include_archived: bool = False) -> list[ProjectOut]:
         return self.api.cache.get(
@@ -198,6 +243,12 @@ class RemoteAttachments(_Part):
     ) -> LinkOut:
         files = {"file": (filename, stream, content_type or "application/octet-stream")}
         return self.api.call("POST", f"/tasks/{task_id}/attachments", LinkOut, files=files)
+
+    def upload_event(
+        self, event_id: int, filename: str, stream: BinaryIO, content_type: str | None = None
+    ) -> LinkOut:
+        files = {"file": (filename, stream, content_type or "application/octet-stream")}
+        return self.api.call("POST", f"/agenda/{event_id}/attachments", LinkOut, files=files)
 
     def download(self, attachment_id: str) -> tuple[str, bytes]:
         """Contenu d'une pièce jointe et son nom de fichier."""
@@ -326,6 +377,7 @@ class RemoteDataSource:
             api = api.with_headers({ORIGIN_HEADER: origin})
         self.api = api
         self.tasks = RemoteTasks(api)
+        self.agenda = RemoteAgenda(api)
         self.projects = RemoteProjects(api)
         self.tags = RemoteTags(api)
         self.undo = RemoteUndo(api)

@@ -97,7 +97,8 @@ class LinkPatch(_Schema):
 
 class LinkOut(_Schema):
     id: int
-    task_id: int
+    task_id: int | None = None  # lien d'une tâche…
+    event_id: int | None = None  # … ou d'un événement
     kind: LinkKind
     target: str
     label: str
@@ -141,14 +142,27 @@ class TaskPatch(_Schema):
     tag_ids: list[int] | None = None
 
 
-class TaskOut(_Schema):
+class ItemOut(_Schema):
+    """Champs communs aux tâches et aux événements."""
+
     id: int
     owner_id: int
+    title: str
+    notes: str
+    project: ProjectOut | None = None
+    tags: list[TagOut] = Field(default_factory=list)
+    links: list[LinkOut] = Field(default_factory=list)
+    shared_with: list[int] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+    can_delete: bool = False
+
+
+class TaskOut(ItemOut):
     parent_id: int | None
     parent_title: str | None = None
     position: float
     rank: float = 0.0  # rang manuel parmi les tâches de même urgence (reclassement au kanban)
-    title: str
     importance: Importance
     urgency: Urgency
     due_date: date | None
@@ -157,19 +171,11 @@ class TaskOut(_Schema):
     kind: TaskKind
     reminder_offset_days: int | None
     reminder_date: date | None  # date de rappel effective (calculée), None si pas de rappel
-    notes: str
-    project: ProjectOut | None = None
-    tags: list[TagOut] = Field(default_factory=list)
-    links: list[LinkOut] = Field(default_factory=list)
-    shared_with: list[int] = Field(default_factory=list)
     subtask_count: int = 0  # toutes les sous-tâches, annulées comprises
     subtask_total: int = 0  # sous-tâches non annulées (dénominateur de la progression)
     subtask_done: int = 0
     due_after_parent: bool = False  # sous-tâche dont l'échéance dépasse celle du parent
-    created_at: datetime
-    updated_at: datetime
     completed_at: datetime | None
-    can_delete: bool = False
 
     @property
     def is_subtask(self) -> bool:
@@ -199,6 +205,77 @@ class TaskFilter(_Schema):
 class TaskSort(_Schema):
     key: str = "due"  # due | importance | urgency | priority | created | updated | title | position
     descending: bool = False
+
+
+# --- Événements (agenda) ------------------------------------------------------------------------------
+
+
+class EventTimes(_Schema):
+    """Début et fin d'un événement. Sans ``start_time`` : toute la journée, de ``start_date`` à ``end_date``
+    inclus. Avec heures : ``end_date`` par défaut = jour de début ; sans ``end_time``, dure une heure."""
+
+    start_date: date
+    start_time: time | None = None
+    end_date: date | None = None
+    end_time: time | None = None
+
+
+class EventCreate(EventTimes):
+    title: str = Field(min_length=1, max_length=300)
+    location: str = ""
+    color: str | None = None  # None : couleur du projet (ou couleur par défaut)
+    is_public: bool = False
+    notes: str = ""
+    project_id: int | None = None
+    tag_ids: list[int] = Field(default_factory=list)
+
+
+class EventPatch(_Schema):
+    """Fournir ``start_time=None`` (avec ou sans ``end_time``) fait passer en « toute la journée »."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    start_date: date | None = None
+    start_time: time | None = None
+    end_date: date | None = None
+    end_time: time | None = None
+    location: str | None = None
+    color: str | None = None
+    is_public: bool | None = None
+    notes: str | None = None
+    project_id: int | None = None
+    tag_ids: list[int] | None = None
+
+
+class ShareSpec(_Schema):
+    """Partage d'un événement avec un utilisateur, modifiable ou en lecture seule."""
+
+    user_id: int
+    can_edit: bool = True
+
+
+class EventOut(ItemOut):
+    start_date: date
+    start_time: time | None
+    end_date: date
+    end_time: time | None
+    all_day: bool
+    location: str = ""
+    color: str | None = None  # couleur choisie (None : celle du projet)
+    display_color: str  # couleur affichée : choisie, sinon projet, sinon couleur par défaut
+    is_public: bool = False
+    shares: list[ShareSpec] = Field(default_factory=list)
+    can_edit: bool = False  # propriétaire, ou partage modifiable
+
+
+class EventFilter(_Schema):
+    """Événements qui touchent la période ``[start, end]`` (dates incluses ; sans borne : pas de limite)."""
+
+    start: date | None = None
+    end: date | None = None
+    scope: str = "all"  # all | mine | shared (partagés avec moi ou publics des autres)
+    text: str = ""
+    project_ids: list[int | None] = Field(default_factory=list)
+    tag_ids: list[int] = Field(default_factory=list)
 
 
 # --- Boards personnalisés ---------------------------------------------------------------------------------
