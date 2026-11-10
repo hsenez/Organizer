@@ -2,6 +2,12 @@
 
 - Public : visible et utilisable par tous ; modifiable par son créateur et les admins.
 - Privé : visible, utilisable et modifiable uniquement par son créateur.
+
+Noms : uniques (sans la casse) parmi ce que l'utilisateur voit. Un privé d'un autre utilisateur est
+invisible : quand un élément devient public (création, passage en public, renommage), un autre utilisateur
+peut donc déjà avoir un privé du même nom. C'est permis, mais son propriétaire reçoit une notification
+« conflict » qui lui propose de renommer le sien ou de le fusionner dans le public. Deux publics du même nom
+sont refusés.
 """
 
 from __future__ import annotations
@@ -13,7 +19,7 @@ from sqlmodel import Session, select
 
 from organizer.core import rules
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
-from organizer.core.models import Event, EventTag, Project, Tag, Task, TaskTag
+from organizer.core.models import Event, EventTag, Notification, Project, Tag, Task, TaskTag
 from organizer.core.schemas import ProjectIn, ProjectOut, ProjectPatch, TagIn, TagOut, TagPatch
 from organizer.core.services.base import BaseService, quoted
 
@@ -21,6 +27,7 @@ from organizer.core.services.base import BaseService, quoted
 class _LabelService(BaseService):
     model: Any = None
     noun: str = ""  # « le projet », « le tag »
+    kind: str = ""  # « project », « tag » (type d'élément des notifications)
 
     # --- visibilité / droits ---
 
@@ -54,6 +61,41 @@ class _LabelService(BaseService):
             query = query.where(m.id != exclude_id)
         if s.exec(query).first() is not None:
             raise InvalidOperation(f"{self.noun.capitalize()} {quoted(name)} existe déjà.")
+
+    def _check_public_name(self, s: Session, obj: Any) -> None:
+        """``obj`` est (ou devient) public sous ce nom : refuse un autre public du même nom ; prévient les
+        propriétaires d'un privé du même nom (notification « conflict », une seule tant qu'elle n'est pas
+        lue)."""
+        m = self.model
+        same = s.exec(select(m).where(func.lower(m.name) == obj.name.lower(), m.id != obj.id)).all()
+        if any(other.is_public for other in same):
+            raise InvalidOperation(
+                f"{self.noun.capitalize()} public {quoted(obj.name)} existe déjà : fusionnez plutôt les deux."
+            )
+        for other in same:
+            if other.owner_id == self.actor.id:
+                continue
+            pending = s.exec(
+                select(Notification.id).where(
+                    Notification.user_id == other.owner_id,
+                    Notification.kind == "conflict",
+                    Notification.item_type == self.kind,
+                    Notification.item_id == other.id,
+                    Notification.read_at.is_(None),
+                )
+            ).first()
+            if pending is None:
+                s.add(
+                    Notification(
+                        user_id=other.owner_id,
+                        actor_id=self.actor.id,
+                        kind="conflict",
+                        item_type=self.kind,
+                        item_id=other.id,
+                        title=other.name,
+                        text=f"Même nom que {self.noun} public {quoted(obj.name)}",
+                    )
+                )
 
     def _next_position(self, s: Session) -> float:
         current = s.exec(select(func.max(self.model.position))).one()
@@ -91,6 +133,8 @@ class _LabelService(BaseService):
             )
             w.session.add(obj)
             w.session.flush()
+            if obj.is_public:
+                self._check_public_name(w.session, obj)
             return self._out(obj)
 
     def update(self, obj_id: int, patch: Any) -> Any:
@@ -99,14 +143,16 @@ class _LabelService(BaseService):
             name = self._get_visible(probe.session, obj_id).name
         with self.uow(label=f"Modifier {self.noun} {quoted(name)}") as w:
             obj = self._get_editable(w.session, obj_id)
+            was_public, old_name = obj.is_public, obj.name
             if "name" in fields:
                 fields["name"] = fields["name"].strip()
-            if "name" in fields:
                 self._check_unique(w.session, fields["name"], exclude_id=obj.id)
             for key, value in fields.items():
                 setattr(obj, key, value)
             w.session.add(obj)
             w.session.flush()
+            if obj.is_public and (not was_public or obj.name.lower() != old_name.lower()):
+                self._check_public_name(w.session, obj)
             return self._out(obj)
 
     plural: str = ""
@@ -125,6 +171,7 @@ class ProjectService(_LabelService):
     model = Project
     noun = "le projet"
     plural = "projets"
+    kind = "project"
 
     def _out(self, obj: Project) -> ProjectOut:
         return ProjectOut.model_validate(obj).model_copy(update={"can_edit": self.can_edit(obj)})
@@ -151,11 +198,33 @@ class ProjectService(_LabelService):
             w.session.flush()
             w.session.delete(project)
 
+    def merge(self, source_id: int, target_id: int) -> ProjectOut:
+        """Fusionne le projet ``source`` dans ``target`` : ses tâches et ses événements passent à ``target``,
+        puis ``source`` est supprimé."""
+        if source_id == target_id:
+            raise InvalidOperation("Impossible de fusionner un projet avec lui-même.")
+        with self.uow() as probe:
+            source_name = self._get_visible(probe.session, source_id).name
+            target_name = self._get_visible(probe.session, target_id).name
+        with self.uow(label=f"Fusionner le projet {quoted(source_name)} dans {quoted(target_name)}") as w:
+            s = w.session
+            source = self._get_editable(s, source_id)
+            target = self._get_visible(s, target_id)
+            for model in (Task, Event):
+                for item in s.exec(select(model).where(model.project_id == source_id)).all():
+                    item.project_id = target_id
+                    s.add(item)
+            s.flush()
+            s.delete(source)
+            s.flush()
+            return self._out(target)
+
 
 class TagService(_LabelService):
     model = Tag
     noun = "le tag"
     plural = "tags"
+    kind = "tag"
 
     def _out(self, obj: Tag) -> TagOut:
         return TagOut.model_validate(obj).model_copy(update={"can_edit": self.can_edit(obj)})

@@ -432,3 +432,20 @@ def test_agenda_layout_splits_at_noon_and_places_overlaps():
     assert (by["soir", 1].top, by["soir", 1].bottom, by["soir", 1].ends) == (660, 720, False)
     assert rules.snap_minutes(9 * 60 + 7) == 9 * 60 + 0 and rules.snap_minutes(9 * 60 + 8) == 9 * 60 + 15
     assert rules.snap_minutes(-30) == 0 and rules.snap_minutes(1500) == 1440
+
+
+def test_label_names_disambiguate_same_names():
+    @dataclass
+    class L:
+        id: int
+        name: str
+        is_public: bool
+
+    labels = [L(1, "Sport", False), L(2, "sport", True), L(3, "Maison", True), L(4, "Sport", True)]
+    assert rules.label_names(labels) == {
+        1: "Sport (privé)",
+        2: "sport (public)",
+        3: "Maison",
+        4: "Sport (public)",  # casse différente : déjà distinct
+    }
+    assert rules.label_names([L(1, "A", True), L(2, "A", True)]) == {1: "A (public)", 2: "A (public) 2"}

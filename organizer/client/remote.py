@@ -206,6 +206,11 @@ class RemoteProjects(_Part):
     def reorder(self, ordered_ids: list[int]) -> None:
         self.api.call("POST", "/projects/reorder", json={"ids": ordered_ids})
 
+    def merge(self, source_id: int, target_id: int) -> ProjectOut:
+        return self.api.call(
+            "POST", f"/projects/{source_id}/merge", ProjectOut, json={"target_id": target_id}
+        )
+
 
 class RemoteTags(_Part):
     def list(self) -> list[TagOut]:
@@ -255,6 +260,11 @@ class RemoteNotifications(_Part):
         # oublié à chaque modification signalée par le temps réel.
         return self.api.cache.get(
             NOTIFICATIONS_KEY, lambda: self.api.call("GET", "/notifications/unread-count", int), [EVERYTHING]
+        )
+
+    def conflict_target(self, item_type: str, item_id: int) -> int | None:
+        return self.api.call(
+            "GET", f"/notifications/conflict-target/{quote(item_type)}/{item_id}", int | None
         )
 
     def mark_read(self, ids: list[int] | None = None) -> int:

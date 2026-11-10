@@ -10,7 +10,10 @@ partagé (pour une sous-tâche : aussi ceux de la tâche parente). L'auteur de l
 - ``share`` : l'élément vient d'être partagé avec elle ;
 - ``unshare`` : il ne l'est plus ;
 - ``change`` : il a été modifié (ou converti tâche ↔ événement) ;
-- ``delete`` : il a été supprimé.
+- ``delete`` : il a été supprimé ;
+- ``conflict`` (créée par ``labels``) : un tag / projet public porte désormais le même nom que mon tag /
+  projet privé (``item_type`` = ``tag`` / ``project``, ``item_id`` = le mien) ; utilisable tant que le
+  conflit existe.
 
 Les actions rapprochées identiques (enregistrement automatique des notes…) sont **regroupées** dans la
 notification non lue précédente. Annuler / rétablir ne notifie pas.
@@ -28,6 +31,8 @@ from organizer.core.models import (
     Event,
     EventShare,
     Notification,
+    Project,
+    Tag,
     Task,
     TaskShare,
     User,
@@ -211,10 +216,34 @@ class NotificationService(BaseService):
                     created_at=n.created_at,
                     updated_at=n.updated_at,
                     read=n.read_at is not None,
-                    available=n.kind != "delete" and self._visible(s, n.item_type, n.item_id),
+                    available=self._available(s, n),
                 )
                 for n in rows
             ]
+
+    def _available(self, s: Session, n: Notification) -> bool:
+        if n.kind == "delete":
+            return False
+        if n.kind == "conflict":
+            return self.conflicting_public(s, n.item_type, n.item_id) is not None
+        return self._visible(s, n.item_type, n.item_id)
+
+    def conflicting_public(self, s: Session, item_type: str, item_id: int):
+        """Le tag / projet public qui porte le même nom que mon tag / projet privé ``item_id`` (None : plus de
+        conflit — renommé, fusionné, supprimé, ou le public a changé)."""
+        model = {"tag": Tag, "project": Project}.get(item_type)
+        mine = s.get(model, item_id) if model is not None else None
+        if mine is None or mine.owner_id != self.actor.id or mine.is_public:
+            return None
+        return s.exec(
+            select(model).where(model.is_public.is_(True), func.lower(model.name) == mine.name.lower())
+        ).first()
+
+    def conflict_target(self, item_type: str, item_id: int) -> int | None:
+        """Identifiant du public en conflit avec mon tag / projet privé (pour le fusionner), ou None."""
+        with self.uow() as w:
+            public = self.conflicting_public(w.session, item_type, item_id)
+            return public.id if public is not None else None
 
     def _visible(self, s: Session, item_type: str, item_id: int) -> bool:
         """L'élément existe-t-il encore, et le voit-on (pour l'ouvrir d'un clic) ?"""

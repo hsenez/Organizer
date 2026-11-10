@@ -27,6 +27,13 @@ def unread_count(sv: Services = Depends(get_services)):
     return sv.notifications.unread_count()
 
 
+@router.get("/notifications/conflict-target/{item_type}/{item_id}", response_model=int | None)
+def conflict_target(item_type: str, item_id: int, sv: Services = Depends(get_services)):
+    """Tag / projet public en conflit de nom avec mon tag / projet privé ``item_id`` (null : plus de
+    conflit)."""
+    return sv.notifications.conflict_target(item_type, item_id)
+
+
 @router.post("/notifications/read", response_model=int)
 def mark_read(data: ReadIn, sv: Services = Depends(get_services)):
     """Marque comme lues (toutes sans ``ids``) ; renvoie le nombre de non lues restantes."""

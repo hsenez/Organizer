@@ -188,6 +188,13 @@ def test_notifications_through_api_match_local(remote, local, state):
     first = remote.notifications.list()[-1].id
     assert remote.notifications.mark_read([first]) == 1 and remote.notifications.unread_count() == 1
     assert remote.notifications.mark_read() == 0 and local.notifications.unread_count() == 0
+    # Conflit de nom : un projet public de Bob porte le nom d'un projet privé d'Alice ; fusion.
+    mine = remote.projects.create(ProjectIn(name="Club"))
+    public = bob.projects.create(ProjectIn(name="club", is_public=True))
+    assert remote.notifications.list()[0].kind == "conflict"
+    assert remote.notifications.conflict_target("project", mine.id) == public.id
+    assert remote.projects.merge(mine.id, public.id).id == public.id
+    assert remote.notifications.conflict_target("project", mine.id) is None
 
 
 def test_subtasks_links_shares_and_errors(remote, state, local):

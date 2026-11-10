@@ -126,3 +126,66 @@ def test_new_tags_get_distinct_colors(alice):
     assert explicit.color == "#123456"
     on_task = alice.tags.create(TagIn(name="d", avoid_colors=[first.color]))
     assert rules.color_distance(on_task.color, first.color) > 30
+
+
+# --- même nom : privé d'un autre utilisateur / public ----------------------------------------------------
+
+
+def test_public_name_conflict_notifies_private_owner(alice, bob):
+    from organizer.core.schemas import TagPatch
+
+    mine = bob.tags.create(TagIn(name="Sport", color="#40c057"))
+    theirs = alice.tags.create(TagIn(name="sport", color="#fa5252"))  # privé de Bob : invisible, permis
+    assert bob.notifications.list() == []
+    alice.tags.update(theirs.id, TagPatch(is_public=True))
+    [n] = bob.notifications.list()
+    assert (n.kind, n.item_type, n.item_id, n.actor_name, n.available) == (
+        "conflict",
+        "tag",
+        mine.id,
+        "Alice",
+        True,
+    )
+    assert bob.notifications.conflict_target("tag", mine.id) == theirs.id
+    alice.tags.update(theirs.id, TagPatch(color="#000000"))  # rien de nouveau tant que non lue
+    assert len(bob.notifications.list()) == 1
+    # Renommer le sien : plus de conflit.
+    bob.tags.update(mine.id, TagPatch(name="Sport perso"))
+    assert not bob.notifications.list()[0].available
+    assert bob.notifications.conflict_target("tag", mine.id) is None
+
+
+def test_two_public_labels_with_the_same_name_are_refused(alice, bob):
+    from organizer.core.schemas import ProjectPatch, TagPatch
+
+    bob_tag = bob.tags.create(TagIn(name="Courses"))
+    alice.tags.create(TagIn(name="courses", is_public=True))
+    with pytest.raises(InvalidOperation, match="fusionnez"):
+        bob.tags.update(bob_tag.id, TagPatch(is_public=True))
+    bob_project = bob.projects.create(ProjectIn(name="Maison"))
+    alice.projects.create(ProjectIn(name="Maison", is_public=True))  # notifie Bob
+    assert [n.item_type for n in bob.notifications.list()] == ["project", "tag"]
+    with pytest.raises(InvalidOperation):
+        bob.projects.update(bob_project.id, ProjectPatch(is_public=True))
+
+
+def test_merge_private_project_into_public(alice, bob):
+    from datetime import date
+
+    from organizer.core.schemas import EventCreate
+
+    public = alice.projects.create(ProjectIn(name="Club", is_public=True))
+    mine = bob.projects.create(ProjectIn(name="Club perso"))
+    task = bob.tasks.create(TaskCreate(title="Cotisation", project_id=mine.id))
+    event = bob.agenda.create(
+        EventCreate(title="Assemblée", start_date=date(2026, 11, 20), project_id=mine.id)
+    )
+    merged = bob.projects.merge(mine.id, public.id)
+    assert merged.id == public.id
+    assert bob.tasks.get(task.id).project.id == public.id
+    assert bob.agenda.get(event.id).project.id == public.id
+    assert [p.name for p in bob.projects.list()] == ["Club"]
+    bob.undo.undo()
+    assert bob.tasks.get(task.id).project.id == mine.id
+    with pytest.raises(Forbidden):
+        bob.projects.merge(public.id, mine.id)  # le public d'Alice ne lui appartient pas

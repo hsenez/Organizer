@@ -96,6 +96,12 @@ def delete_tag(tag_id: int, sv: Services = Depends(get_services)):
     return Response(status_code=204)
 
 
+@router.post("/projects/{project_id}/merge", response_model=ProjectOut)
+def merge_project(project_id: int, data: MergeIn, sv: Services = Depends(get_services)):
+    """Fusionne ce projet dans ``target_id`` : ses tâches et événements y passent, ce projet disparaît."""
+    return sv.projects.merge(project_id, data.target_id)
+
+
 @router.post("/tags/{tag_id}/merge", response_model=TagOut)
 def merge_tag(tag_id: int, data: MergeIn, sv: Services = Depends(get_services)):
     """Fusionne ce tag dans ``target_id`` (ce tag disparaît)."""

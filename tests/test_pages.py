@@ -1293,3 +1293,41 @@ async def test_notifications_page_badge_and_open(user: User):
     assert sv.notifications.unread_count() == 0
     await settle()
     await user.should_not_see(marker="notifications-badge")  # bulle masquée
+
+
+async def test_label_name_conflict_display_rename_and_merge(user: User):
+    from organizer.core.schemas import TagIn, TagPatch
+
+    sv = await login(user)  # Alice
+    bob = state().services_for(state().users.create_user("bob", "motdepasse-12", "Bob", by=sv.actor))
+    mine = sv.tags.create(TagIn(name="Sport", color="#40c057"))
+    theirs = bob.tags.create(TagIn(name="Sport", color="#fa5252"))
+    bob.tags.update(theirs.id, TagPatch(is_public=True))
+    task = sv.tasks.create(TaskCreate(title="Piscine", tag_ids=[mine.id]))
+
+    # Plus de confusion : les deux tags ont des noms distincts dans les listes, chacun avec sa couleur.
+    await user.open(f"/tasks?task={task.id}")
+    tags = next(iter(user.find(marker="editor-tags").elements))
+    assert tags.options == {mine.id: "Sport (privé)", theirs.id: "Sport (public)"}
+    user.find(marker="task-editor-dialog").trigger("hide")
+
+    await user.open("/notifications")
+    [conflict] = sv.notifications.list()
+    await user.should_see("Bob a rendu public un tag du même nom que votre tag privé « Sport »")
+    user.find(marker=f"notification-rename-{conflict.id}").trigger("click.stop")
+    await user.should_see(marker="rename-dialog")
+    with user.client:
+        next(iter(user.find(marker="rename-input").elements)).set_value("Sport perso")
+    user.find(marker="rename-save").click()
+    assert sv.tags.get(mine.id).name == "Sport perso" and sv.notifications.unread_count() == 0
+
+    # Fusion : nouveau conflit, puis « Fusionner dans le public ».
+    bob.tags.update(theirs.id, TagPatch(name="Sports"))
+    sv.tags.update(mine.id, TagPatch(name="sport"))
+    bob.tags.update(theirs.id, TagPatch(name="Sport"))  # le public reprend ce nom : nouveau conflit
+    await user.open("/notifications")
+    latest = sv.notifications.list()[0]
+    assert latest.kind == "conflict" and latest.available
+    user.find(marker=f"notification-merge-{latest.id}").trigger("click.stop")
+    assert [t.name for t in sv.tasks.get(task.id).tags] == ["Sport"]
+    assert sv.tasks.get(task.id).tags[0].id == theirs.id

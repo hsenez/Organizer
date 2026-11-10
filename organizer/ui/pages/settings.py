@@ -12,6 +12,7 @@ from fastapi.responses import Response
 from nicegui import run, ui
 from pydantic import ValidationError
 
+from organizer.core import rules
 from organizer.core.errors import OrganizerError
 from organizer.core.schemas import (
     AdminUserPatch,
@@ -283,6 +284,11 @@ def _projects(ctx: UiContext) -> None:
                     _row_button("arrow_downward", "Descendre", lambda i=index: move(i, 1))
                     _row_button("edit", "Modifier", lambda p=project: _project_dialog(ctx, p, body.refresh))
                     _row_button(
+                        "merge",
+                        "Fusionner dans un autre projet",
+                        lambda p=project: _merge_dialog(ctx, p, body.refresh, kind="project"),
+                    )
+                    _row_button(
                         "unarchive" if project.archived else "archive",
                         "Désarchiver"
                         if project.archived
@@ -475,21 +481,34 @@ def _tag_dialog(ctx: UiContext, tag, on_saved) -> None:
     dialog.open()
 
 
-def _merge_dialog(ctx: UiContext, tag, on_saved) -> None:
-    others = {t.id: t.name for t in ctx.ds.tags.list() if t.id != tag.id}
-    with ui.dialog() as dialog, ui.card().classes("w-[440px] max-w-[95vw] gap-3"):
+def _merge_dialog(ctx: UiContext, tag, on_saved, kind: str = "tag") -> None:
+    """Fusionner un tag (ou, ``kind="project"``, un projet) dans un autre."""
+    service = ctx.ds.projects if kind == "project" else ctx.ds.tags
+    items = service.list()
+    names = rules.label_names(items)  # « x (privé) » / « x (public) » si même nom
+    others = {t.id: names[t.id] for t in items if t.id != tag.id}
+    with ui.dialog() as dialog, ui.card().classes("w-[440px] max-w-[95vw] gap-3").mark("merge-dialog"):
         ui.label(f"🔀 Fusionner « {tag.name} »").classes("text-lg font-semibold")
-        ui.label("Les tâches qui portent ce tag recevront le tag choisi ; ce tag disparaîtra.").classes(
-            "text-sm"
+        if kind == "project":
+            explanation = (
+                "Ses tâches et ses événements passeront dans le projet choisi ; ce projet disparaîtra."
+            )
+        else:
+            explanation = (
+                "Les tâches et événements qui portent ce tag recevront le tag choisi ; ce tag disparaîtra."
+            )
+        ui.label(explanation).classes("text-sm")
+        target = (
+            ui.select(others, label="Fusionner dans…")
+            .props("outlined dense")
+            .classes("w-full")
+            .mark("merge-target")
         )
-        target = ui.select(others, label="Fusionner dans…").props("outlined dense").classes("w-full")
 
         def merge() -> None:
             if target.value is None:
                 return
-            if _try(
-                lambda: ctx.ds.tags.merge(tag.id, target.value), "🔀 Tags fusionnés — Ctrl+Z pour annuler"
-            ):
+            if _try(lambda: service.merge(tag.id, target.value), "🔀 Fusion faite — Ctrl+Z pour annuler"):
                 dialog.close()
                 on_saved()
                 ctx.refresh()

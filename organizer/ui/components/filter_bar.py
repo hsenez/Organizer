@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 from nicegui import ui
 
+from organizer.core import rules
 from organizer.core.enums import DueBucket, Importance, Status, TaskKind, Urgency
 from organizer.core.schemas import TaskFilter
 from organizer.ui.components.tag_chips import color_tag_select
@@ -73,9 +74,12 @@ class FilterBar:
         self.default = default or TaskFilter()
         self._on_change = on_change
         projects = {NO_PROJECT: "∅ Sans projet"}
-        projects.update({p.id: f"{p.emoji} {p.name}" for p in ctx.ds.projects.list(include_archived=True)})
+        all_projects = ctx.ds.projects.list(include_archived=True)
+        project_names = rules.label_names(all_projects)  # « x (privé) » / « x (public) » si même nom
+        projects.update({p.id: f"{p.emoji} {project_names[p.id]}" for p in all_projects})
         all_tags = ctx.ds.tags.list()
-        tags = {t.id: t.name for t in all_tags}
+        tag_names = rules.label_names(all_tags)
+        tags = {t.id: tag_names[t.id] for t in all_tags}
 
         with ui.column().classes("w-full gap-2").mark("filter-bar"):
             with ui.row().classes("w-full items-center gap-2 no-wrap"):
@@ -101,7 +105,7 @@ class FilterBar:
                     "kind": self._select("Type", _options(TaskKind)),
                     "project_ids": self._select("📁 Projet", projects),
                     "tag_ids": color_tag_select(
-                        self._select("🏷️ Tags", tags), {t.name: t.color for t in all_tags}
+                        self._select("🏷️ Tags", tags), {tag_names[t.id]: t.color for t in all_tags}
                     ),
                     "due": self._select("📅 Échéance", _options(DueBucket)),
                 }

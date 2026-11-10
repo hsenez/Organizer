@@ -180,6 +180,12 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Couleur d'un nouveau tag : `TagIn.color = None` → `TagService.suggest_color(avoid)` /
   `rules.pick_distinct_color` (palette de 24 teintes, distance CIELAB, couleurs de la tâche éditée en
   priorité via `TagIn.avoid_colors`, qui n'est pas enregistré).
+- **Même nom** : un privé d'un autre est invisible, donc un public peut porter le nom d'un privé d'un autre
+  utilisateur. Dans toute liste de choix de tags / projets, passer par `rules.label_names(...)` (« x (privé) »
+  / « x (public) ») — `color_tag_select` retrouve les couleurs **par le libellé** : un libellé en double
+  donnerait la mauvaise couleur. `_LabelService._check_public_name` (création / passage en public /
+  renommage d'un public) : refuse deux publics du même nom, crée la notification `conflict`
+  (`item_type` `tag` / `project`, `item_id` = le privé) ; `NotificationService.conflict_target`.
 - Affichage des tags : `components/tag_chips.py` (`tag_chip` pour les cartes, `color_tag_select` pour un
   `ui.select` : slots Quasar `selected-item` et `option`, couleurs retrouvées par le **libellé** de
   l'option, car NiceGUI envoie `{value: index, label}` au navigateur).
@@ -556,7 +562,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 409 tests au total (+1 réservé à Windows).
+- 414 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

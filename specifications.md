@@ -237,8 +237,16 @@ Retirer le lien (annulable) conserve le fichier.
   - Privé : visible, utilisable et modifiable uniquement par son créateur.
   - Sur une tâche partagée, un projet ou un tag privé d'un autre utilisateur **n'apparaît pas** aux autres.
   - Les noms doivent être uniques parmi ce qu'un utilisateur voit (ses privés + les publics).
-- Gestion complète (créer, renommer, recolorer, réordonner, archiver, supprimer, fusionner deux tags) dans
-  **⚙️ Réglages**.
+  - **Même nom qu'un privé d'un autre** : le privé d'un autre étant invisible, un projet / tag peut devenir
+    public (création, passage en public, renommage) sous un nom qu'un autre utilisateur a déjà en privé.
+    C'est permis, mais **deux publics du même nom sont refusés** (« fusionnez plutôt »). Pour qu'il n'y ait
+    pas de confusion, partout où l'on choisit un tag / projet (éditeur, filtres, fusion), deux noms
+    identiques s'affichent « x (privé) » et « x (public) », chacun avec sa couleur ; un nom tapé dans
+    l'éditeur désigne d'abord son propre tag. Le propriétaire du privé reçoit une **notification ⚠️**
+    (« Bob a rendu public un tag du même nom que votre tag privé « x » ») avec deux boutons : **✏️ Renommer
+    mon tag** et **🔀 Fusionner dans le public** ; ils disparaissent quand le conflit n'existe plus.
+- Gestion complète (créer, renommer, recolorer, réordonner, archiver, supprimer, fusionner deux tags **ou
+  deux projets**) dans **⚙️ Réglages**. Fusionner un projet : ses tâches et événements passent dans l'autre.
 
 ### 4.6 Boards
 
@@ -647,7 +655,8 @@ Page `/notifications` : ce que **les autres** ont fait qui me concerne. Je suis 
 un événement dont je suis propriétaire ou avec qui il est partagé (pour une sous-tâche : aussi par la
 tâche parente). Types : 🤝 « Bob a partagé « … » avec vous », ✏️ « Bob a modifié « … » » (avec le détail
 de l'action, celui de l'historique : « Changer l'échéance de … »), 🚫 « ne partage plus », 🗑️ « a
-supprimé ». Une conversion tâche ↔ événement compte comme une modification.
+supprimé », ⚠️ conflit de nom avec un tag / projet public (§4.5, avec les boutons Renommer / Fusionner). Une
+conversion tâche ↔ événement compte comme une modification.
 
 - Créées dans la transaction de chaque action enregistrée dans l'historique (donc pour toutes les actions,
   y compris celles ajoutées plus tard) ; annuler / rétablir ne notifie pas ; on n'est jamais notifié de ses
@@ -1020,3 +1029,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.28 | **Événements, étape 4** : vue d'un jour — zone tâches compacte + agenda sur deux colonnes (0-12 h, 12-24 h ; `rules.agenda_layout` : coupure à midi, chevauchements côte à côte), journées entières en bandeau, glisser un événement ou ses bords par pas de 15 min (`agenda.js`), double-clic / clic droit sur une heure libre pour créer, jour précédent / suivant, heure actuelle ; correction : libellé d'entrée de menu modifiable (NiceGUI 4) ; 402 tests + gestes vérifiés à la souris dans Firefox |
 | 2026-11-10 | 1.29 | **🔔 Notifications** (§8.4 ter) : table `notification`, créées dans la transaction de chaque action enregistrée (`UnitOfWork.before_commit` → `notifications.record` : concernés = propriétaire + partages, parent d'une sous-tâche ; types partage / modification / fin de partage / suppression ; regroupement 15 min), `NotificationService`, API `/notifications`, `RemoteNotifications` (nombre de non lues gardé en mémoire), module dans la colonne de gauche avec bulle, page `/notifications` (non lues mises en valeur, clic = ouvrir + lu, tout marquer comme lu) ; 409 tests |
 | 2026-11-10 | 1.30 | Calendrier : « De qui ? » n'est plus mémorisé, la page s'ouvre toujours sur « Tous » (le choix « Mes tâches » d'avant les événements, gardé, masquait les événements partagés) ; 409 tests |
+| 2026-11-10 | 1.31 | **Tags / projets du même nom** (§4.5) : deux publics du même nom refusés ; noms rendus distincts dans les listes (`rules.label_names` : « x (privé) » / « x (public) », couleurs retrouvées sans confusion), nom tapé = son propre tag d'abord ; notification « conflict » au propriétaire du privé (Renommer / Fusionner dans le public) ; fusion de projets (`ProjectService.merge`, `POST /projects/{id}/merge`, bouton dans les réglages) ; 414 tests + vérifié dans Firefox |

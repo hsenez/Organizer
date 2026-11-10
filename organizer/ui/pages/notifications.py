@@ -2,6 +2,9 @@
 
 Les non lues sont mises en valeur (et comptées dans la bulle de la colonne de gauche) ; un clic ouvre
 l'élément et marque la notification comme lue ; « Tout marquer comme lu ».
+
+Conflit de nom (un tag / projet public porte le nom de mon tag / projet privé) : boutons « Renommer » et
+« Fusionner dans le public ».
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ from fastapi import Request
 from fastapi.responses import Response
 from nicegui import ui
 
-from organizer.core.schemas import NotificationOut
+from organizer.core.schemas import NotificationOut, ProjectPatch, TagPatch
 from organizer.ui import format as fmt
 from organizer.ui.context import UiContext
 from organizer.ui.layout import app_frame, empty_state
@@ -20,8 +23,10 @@ KINDS = {
     "change": ("✏️", "a modifié {item}"),
     "unshare": ("🚫", "ne partage plus {item} avec vous"),
     "delete": ("🗑️", "a supprimé {item}"),
+    "conflict": ("⚠️", "a rendu public un {noun} du même nom que votre {noun} privé {item}"),
 }
-ITEM_EMOJI = {"task": "📋", "event": "📅"}
+ITEM_EMOJI = {"task": "📋", "event": "📅", "tag": "🏷️", "project": "📁"}
+NOUNS = {"tag": "tag", "project": "projet"}
 
 
 def page(make_context):
@@ -45,7 +50,7 @@ def page(make_context):
 def describe(n: NotificationOut) -> str:
     """« Bob a modifié « Plombier » »."""
     _, phrase = KINDS.get(n.kind, KINDS["change"])
-    return f"{n.actor_name} {phrase.format(item=f'« {n.title} »')}"
+    return f"{n.actor_name} {phrase.format(item=f'« {n.title} »', noun=NOUNS.get(n.item_type, ''))}"
 
 
 class NotificationsView:
@@ -88,6 +93,17 @@ class NotificationsView:
                 ui.label(describe(n)).classes("notification-title truncate w-full")
                 detail = f"{ITEM_EMOJI.get(n.item_type, '')} {n.text} · {fmt.ago(n.updated_at)}"
                 ui.label(detail).classes("text-xs text-gray-500 truncate w-full")
+            if n.kind == "conflict" and n.available:
+                noun = NOUNS.get(n.item_type, "")
+                # « click.stop » : le clic ne remonte pas à la ligne (qui rafraîchirait la page).
+                ui.button(f"✏️ Renommer mon {noun}").on("click.stop", lambda _, n=n: self._rename(n)).props(
+                    "flat dense no-caps"
+                ).mark(f"notification-rename-{n.id}")
+                ui.button("🔀 Fusionner dans le public").on(
+                    "click.stop", lambda _, n=n: self._merge(n)
+                ).props("flat dense no-caps").tooltip(
+                    f"Remplacer partout votre {noun} privé par le public, puis le supprimer"
+                ).mark(f"notification-merge-{n.id}")
             if not n.read:
                 ui.element("span").classes("notification-dot").tooltip("Non lue")
             elif not n.available:
@@ -99,7 +115,7 @@ class NotificationsView:
         if not n.read:
             self.ctx.call(self.ctx.ds.notifications.mark_read, [n.id])
             self.ctx.refresh()
-        if not n.available:
+        if not n.available or n.kind == "conflict":
             return
         if n.item_type == "event":
             self.ctx.editor.open_event(n.item_id)
@@ -109,3 +125,43 @@ class NotificationsView:
     def _read_all(self) -> None:
         self.ctx.call(self.ctx.ds.notifications.mark_read)
         self.ctx.refresh()
+
+    # --- conflit de nom : renommer, fusionner ---
+
+    def _service(self, n: NotificationOut):
+        return self.ctx.ds.projects if n.item_type == "project" else self.ctx.ds.tags
+
+    def _done(self, n: NotificationOut, message: str) -> None:
+        self.ctx.call(self.ctx.ds.notifications.mark_read, [n.id])
+        ui.notify(message, position="top")
+        self.ctx.refresh()
+
+    def _rename(self, n: NotificationOut) -> None:
+        noun = NOUNS.get(n.item_type, "")
+        with ui.dialog() as dialog, ui.card().classes("w-[440px] max-w-[95vw] gap-3").mark("rename-dialog"):
+            ui.label(f"✏️ Renommer votre {noun} privé « {n.title} »").classes("text-lg font-semibold")
+            name = ui.input("Nouveau nom", value=f"{n.title} (perso)").props("outlined dense autofocus")
+            name.classes("w-full").mark("rename-input")
+
+            def save() -> None:
+                value = (name.value or "").strip()
+                if not value:
+                    return
+                patch = ProjectPatch(name=value) if n.item_type == "project" else TagPatch(name=value)
+                if self.ctx.call(self._service(n).update, n.item_id, patch) is not None:
+                    dialog.close()
+                    self._done(n, f"✏️ Renommé en « {value} »")
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                ui.button("Renommer", on_click=save).props("unelevated").mark("rename-save")
+        dialog.open()
+
+    def _merge(self, n: NotificationOut) -> None:
+        target = self.ctx.call(self.ctx.ds.notifications.conflict_target, n.item_type, n.item_id)
+        if target is None:
+            ui.notify("Plus de conflit : rien à fusionner.", position="top")
+            self.ctx.refresh()
+            return
+        if self.ctx.call(self._service(n).merge, n.item_id, target) is not None:
+            self._done(n, "🔀 Fusionné dans le public (Ctrl+Z pour annuler)")

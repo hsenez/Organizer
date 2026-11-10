@@ -409,12 +409,16 @@ class ItemEditor:
     # --- projet, tags ---
 
     def _labels(self, item: Any) -> None:
+        # Noms rendus distincts : un privé et un public d'un autre peuvent porter le même nom.
+        visible_projects = self.ds.projects.list()
+        project_names = rules.label_names(visible_projects)
         projects = {NO_PROJECT: "— Aucun projet —"}
-        projects.update({p.id: f"{p.emoji} {p.name}" for p in self.ds.projects.list()})
+        projects.update({p.id: f"{p.emoji} {project_names[p.id]}" for p in visible_projects})
         if item.project is not None and item.project.id not in projects:  # projet archivé
             projects[item.project.id] = f"{item.project.emoji} {item.project.name} (archivé)"
         all_tags = self.ds.tags.list()
-        tags = {t.id: t.name for t in all_tags}
+        tag_names = rules.label_names(all_tags)
+        tags = {t.id: tag_names[t.id] for t in all_tags}
         with ui.element("div").classes("grid grid-cols-1 sm:grid-cols-2 gap-3 w-full"):
             ui.select(
                 projects,
@@ -435,10 +439,12 @@ class ItemEditor:
                 .props("outlined dense use-chips options-dense")
                 .mark("editor-tags")
             )
-            color_tag_select(self.tags_select, {t.name: t.color for t in all_tags})
+            color_tag_select(self.tags_select, {tag_names[t.id]: t.color for t in all_tags})
 
     def _tags_changed(self, values: list) -> None:
-        existing = {t.name.casefold(): t.id for t in self.ds.tags.list()}
+        # Nom tapé : son propre tag d'abord (un public d'un autre peut porter le même nom).
+        all_tags = sorted(self.ds.tags.list(), key=lambda t: t.owner_id == self.ctx.user.id)
+        existing = {t.name.casefold(): t.id for t in all_tags}
         ids: list[int] = []
         created = False
         colors = {t.id: t.color for t in self.ds.tags.list()}

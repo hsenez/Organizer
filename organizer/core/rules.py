@@ -600,3 +600,33 @@ def _place_cluster(cluster: list[dict]) -> list[AgendaBlock]:
 def snap_minutes(minutes: float, step: int = AGENDA_STEP) -> int:
     """Arrondit au pas le plus proche, dans la journée (0 à 24 h)."""
     return max(0, min(DAY_MINUTES, round(minutes / step) * step))
+
+
+# --- Tags et projets : noms ---------------------------------------------------------------------------------
+
+
+class _Labelled(Protocol):
+    id: int
+    name: str
+    is_public: bool
+
+
+def label_names(labels: Iterable[_Labelled]) -> dict[int, str]:
+    """Noms à afficher pour des tags (ou des projets) : le nom seul, sauf quand plusieurs portent le même nom
+    (sans tenir compte de la casse) — un tag privé et un tag public d'un autre utilisateur : « x (privé) »,
+    « x (public) » (puis un numéro s'il reste des doublons)."""
+    labels = list(labels)
+    counts: dict[str, int] = {}
+    for label in labels:
+        counts[label.name.casefold()] = counts.get(label.name.casefold(), 0) + 1
+    names: dict[int, str] = {}
+    seen: dict[str, int] = {}
+    for label in labels:
+        name = label.name
+        if counts[name.casefold()] > 1:
+            name = f"{name} ({'public' if label.is_public else 'privé'})"
+            seen[name] = seen.get(name, 0) + 1
+            if seen[name] > 1:
+                name = f"{name} {seen[name]}"
+        names[label.id] = name
+    return names
