@@ -24,6 +24,7 @@ from organizer.core import rules
 from organizer.core.enums import LinkKind
 from organizer.core.schemas import LinkIn, TagIn
 from organizer.ui import format as fmt
+from organizer.ui.components.copy_link import copy_link_button
 from organizer.ui.components.file_drop import (
     attach_local_files,
     file_drop_zone,
@@ -31,7 +32,7 @@ from organizer.ui.components.file_drop import (
     reusable_upload,
 )
 from organizer.ui.components.markdown_editor import MarkdownEditor
-from organizer.ui.components.ref_links import RefLinks, open_ref
+from organizer.ui.components.ref_links import RefLinks, as_ref, open_ref
 from organizer.ui.components.tag_chips import color_tag_select
 from organizer.ui.context import UiContext
 
@@ -362,6 +363,8 @@ class ItemEditor:
             self.saved = ui.label().classes(
                 "text-sm text-green-600 transition-opacity duration-500 opacity-0"
             )
+            if not self.is_draft and getattr(item, "id", 0):
+                copy_link_button(self.ctx, self.kind, item.id, mark="editor-copy-link")
             ui.button(icon="close", on_click=self.dialog.close).props("flat round dense").tooltip(
                 "Fermer (Échap)"
             )
@@ -548,7 +551,7 @@ class ItemEditor:
     def _open_note_link(self, target: str, kind: str) -> None:
         """Clic sur un lien des notes : lien interne → l'élément (après avoir enregistré) ; une adresse
         reconnue comme web par le markdown est toujours ouverte ; sinon on devine (adresse web ou chemin)."""
-        if kind == "ref" or rules.parse_ref(target) is not None:
+        if kind == "ref" or as_ref(target) is not None:
             self._leave()
             open_ref(self.ctx, target)
             return

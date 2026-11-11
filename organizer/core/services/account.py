@@ -7,7 +7,10 @@ passe le déconnecte partout. Les jetons de sauvegarde sont gérés par les admi
 
 from __future__ import annotations
 
-from organizer.core.errors import Forbidden
+import re
+from urllib.parse import urlsplit
+
+from organizer.core.errors import Forbidden, InvalidOperation
 from organizer.core.schemas import (
     AdminUserPatch,
     ApiKeyCreated,
@@ -48,6 +51,21 @@ class AccountService:
 
     def set_pref(self, key: str, value) -> None:
         self.users.set_pref(self.user_id, key, value)
+
+    # --- adresse publique du serveur (liens à partager) ---
+
+    def public_url(self) -> str | None:
+        """Adresse par laquelle on joint le serveur de partout (``https://organizer.exemple.fr``), réglée par
+        un administrateur ; les liens copiés l'utilisent. None : pas réglée."""
+        value = self.users.get_setting(PUBLIC_URL_SETTING)
+        return value if isinstance(value, str) and value else None
+
+    def set_public_url(self, url: str | None) -> str | None:
+        """Règle l'adresse publique (admin) ; vide ou None l'efface. Renvoie l'adresse enregistrée."""
+        self._admin()
+        url = normalize_public_url(url)
+        self.users.set_setting(PUBLIC_URL_SETTING, url)
+        return url
 
     # --- appareils connectés ---
 
@@ -96,3 +114,20 @@ class AccountService:
     def revoke_backup_key(self, key_id: int) -> None:
         self._admin()
         self.auth.revoke_api_key(key_id, "backup")
+
+
+PUBLIC_URL_SETTING = "public_url"
+
+
+def normalize_public_url(url: str | None) -> str | None:
+    """``organizer.exemple.fr`` → ``https://organizer.exemple.fr`` ; refuse ce qui n'est pas une adresse."""
+    url = (url or "").strip().rstrip("/")
+    if not url:
+        return None
+    if "://" not in url:
+        url = f"https://{url}"
+    parts = urlsplit(url)
+    host_ok = re.fullmatch(r"[A-Za-z0-9.-]+(:\d+)?", parts.netloc) is not None
+    if parts.scheme not in ("http", "https") or not host_ok or parts.query or parts.fragment:
+        raise InvalidOperation("Adresse invalide : par exemple https://organizer.exemple.fr")
+    return url

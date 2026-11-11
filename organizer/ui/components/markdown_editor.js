@@ -441,6 +441,29 @@ function formatLink(view) {
   );
 }
 
+// Adresse d'Organizer collée (identique à organizer/links.py : from_url) → lien interne « note:5 ».
+const PAGE_PARAMS = { "/tasks": ["task", "task"], "/calendar": ["event", "event"], "/notes": ["note", "note"] };
+function refFromUrl(text) {
+  text = text.trim();
+  const scheme = /^organizer:(?:\/\/+)?(task|event|note)[/:](\d+)\/?$/i.exec(text);
+  if (scheme) return `${scheme[1].toLowerCase()}:${scheme[2]}`;
+  if (!/^(https?:\/\/[^\s/]+)?\/\S*$/.test(text)) return null;
+  let url;
+  try {
+    url = new URL(text, "http://organizer.invalid");
+  } catch (e) {
+    return null;
+  }
+  const open = /^\/open\/(task|event|note)\/(\d+)\/?$/.exec(url.pathname);
+  if (open) return `${open[1]}:${open[2]}`;
+  const page = PAGE_PARAMS[url.pathname.replace(/\/$/, "")];
+  const keys = [...url.searchParams.keys()];
+  if (page && keys.length === 1 && keys[0] === page[1] && /^\d+$/.test(url.searchParams.get(page[1]))) {
+    return `${page[0]}:${url.searchParams.get(page[1])}`;
+  }
+  return null;
+}
+
 // Cible d'un lien à une position donnée (double-clic hors d'un élément rendu).
 function targetAt(state, pos) {
   for (let node = CM.syntaxTree(state).resolveInner(pos, 1); node; node = node.parent) {
@@ -510,6 +533,18 @@ export default {
         if (editing && !(event.ctrlKey || event.metaKey)) return false;
         event.preventDefault();
         this.openTarget(element.dataset.target, element.dataset.kind);
+        return true;
+      },
+      // Lien d'Organizer collé (copié avec « 🔗 Copier le lien », ou adresse d'une page) → lien interne : la
+      // pastille affiche le titre actuel.
+      paste: (event, view) => {
+        if (!this.refPicker || view.state.readOnly) return false;
+        const ref = refFromUrl(event.clipboardData?.getData("text/plain") || "");
+        if (!ref) return false;
+        event.preventDefault();
+        const insert = `[](${ref})`;
+        const { from, to } = view.state.selection.main;
+        view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: "input.paste" });
         return true;
       },
       dblclick: (event, view) => {

@@ -403,6 +403,15 @@ class RemoteAccount(_Part):
         self.api.call("PUT", f"/users/me/prefs/{quote(key, safe='')}", json=value)
         self.api.cache.put(f"pref:{key}", copy.deepcopy(value))
 
+    def public_url(self) -> str | None:
+        data = self.api.cache.get("public_url", lambda: self.api.call("GET", "/server/public-url", Any))
+        return (data or {}).get("url")
+
+    def set_public_url(self, url: str | None) -> str | None:
+        data = self.api.call("PUT", "/server/public-url", Any, json={"url": url})
+        self.api.cache.put("public_url", data)
+        return data.get("url")
+
     def sessions(self) -> list[SessionOut]:
         return self.api.call("GET", "/auth/sessions", list[SessionOut])
 
@@ -473,9 +482,10 @@ class RemoteDataSource:
         return f"{self.api.base_url}/api/v1/attachments/{quote(attachment_id)}"
 
     def web_url(self, path: str) -> str | None:
-        """Adresse web d'une page (« copier le lien ») : celle du serveur configuré, pas l'adresse locale de
-        la fenêtre du client."""
-        return f"{self.api.server_url.rstrip('/')}{path}"
+        """Adresse web d'une page (« copier le lien ») : l'adresse publique réglée sur le serveur, sinon
+        celle du serveur configuré (jamais l'adresse locale de la fenêtre du client)."""
+        base = self.account.public_url() or self.api.server_url
+        return f"{base.rstrip('/')}{path}"
 
     def backup_url(self, uploads: bool = True) -> str:
         return f"{self.api.base_url}/api/v1/admin/backup" + ("" if uploads else "?uploads=false")

@@ -412,6 +412,11 @@ curl -sI http://organizer.blou.top/ | head -1      # 301 : redirigé vers https
   l'adresse **avec** `https://` : `https://organizer.blou.top` (sans `https://`, le client suppose une
   adresse locale en HTTP et ajoute le port 2603). À la maison, il passera tout seul par le réseau local
   (voir « Réseau local automatique » plus haut).
+- **Liens à partager** : Réglages → 🗄️ Données → 🌍 **Adresse publique** = `https://organizer.blou.top`.
+  Les boutons « 🔗 Copier le lien » (notes, tâches, événements) donnent alors un lien valable partout ; il
+  propose d'ouvrir l'élément dans le client bureau (protocole `organizer://`, déclaré par l'installeur du
+  client : relancer `install/linux/install.sh --reuse` ou `install.bat -Reuse` sur les postes déjà
+  installés) ou dans le navigateur.
 - **Réseau local** : `http://<ip-du-pi>:2603` continue de fonctionner (le serveur écoute toujours sur
   `0.0.0.0`). Pour n'autoriser **que** le tunnel : `deploy/install.sh --reuse --host 127.0.0.1` (les appareils
   de la maison passent alors eux aussi par `https://organizer.blou.top`). La sauvegarde par jeton marche

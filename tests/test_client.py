@@ -177,6 +177,10 @@ def test_agenda_through_api_matches_local(remote, local, state):
         remote.agenda.create(EventCreate(title="X", start_date=day, start_time=time(9), end_time=time(8)))
 
 
+def local_public_url(state):
+    return AccountService(state.users, state.auth, 1).public_url()
+
+
 def test_notes_through_api_match_local(remote, local, state):
     bob = state.users.create_user("bob", "motdepasse-12", "Bob", by=local.actor)
     tag = remote.tags.create(TagIn(name="maison"))
@@ -201,7 +205,11 @@ def test_notes_through_api_match_local(remote, local, state):
     remote.notes.delete(note.id)
     with pytest.raises(NotFound, match="introuvable"):
         remote.notes.get(note.id)
-    assert remote.web_url("/notes?note=1").endswith("/notes?note=1")
+    # Liens à partager : adresse du serveur configuré, puis adresse publique réglée par l'admin.
+    assert remote.web_url("/open/note/1") == f"{remote.api.server_url.rstrip('/')}/open/note/1"
+    assert remote.account.set_public_url("organizer.exemple.fr") == "https://organizer.exemple.fr"
+    assert remote.account.public_url() == local_public_url(state) == "https://organizer.exemple.fr"
+    assert remote.web_url("/open/note/1") == "https://organizer.exemple.fr/open/note/1"
 
 
 def test_notifications_through_api_match_local(remote, local, state):

@@ -14,6 +14,7 @@ from organizer.server.api import (
     local,
     notes,
     notifications,
+    server_settings,
     tasks,
     undo,
     users,
@@ -35,5 +36,6 @@ for module in (
     events,
     admin,
     local,
+    server_settings,
 ):
     api_router.include_router(module.router)

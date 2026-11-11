@@ -10,7 +10,7 @@ fenêtre native (pywebview), branchée sur l'API REST du serveur.
 - 🔔 Notifications système des rappels (``notifications.ReminderNotifier``).
 - **Arrière-plan** : fermer la fenêtre la cache (``window.py``) ; une seule instance par utilisateur, que
   les lancements suivants (lanceur, raccourcis clavier globaux) pilotent par ``/_organizer/control/<action>``
-  (``instance.py``) : ``show``, ``new-task``, ``quit``.
+  (``instance.py``) : ``show``, ``new-task``, ``quit``, ``open`` (lien ``organizer://note/5``).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from nicegui import Client, app, run, ui
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from organizer import ASSETS_DIR, FAVICON, versioning
+from organizer import ASSETS_DIR, FAVICON, links, versioning
 from organizer.client import instance, system, window
 from organizer.client.api import ApiClient
 from organizer.client.config import ClientConfig, ConfigStore, normalize_server_url
@@ -57,6 +57,7 @@ from organizer.core.events import ChangeEvent
 from organizer.core.schemas import LoginOut, TaskOut, UserOut
 from organizer.ui.auth_shell import auth_shell
 from organizer.ui.components.connection_badge import desktop_connection
+from organizer.ui.components.ref_links import open_ref
 from organizer.ui.context import Banner, Connection, UiContext
 from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
@@ -467,6 +468,11 @@ class DesktopClient:
         self.show_window(activation_token)
         self._in_page(lambda ctx: ctx.editor.open_new(), "/?task=new")
 
+    def open_item(self, kind: str, item_id: int, activation_token: str | None = None) -> None:
+        """Lien ``organizer://…`` : montre la fenêtre et y ouvre la tâche, l'événement ou la note."""
+        self.show_window(activation_token)
+        self._in_page(lambda ctx: open_ref(ctx, links.ref(kind, item_id)), links.page_path(kind, item_id))
+
     def quit(self) -> None:
         """Arrête vraiment le client (fenêtre, serveur local, rappels)."""
         if not self._window_call("organizer_quit"):
@@ -495,14 +501,21 @@ class DesktopClient:
         if not self.launch_secret or not secrets.compare_digest(secret, self.launch_secret):
             return PlainTextResponse("Accès refusé.", status_code=403)
         try:
-            token = (await request.json()).get("activation_token")
+            body = await request.json()
         except ValueError:
-            token = None
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        token = body.get("activation_token")
         log.info("Commande reçue : %s", action)
         if action == "show":
             self.show_window(token)
         elif action == "new-task":
             self.new_task(token)
+        elif action == "open":
+            ref = links.split_ref(str(body.get("ref") or ""))
+            if ref is None:
+                return PlainTextResponse("Lien invalide.", status_code=400)
+            self.open_item(*ref, activation_token=token)
         elif action == "quit":
             self.quit()
         elif action == "hidden":
@@ -604,7 +617,12 @@ def main(args: argparse.Namespace) -> None:
         os.environ[ENV_SECRET] = secrets.token_urlsafe(24)
         os.environ[ENV_PORT] = str(args.port or _free_port())
     secret, port = os.environ[ENV_SECRET], int(os.environ[ENV_PORT])
-    start_url = f"http://127.0.0.1:{port}/?launch={secret}" + ("&task=new" if args.new_task else "")
+    ref = links.from_url(args.link) if getattr(args, "link", None) else None
+    if ref is not None:  # lancé par un lien organizer://… : la fenêtre s'ouvre sur l'élément
+        path = links.page_path(*links.split_ref(ref))
+        start_url = f"http://127.0.0.1:{port}{path}&launch={secret}"
+    else:
+        start_url = f"http://127.0.0.1:{port}/?launch={secret}" + ("&task=new" if args.new_task else "")
 
     client = DesktopClient(ConfigStore(directory), launch_secret=secret, port=port)
     client.install(single_instance=True)

@@ -12,6 +12,7 @@ Installation du client bureau Organizer sous Windows (utilisateur courant, sans 
 raccourcis du menu Démarrer, du Bureau et du démarrage de session. Les raccourcis clavier globaux sont
 enregistrés par Organizer lui-même quand il tourne (d'où le démarrage avec la session par défaut).
 Les raccourcis lancent pythonw.exe (pas de console) ; si Organizer tourne déjà, la commande lui est transmise.
+Déclare aussi le protocole organizer:// (liens « Ouvrir dans le client bureau ») pour l'utilisateur courant.
 #>
 param(
     [switch]$Uninstall,
@@ -30,6 +31,7 @@ $Pythonw = Join-Path $Venv "Scripts\pythonw.exe"
 $Script = Join-Path $Root "run_client.py"
 $Icon = Join-Path $Root "organizer\assets\organizer.ico"
 
+$Protocol = "HKCU:\Software\Classes\organizer"     # liens organizer://note/5
 $Programs = [Environment]::GetFolderPath("Programs")   # menu Démarrer de l'utilisateur
 $Links = [ordered]@{
     Main    = Join-Path $Programs "Organizer.lnk"
@@ -69,6 +71,7 @@ function New-Link($Path, $Arguments, $Description, $Hotkey) {
 if ($Uninstall) {
     if (Test-Path $Python) { & $Python $Script --quit }
     foreach ($path in $Links.Values) { if (Test-Path $path) { Remove-Item $path } }
+    if (Test-Path $Protocol) { Remove-Item -Recurse -Force $Protocol }
     Write-Host "Raccourcis d'Organizer retirés (le dossier $Root et son .venv restent)." -ForegroundColor Green
     exit 0
 }
@@ -123,6 +126,13 @@ else { New-Link $Links.Desktop "" "Organiseur de tâches" $null }
 if ($NoAutostart) { if (Test-Path $Links.Startup) { Remove-Item $Links.Startup } }
 else { New-Link $Links.Startup "--hidden" "Démarre Organizer en arrière-plan (rappels, raccourcis)" $null }
 
+# --- protocole organizer:// (« Ouvrir dans le client bureau » depuis un lien partagé) ---
+Write-Step "Déclaration des liens organizer://"
+New-Item -Path $Protocol -Force -Value "URL:Organizer" | Out-Null
+Set-ItemProperty -Path $Protocol -Name "URL Protocol" -Value ""
+New-Item -Path "$Protocol\DefaultIcon" -Force -Value "`"$Icon`",0" | Out-Null
+New-Item -Path "$Protocol\shell\open\command" -Force -Value "`"$Pythonw`" `"$Script`" `"%1`"" | Out-Null
+
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 @{ NoAutostart = [bool]$NoAutostart; NoDesktop = [bool]$NoDesktop; ShowKey = $ShowKey; NewKey = $NewKey } |
     ConvertTo-Json | Set-Content -Path $OptionsFile -Encoding UTF8
@@ -136,5 +146,6 @@ try {
 Write-Host ""
 Write-Host "Terminé ! « Organizer » est dans le menu Démarrer." -ForegroundColor Green
 Write-Host "  $ShowKey : ouvrir Organizer      $NewKey : nouvelle tâche"
+Write-Host "  Les liens organizer://… (partagés depuis Organizer) ouvrent ce client."
 Write-Host "  Fermer la fenêtre la cache : Organizer continue en arrière-plan (rappels, raccourcis)."
 Write-Host "  Pour l'arrêter : menu du compte > Quitter Organizer, ou « Organizer - Quitter » dans le menu Démarrer."

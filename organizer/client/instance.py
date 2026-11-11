@@ -19,7 +19,7 @@ ENV_SECRET = "ORGANIZER_CLIENT_LAUNCH"
 ENV_PORT = "ORGANIZER_CLIENT_PORT"
 CONTROL_PATH = "/_organizer/control"
 SECRET_HEADER = "X-Organizer-Secret"
-ACTIONS = ("show", "new-task", "quit", "ping", "hidden")
+ACTIONS = ("show", "new-task", "quit", "ping", "hidden", "open")
 
 
 def write(directory: Path, port: int, secret: str) -> None:
@@ -39,9 +39,10 @@ def remove(directory: Path) -> None:
         pass
 
 
-def send(port: int, secret: str, action: str, timeout: float = 2.0) -> bool:
-    """Envoie une commande à une instance ; True si elle l'a acceptée."""
-    body = json.dumps({"activation_token": os.environ.get("XDG_ACTIVATION_TOKEN")}).encode()
+def send(port: int, secret: str, action: str, data: dict | None = None, timeout: float = 2.0) -> bool:
+    """Envoie une commande à une instance (``data`` : paramètres, ex. ``{"ref": "note:5"}``) ; True si elle
+    l'a acceptée."""
+    body = json.dumps({**(data or {}), "activation_token": os.environ.get("XDG_ACTIVATION_TOKEN")}).encode()
     request = urllib.request.Request(
         f"http://127.0.0.1:{port}{CONTROL_PATH}/{action}",
         data=body,
@@ -55,15 +56,15 @@ def send(port: int, secret: str, action: str, timeout: float = 2.0) -> bool:
         return False
 
 
-def forward(directory: Path, action: str) -> bool:
+def forward(directory: Path, action: str, data: dict | None = None) -> bool:
     """Transmet ``action`` à l'instance déjà lancée ; False s'il n'y en a pas (ou plus)."""
     try:
-        data = json.loads((directory / FILENAME).read_text(encoding="utf-8"))
-        port, secret = int(data["port"]), str(data["secret"])
+        running = json.loads((directory / FILENAME).read_text(encoding="utf-8"))
+        port, secret = int(running["port"]), str(running["secret"])
     except (OSError, ValueError, KeyError, TypeError):
         return False
     if os.name == "nt":  # ce lancement (clic sur un raccourci) cède au client son droit au premier plan
         from organizer.client import winshell
 
         winshell.allow_foreground_for_others()
-    return send(port, secret, action)
+    return send(port, secret, action, data)

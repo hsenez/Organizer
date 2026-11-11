@@ -15,7 +15,6 @@ Adresse : ``/notes?note=<id>`` (ou ``new``) ; « 🔗 Copier le lien » donne l'
 
 from __future__ import annotations
 
-import json
 import time
 
 from fastapi import Request
@@ -27,11 +26,12 @@ from organizer.core.enums import LinkKind
 from organizer.core.errors import OrganizerError
 from organizer.core.schemas import NoteCreate, NoteFilter, NoteOut, NotePatch, ShareSpec
 from organizer.ui import format as fmt
+from organizer.ui.components.copy_link import copy_link_button
 from organizer.ui.components.emoji_picker import emoji_button
 from organizer.ui.components.item_editor import label_selects, open_link, tag_ids_from
 from organizer.ui.components.markdown_editor import MarkdownEditor, markdown_toolbar
 from organizer.ui.components.ownership import ownership_emoji, ownership_text
-from organizer.ui.components.ref_links import RefLinks, open_ref
+from organizer.ui.components.ref_links import RefLinks, as_ref, open_ref
 from organizer.ui.components.sharing import public_switch, share_editor
 from organizer.ui.components.tag_chips import tag_chip
 from organizer.ui.context import UiContext
@@ -40,27 +40,6 @@ from organizer.ui.layout import app_frame, empty_state
 SCOPES = {"all": "👥 Toutes", "mine": "👤 Les miennes", "shared": "🤝 Partagées avec moi"}
 TYPING_SECONDS = 5.0  # une frappe plus récente : on ne remplace pas le texte sous les doigts
 SNIPPET_LENGTH = 90
-
-# Copie dans le presse-papiers, y compris hors HTTPS (navigator.clipboard n'existe qu'en contexte sûr).
-COPY_JS = """
-<script>
-window.organizerCopy = (text) => {
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text).then(() => true, () => false);
-  }
-  const area = document.createElement("textarea");
-  area.value = text;
-  area.style.position = "fixed";
-  area.style.opacity = "0";
-  document.body.appendChild(area);
-  area.select();
-  let done = false;
-  try { done = document.execCommand("copy"); } catch (e) { done = false; }
-  area.remove();
-  return Promise.resolve(done);
-};
-</script>
-"""
 
 
 def page(make_context):
@@ -103,7 +82,6 @@ class NotesView:
         self.editor: MarkdownEditor | None = None
         self.ref_links: RefLinks | None = None
         ctx.open_note = self.select
-        ui.add_body_html(COPY_JS)
         with ui.row().classes("notes-page w-full page-fill-grow no-wrap gap-4 items-stretch") as self.root:
             with ui.column().classes("notes-list gap-2"):
                 with ui.row().classes("w-full items-center gap-2 no-wrap"):
@@ -295,27 +273,7 @@ class NotesView:
         button.tooltip("Désépingler" if note.pinned else "Épingler en haut de ma liste").mark("note-pin")
 
     def _copy_button(self, note: NoteOut) -> None:
-        path = f"/notes?note={note.id}"
-        url = self.ctx.ds.web_url(path)
-        target = json.dumps(url) if url else f"location.origin + {json.dumps(path)}"
-        button = (
-            ui.button(icon="link")
-            .props("flat round dense")
-            .tooltip("Copier le lien (adresse web de cette note)")
-        )
-        # Copie dans le navigateur, au moment du clic (le geste de l'utilisateur est exigé).
-        button.on(
-            "click",
-            lambda e: self._copied(bool(e.args)),
-            js_handler=f"() => organizerCopy({target}).then((ok) => emit(ok))",
-        )
-        button.mark("note-copy-link")
-
-    def _copied(self, ok: bool) -> None:
-        if ok:
-            ui.notify("🔗 Lien copié", position="top", timeout=1500)
-        else:
-            ui.notify("Impossible de copier le lien ici", type="warning", position="top")
+        copy_link_button(self.ctx, "note", note.id, mark="note-copy-link")
 
     def _details(self, note: NoteOut) -> None:
         label_selects(
@@ -460,7 +418,7 @@ class NotesView:
     # ==================================================================================================
 
     def _open_link(self, target: str, kind: str) -> None:
-        if kind == "ref" or rules.parse_ref(target) is not None:
+        if kind == "ref" or as_ref(target) is not None:
             self._open_ref(target)
             return
         link_kind = LinkKind.URL if kind == "url" else rules.detect_link_kind(target)

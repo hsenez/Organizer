@@ -15,7 +15,7 @@ from sqlalchemy import Engine, func
 from sqlmodel import Session, select
 
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
-from organizer.core.models import User, UserPref, utcnow
+from organizer.core.models import AppSetting, User, UserPref, utcnow
 from organizer.core.schemas import AdminUserPatch, PasswordChange, ProfilePatch, UserOut, UserPublic
 from organizer.core.services.base import Actor
 
@@ -128,6 +128,26 @@ class UserService:
             row.value = json.dumps(value, ensure_ascii=False)
             row.updated_at = utcnow()
             s.add(row)
+            s.commit()
+
+    # --- réglages du serveur ---
+
+    def get_setting(self, key: str, default: Any = None) -> Any:
+        with Session(self.engine) as s:
+            row = s.get(AppSetting, key)
+            return json.loads(row.value) if row is not None else default
+
+    def set_setting(self, key: str, value: Any) -> None:
+        with Session(self.engine) as s:
+            row = s.get(AppSetting, key)
+            if value is None:
+                if row is not None:
+                    s.delete(row)
+            else:
+                row = row or AppSetting(key=key, value="null")
+                row.value = json.dumps(value, ensure_ascii=False)
+                row.updated_at = utcnow()
+                s.add(row)
             s.commit()
 
     def list_public(self) -> list[UserPublic]:

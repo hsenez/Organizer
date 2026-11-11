@@ -20,10 +20,23 @@ from organizer.client.config import ConfigStore
 
 @pytest.mark.parametrize(
     ("argv", "expected"),
-    [([], "show"), (["--new-task"], "new-task"), (["--quit"], "quit"), (["--hidden"], "ping")],
+    [
+        ([], "show"),
+        (["--new-task"], "new-task"),
+        (["--quit"], "quit"),
+        (["--hidden"], "ping"),
+        (["organizer://note/5"], "open"),
+        (["organizer://n'importe-quoi"], "show"),
+    ],
 )
 def test_launcher_command(argv, expected):
     assert launcher.command(launcher.parse_args(argv)) == expected
+
+
+def test_launcher_link_ref():
+    assert launcher.link_ref(launcher.parse_args(["organizer://task/12"])) == "task:12"
+    assert launcher.link_ref(launcher.parse_args(["organizer:event/8/"])) == "event:8"
+    assert launcher.link_ref(launcher.parse_args([])) is None
 
 
 def test_launcher_rejects_two_actions():
@@ -64,6 +77,11 @@ def test_forward_to_running_instance(tmp_path, fake_instance, monkeypatch):
     instance.write(tmp_path, port, "s3cret")
     assert instance.forward(tmp_path, "new-task")
     assert received == [(f"{instance.CONTROL_PATH}/new-task", {"activation_token": "jeton-kde"})]
+    assert instance.forward(tmp_path, "open", {"ref": "note:5"})
+    assert received[-1] == (
+        f"{instance.CONTROL_PATH}/open",
+        {"ref": "note:5", "activation_token": "jeton-kde"},
+    )
     instance.write(tmp_path, port, "mauvais")
     assert not instance.forward(tmp_path, "show")  # secret refusé
     instance.write(tmp_path, 9, "s3cret")
@@ -78,6 +96,9 @@ def test_control_endpoint(tmp_path):
     client.show_window = lambda token=None: calls.append(("show", token))
     client.new_task = lambda token=None: calls.append(("new-task", token))
     client.quit = lambda: calls.append(("quit", None))
+    client.open_item = lambda kind, item_id, activation_token=None: calls.append(
+        ("open", f"{kind}:{item_id}")
+    )
     api = FastAPI()
     api.add_api_route(f"{instance.CONTROL_PATH}/{{action}}", client.control, methods=["POST"])
     api.add_middleware(LaunchGuard, secret="s3cret")
@@ -88,9 +109,11 @@ def test_control_endpoint(tmp_path):
     assert http.post(f"{url}/new-task", json={}, headers=headers).status_code == 200
     assert http.post(f"{url}/quit", json={}, headers=headers).status_code == 200
     assert http.post(f"{url}/ping", json={}, headers=headers).status_code == 200
+    assert http.post(f"{url}/open", json={"ref": "note:5"}, headers=headers).status_code == 200
+    assert http.post(f"{url}/open", json={"ref": "rien"}, headers=headers).status_code == 400
     assert http.post(f"{url}/inconnue", json={}, headers=headers).status_code == 404
     assert http.post(f"{url}/show", json={}, headers={instance.SECRET_HEADER: "non"}).status_code == 403
-    assert calls == [("show", "t"), ("new-task", None), ("quit", None)]
+    assert calls == [("show", "t"), ("new-task", None), ("quit", None), ("open", "note:5")]
 
 
 def test_launch_guard_keeps_other_parameters():
@@ -125,7 +148,8 @@ def test_desktop_files(tmp_path, monkeypatch):
     written = install.install_files(paths, "/venv/bin/python", root, autostart=True)
     launcher_file = paths.applications / "organizer.desktop"
     text = launcher_file.read_text()
-    assert f'Exec=/venv/bin/python "{root}/run_client.py"\n' in text
+    assert f'Exec=/venv/bin/python "{root}/run_client.py" %u\n' in text
+    assert "MimeType=x-scheme-handler/organizer;" in text
     assert f'Exec=/venv/bin/python "{root}/run_client.py" --new-task' in text
     assert "Actions=new-task;quit;" in text and "Icon=organizer" in text
     autostart = (paths.autostart / "organizer.desktop").read_text()

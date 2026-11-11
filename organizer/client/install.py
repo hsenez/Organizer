@@ -9,6 +9,8 @@ Les options choisies sont retenues (``install.json`` dans le dossier de configur
 - Lanceur ``~/.local/share/applications/organizer.desktop`` (menu des applications), avec les actions
   « Nouvelle tâche » et « Quitter Organizer » (clic droit sur l'icône) ;
 - icônes dans ``~/.local/share/icons/hicolor`` ;
+- protocole ``organizer://`` (liens « Ouvrir dans le client bureau ») : ``MimeType`` du lanceur et
+  ``xdg-mime default`` ;
 - démarrage en arrière-plan à l'ouverture de session (``~/.config/autostart``) : rappels et raccourcis
   disponibles tout de suite ;
 - **raccourcis clavier globaux** : sous Wayland, une application ne peut pas écouter le clavier hors de sa
@@ -30,11 +32,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from organizer import ASSETS_DIR
+from organizer import ASSETS_DIR, links
 from organizer.client import system
 from organizer.client.config import ConfigStore
 
 APP_ID = "organizer"
+SCHEME = links.SCHEME  # liens organizer://note/5
 DESKTOP_FILE = f"{APP_ID}.desktop"
 ASSETS = ASSETS_DIR
 ICON_SIZES = (16, 24, 32, 48, 64, 128, 256, 512)
@@ -100,7 +103,8 @@ def desktop_entry(python: str, root: Path, *, autostart: bool = False) -> str:
         "Name=Organizer",
         "GenericName=Organiseur de tâches",
         "Comment=Tâches, kanbans et matrice d'Eisenhower",
-        f"Exec={command(python, root, '--hidden') if autostart else command(python, root)}",
+        # « %u » : lien organizer://… reçu du système (protocole déclaré par MimeType).
+        f"Exec={command(python, root, '--hidden') if autostart else command(python, root) + ' %u'}",
         f"Icon={APP_ID}",
         "Terminal=false",
         "Categories=Office;ProjectManagement;",
@@ -112,6 +116,7 @@ def desktop_entry(python: str, root: Path, *, autostart: bool = False) -> str:
         lines += ["X-GNOME-Autostart-enabled=true", "X-KDE-autostart-after=panel"]
     else:
         lines += [
+            f"MimeType=x-scheme-handler/{SCHEME};",
             "Actions=new-task;quit;",
             "",
             "[Desktop Action new-task]",
@@ -173,6 +178,21 @@ def refresh_caches(paths: Paths) -> None:
         if shutil.which(cmd[0]):
             with contextlib.suppress(OSError, subprocess.SubprocessError):
                 subprocess.run(cmd, check=False, capture_output=True, timeout=60)
+
+
+def register_scheme() -> bool:
+    """Fait d'Organizer l'application des liens ``organizer://`` (``~/.config/mimeapps.list``)."""
+    if not shutil.which("xdg-mime"):
+        return False
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        result = subprocess.run(
+            ["xdg-mime", "default", DESKTOP_FILE, f"x-scheme-handler/{SCHEME}"],
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    return False
 
 
 # --- raccourcis clavier ------------------------------------------------------------------------------------
@@ -369,6 +389,10 @@ def main(argv: list[str] | None = None) -> int:
     save_options(system.config_dir(), args)
     refresh_caches(paths)
     print(f"✅ Lanceur « Organizer » ajouté au menu des applications ({paths.applications / DESKTOP_FILE})")
+    if register_scheme():
+        print(f"✅ Les liens {SCHEME}://… (« Ouvrir dans le client bureau ») ouvrent Organizer")
+    else:
+        print(f"⚠️ Liens {SCHEME}://… non déclarés (xdg-mime introuvable)")
     print(
         "✅ Démarrage en arrière-plan à l'ouverture de session"
         if not args.no_autostart

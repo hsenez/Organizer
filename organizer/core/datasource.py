@@ -79,8 +79,10 @@ class LocalDataSource:
         return f"/api/v1/attachments/{attachment_id}"
 
     def web_url(self, path: str) -> str | None:
-        """Adresse web d'une page : None = celle par laquelle le navigateur est venu (``location.origin``)."""
-        return None
+        """Adresse web d'une page (liens à partager) : l'adresse publique réglée par l'admin ; None si elle
+        ne l'est pas (on prend alors celle par laquelle le navigateur est venu, ``location.origin``)."""
+        public = self.account.public_url()
+        return f"{public}{path}" if public else None
 
     def backup_url(self, uploads: bool = True) -> str:
         """Sauvegarde du serveur (admin), téléchargée par le navigateur avec le cookie de session."""

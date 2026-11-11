@@ -705,6 +705,7 @@ def _password_dialog(ctx: UiContext, user) -> None:
 
 
 def _data(ctx: UiContext) -> None:
+    _public_url(ctx)
     with _card(
         "💾 Sauvegarde",
         "Archive .tar de tout le serveur : la base de données (copie cohérente, prise sans arrêter le "
@@ -738,6 +739,34 @@ def _data(ctx: UiContext) -> None:
             "text-xs text-gray-500"
         )
     _backup_keys(ctx)
+
+
+def _public_url(ctx: UiContext) -> None:
+    with _card(
+        "🌍 Adresse publique",
+        "Adresse par laquelle on joint Organizer de partout (ex. https://organizer.exemple.fr) : les liens "
+        "« 🔗 Copier le lien » l'utilisent, quel que soit l'appareil. Vide : l'adresse de la page en cours.",
+    ):
+        field = (
+            ui.input("Adresse publique", value=ctx.ds.account.public_url() or "")
+            .props("outlined dense clearable")
+            .classes("w-full")
+            .mark("public-url")
+        )
+
+        def save() -> None:
+            def action():
+                field.set_value(ctx.ds.account.set_public_url(field.value or None) or "")
+
+            _try(action, "✔ Adresse publique enregistrée")
+
+        async def from_page() -> None:
+            field.set_value(await ui.run_javascript("location.origin"))
+
+        with ui.row().classes("gap-2"):
+            ui.button("💾 Enregistrer", on_click=save).props("no-caps").mark("public-url-save")
+            if not ctx.ds.is_desktop:
+                ui.button("📍 Adresse de cette page", on_click=from_page).props("flat no-caps")
 
 
 def _backup_keys(ctx: UiContext) -> None:

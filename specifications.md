@@ -307,9 +307,27 @@ Tables `note`, `note_tag`, `note_share`, `note_pin` (toutes dans l'historique an
   épingler ne notifie personne.
 - API : `POST /notes/query`, `POST /notes`, `GET|PATCH|DELETE /notes/{id}`, `PUT /notes/{id}/shares`,
   `PUT /notes/{id}/pin`, `POST /refs/resolve` (`{refs}`), `GET /refs/backlinks?ref=note:5`.
-- Page et éditeur : §8.4 quater. **Liens hors du logiciel** : « 🔗 Copier le lien » donne l'adresse web
-  (`https://…/notes?note=5`, valable partout : navigateur, téléphone, mail) ; un lien `organizer://` qui
-  ouvrirait le client bureau (Linux, Windows) est prévu ensuite.
+- Page et éditeur : §8.4 quater. Liens à partager hors du logiciel : §4.9.
+
+### 4.9 🔗 Liens à partager (hors du logiciel)
+
+- **« 🔗 Copier le lien »** : en-tête d'une note, de l'éditeur de tâche et de l'éditeur d'événement. Il copie
+  `https://<adresse publique>/open/<note|task|event>/<id>` (`organizer/links.py`).
+- **Adresse publique** (Réglages → 🗄️ Données, admin ; table `app_setting`, route `GET|PUT
+  /server/public-url`) : celle par laquelle on joint le serveur de partout (`https://organizer.blou.top`).
+  Les liens copiés l'utilisent quel que soit l'appareil (sinon : l'adresse de la page, ou celle du serveur
+  configuré sur le client bureau — à la maison une adresse locale, inutilisable ailleurs).
+- **Page `/open/<type>/<id>`** (sans session, ne révèle rien de l'élément) : « 🖥️ Client bureau
+  Organizer » (`organizer://<type>/<id>`) ou « 🌐 Continuer dans le navigateur » (page de l'élément ;
+  connexion demandée si besoin, puis retour à l'élément) ; « Toujours faire ce choix sur cet appareil »
+  (`localStorage`) ; un téléphone va directement au navigateur.
+- **Protocole `organizer://`** déclaré par les installeurs du client bureau : Linux (`MimeType` du lanceur
+  + `xdg-mime default`), Windows (`HKCU\Software\Classes\organizer`). Le lanceur reçoit le lien,
+  le transmet au client lancé (commande `open`) ou le démarre directement sur l'élément.
+- **Dans le texte** : une adresse d'Organizer **collée** (`…/open/task/12`, `…/notes?note=5`,
+  `…/tasks?task=12`, `…/calendar?event=8`, `organizer://…`, quelle que soit l'adresse du serveur) devient
+  un lien interne `[](task:12)` (pastille au titre actuel) ; une telle adresse **cliquée** ouvre l'élément
+  dans l'application.
 
 ---
 
@@ -712,7 +730,7 @@ recherche, « De qui ? ») et **note à droite**. Sur téléphone : la liste, pu
 
 - **➕ Nouvelle** crée tout de suite une note « Sans titre » (titre sélectionné pour être retapé).
 - En-tête : **emoji** (menu : la liste personnelle des réglages, ou un emoji tapé), **titre** (enregistré
-  à la sortie du champ / Entrée), **📌 épingler** (personnel), **🔗 copier le lien** (adresse web),
+  à la sortie du champ / Entrée), **📌 épingler** (personnel), **🔗 copier le lien** (§4.9),
   **🗑️ supprimer** (Ctrl+Z annule).
 - Projet et tags (comme l'éditeur de tâche) ; propriétaire : section repliable **👥 Partage** (📢 publique,
   partage par personne ✏️ modifiable / 👁️ lecture seule).
@@ -783,7 +801,7 @@ Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders
   expiration ; déconnecter un appareil ou tous les autres.
 - 👥 **Utilisateurs** (admin) : créer un compte, réinitialiser un mot de passe, désactiver / réactiver,
   donner / retirer les droits admin (pas sur soi-même).
-- 🗄️ **Données** (admin) : ⬇️ télécharger une **sauvegarde** du serveur (archive `.tar`, pièces jointes
+- 🗄️ **Données** (admin) : 🌍 **adresse publique** (liens à partager, §4.9) ; ⬇️ télécharger une **sauvegarde** du serveur (archive `.tar`, pièces jointes
   incluses ou non ; le navigateur la télécharge, le client bureau l'enregistre dans « Téléchargements ») ;
   🔑 **jetons de sauvegarde** : créer (le secret n'est affiché qu'une fois, avec un exemple `curl`), voir la
   dernière utilisation (date, adresse), révoquer. Voir §10.5.
@@ -1124,3 +1142,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-11 | 1.36 | **📝 Notes, étape 1** (§4.8) : tables `note`, `note_tag`, `note_share`, `note_pin` ; `NoteService` (droits comme les événements, épingles personnelles, filtres, liens internes `task:` / `event:` / `note:` résolus pour le lecteur, liens retour) ; tags / projets supprimés ou fusionnés aussi sur les notes ; notifications ; API `/notes` et `/refs`, `RemoteNotes` ; 430 tests |
 | 2026-11-11 | 1.37 | **📝 Notes, étapes 2-3** (§8.4 quater) : module 📝 Notes (liste + note, téléphone en deux écrans), emoji (liste personnelle modifiable dans Réglages → Apparence, aussi pour les projets), épingle, copier le lien, partage / publique, lecture seule ; éditeur markdown : barre de boutons, lecture seule, **tri des cases** à la coche (notes), **liens internes** en pastilles (titre actuel, 🔒 inaccessible), recherche « [[ » / « 🔗 Lier à… » (aussi dans les notes des tâches et des événements), « Cité dans » ; notes dans Ctrl+K et les notifications ; composants `ref_links`, `sharing`, `emoji_picker`, `label_selects` / `tag_ids_from` partagés ; 442 tests + vérifié dans Firefox (tri, Ctrl+Z, boutons, [[, pastilles, lecture seule, téléphone) |
 | 2026-11-11 | 1.37.1 | Barre de boutons des notes : après une puce, un numéro ou une case (toujours suivis d'une espace), le curseur se place après le préfixe au lieu de rester devant ; vérifié dans Firefox |
+| 2026-11-11 | 1.38 | **🔗 Liens à partager** (§4.9) : « Copier le lien » aussi sur les tâches et les événements ; adresse publique réglable par l'admin (table `app_setting`, `/server/public-url`) utilisée par tous les liens copiés ; page `/open/<type>/<id>` (client bureau ou navigateur, choix retenu par appareil, téléphone → navigateur) ; protocole `organizer://` déclaré par les installeurs Linux et Windows, transmis au client lancé (commande `open`) ou ouvert au démarrage ; adresse d'Organizer collée dans une note → pastille, cliquée → ouverte dans l'application ; `organizer/links.py` ; correction : `instance.forward` ; 469 tests + vérifié dans Firefox (copie, collage, page /open) et déclaration xdg-mime en bac à sable |

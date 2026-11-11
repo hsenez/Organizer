@@ -123,7 +123,10 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   « Copier le lien » (adresse web), puis lien `organizer://` qui ouvre le client bureau (Linux, Windows).
 - Modifiée ailleurs pendant l'édition : mise à jour si on ne tape pas, sinon bandeau « recharger ».
 - Avancement : ✅ 1. modèle, service, API, client bureau ; ✅ 2. page et éditeur ; ✅ 3. liens internes
-  dans l'éditeur (aussi dans les notes des tâches / événements) ; 4. `organizer://` (à faire).
+  dans l'éditeur (aussi dans les notes des tâches / événements) ; ✅ 4. liens à partager (adresse publique,
+  page `/open`, `organizer://`).
+- À essayer en vrai : un lien `organizer://` cliqué sous KDE et sous Windows (client lancé / pas lancé) ;
+  relancer les installeurs du client (`--reuse` / `-Reuse`) pour déclarer le protocole.
 - À essayer à l'usage : thème sombre de la page (pastilles), téléphone réel, client bureau (« copier le
   lien » = adresse du serveur configuré).
 - Plus tard peut-être : édition simultanée sans écraser (fusion des frappes) ; liste des notes filtrable

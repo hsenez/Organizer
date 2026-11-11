@@ -12,6 +12,7 @@ from collections.abc import Callable
 
 from nicegui import ui
 
+from organizer import links
 from organizer.core import rules
 from organizer.core.enums import REF_EMOJI
 from organizer.core.schemas import EventFilter, NoteFilter, TaskFilter, TaskSort
@@ -22,12 +23,20 @@ from organizer.ui.context import UiContext
 PER_KIND = 8  # résultats par type dans la recherche
 
 
+def as_ref(target: str) -> str | None:
+    """Lien interne (``note:5``) désigné par ``target`` : lui-même, ou une adresse d'Organizer
+    (``organizer://note/5``, ``https://…/open/note/5``, ``…/notes?note=5``…) ; None sinon."""
+    if rules.parse_ref(target) is not None:
+        return target.strip()
+    return links.from_url(target)
+
+
 def open_ref(ctx: UiContext, target: str) -> bool:
-    """Ouvre l'élément d'un lien interne ; False si ``target`` n'en est pas un."""
-    found = rules.parse_ref(target)
-    if found is None:
+    """Ouvre l'élément d'un lien interne (ou d'une adresse d'Organizer) ; False si ce n'en est pas un."""
+    ref = as_ref(target)
+    if ref is None:
         return False
-    kind, item_id = found
+    kind, item_id = rules.parse_ref(ref)
     if kind == "task":
         ctx.editor.open(item_id)
     elif kind == "event":

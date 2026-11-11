@@ -354,6 +354,16 @@ class UserPref(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class AppSetting(SQLModel, table=True):
+    """Réglage du serveur (un seul pour tous les comptes), valeur JSON — ex. ``public_url``."""
+
+    __tablename__ = "app_setting"
+
+    key: str = Field(primary_key=True)
+    value: str = Field(sa_type=Text)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class UndoEntry(SQLModel, table=True):
     """Une action de l'historique annuler / rétablir d'un utilisateur."""
 

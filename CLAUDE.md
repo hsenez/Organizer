@@ -308,7 +308,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `data-cal-day`. Clic droit : `contextmenu` sur la case (`_context`) + `ui.context_menu` de la grille
   (marqueurs `calendar-menu`, `calendar-new-event`, `calendar-new-task`).
 
-## Notes (chantier en cours : reste `organizer://`)
+## Notes
 
 - `core/services/notes.py` (`NoteService`, `sv.notes` / `ds.notes`, `RemoteNotes`) : sous-classe
   d'`ItemService` sans table de liens (`link_model = None`) ; texte de la note = colonne `notes` (héritée
@@ -319,6 +319,17 @@ Référence fonctionnelle complète : **`specifications.md`**.
   (titre actuel pour le lecteur, `available=False` sinon) et `backlinks(ref)` (`LIKE` puis revérification).
   Routes `/refs/resolve`, `/refs/backlinks`. `ds.web_url(path)` : adresse web à copier (None côté web =
   `location.origin`).
+- **Liens à partager** : `organizer/links.py` (bibliothèque standard seulement : importé par le lanceur) —
+  `page_path`, `open_path`, `scheme_url`, `from_url` (miroir JS : `refFromUrl` dans `markdown_editor.js`,
+  collage → `[](kind:id)`). `components/copy_link.py` (`install_copy_script` dans `app_frame`,
+  `copy_link_button` : copie dans le navigateur au clic, `js_handler`). Adresse publique :
+  `AccountService.public_url / set_public_url` (`UserService.get_setting / set_setting`, table
+  `app_setting`), `ds.web_url`. Page `server/open_page.py` (`/open/<type>/<id>`, HTML statique). Client
+  bureau : argument `link` du lanceur → `instance.forward(..., "open", {"ref"})` →
+  `DesktopClient.open_item` ; démarrage direct : `start_url` = page de l'élément + `&launch=`. Installeurs :
+  `install.py` (`MimeType`, `%u`, `register_scheme` → `xdg-mime default`), `install.ps1` (clé
+  `HKCU:\Software\Classes\organizer`). Vérifier la déclaration Linux en bac à sable
+  (`XDG_DATA_HOME` / `XDG_CONFIG_HOME` temporaires) pour ne pas toucher l'installation de l'utilisateur.
 - Emojis proposés : `enums.DEFAULT_EMOJIS`, préférence `EMOJIS_PREF`, `rules.parse_emojis` ;
   `components/emoji_picker.py` (`emoji_choices` tolérant, `emoji_grid`, `emoji_button`) ; réglages →
   Apparence (`_emojis`) et dialogue des projets.
@@ -605,7 +616,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 442 tests au total (+1 réservé à Windows).
+- 469 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

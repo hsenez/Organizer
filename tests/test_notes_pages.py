@@ -204,3 +204,28 @@ async def test_quick_search_finds_notes(user: User):
     await user.should_see(marker="note-text")
     await user.should_see("Recette du gâteau")
     assert note.id
+
+
+async def test_copy_link_buttons_and_organizer_urls_in_notes(user: User):
+    sv = await login(user)
+    task = sv.tasks.create(TaskCreate(title="Plombier"))
+    note = sv.notes.create(NoteCreate(title="Travaux"))
+    await user.open(f"/tasks?task={task.id}")
+    await user.should_see(marker="editor-copy-link")  # aussi pour les tâches (et les événements)
+    await user.open(f"/notes?note={note.id}")
+    await user.should_see(marker="note-copy-link")
+    # Une adresse d'Organizer cliquée dans une note ouvre l'élément dans l'application.
+    url = f"https://organizer.exemple.fr/open/task/{task.id}"
+    user.find(marker="note-text").trigger("open-link", {"target": url, "kind": "url"})
+    await user.should_see(marker="editor-title")
+
+
+async def test_settings_public_url(user: User):
+    sv = await login(user)
+    await user.open("/settings?tab=data")
+    with user.client:
+        element(user, "public-url").value = "organizer.exemple.fr"
+    user.find(marker="public-url-save").click()
+    await user.should_see("Adresse publique enregistrée")
+    assert state().users.get_setting("public_url") == "https://organizer.exemple.fr"
+    assert sv.actor.is_admin
