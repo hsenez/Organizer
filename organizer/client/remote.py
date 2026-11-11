@@ -42,12 +42,17 @@ from organizer.core.schemas import (
     LinkIn,
     LinkOut,
     LinkPatch,
+    NoteCreate,
+    NoteFilter,
+    NoteOut,
+    NotePatch,
     NotificationOut,
     PasswordChange,
     ProfilePatch,
     ProjectIn,
     ProjectOut,
     ProjectPatch,
+    RefOut,
     SessionOut,
     ShareSpec,
     TagIn,
@@ -179,6 +184,40 @@ class RemoteAgenda(_Part):
     def to_task(self, event_id: int, extra: TaskPatch | None = None) -> TaskOut:
         body = _sent(extra) if extra is not None else None
         return self.api.call("POST", f"/agenda/{event_id}/to-task", TaskOut, json=body)
+
+
+class RemoteNotes(_Part):
+    """Notes et liens internes (``NoteService``)."""
+
+    def get(self, note_id: int) -> NoteOut:
+        return self.api.call("GET", f"/notes/{note_id}", NoteOut)
+
+    def list(self, flt: NoteFilter | None = None) -> list[NoteOut]:
+        return self.api.call("POST", "/notes/query", list[NoteOut], json=_full(flt or NoteFilter()))
+
+    def create(self, data: NoteCreate) -> NoteOut:
+        return self.api.call("POST", "/notes", NoteOut, json=_sent(data))
+
+    def update(self, note_id: int, patch: NotePatch) -> NoteOut:
+        return self.api.call("PATCH", f"/notes/{note_id}", NoteOut, json=_sent(patch))
+
+    def delete(self, note_id: int) -> None:
+        self.api.call("DELETE", f"/notes/{note_id}")
+
+    def set_shares(self, note_id: int, shares: list[ShareSpec]) -> NoteOut:
+        body = {"shares": [_full(share) for share in shares]}
+        return self.api.call("PUT", f"/notes/{note_id}/shares", NoteOut, json=body)
+
+    def set_pinned(self, note_id: int, pinned: bool) -> NoteOut:
+        return self.api.call("PUT", f"/notes/{note_id}/pin", NoteOut, json={"pinned": pinned})
+
+    def resolve(self, refs: list[str]) -> list[RefOut]:
+        if not refs:
+            return []
+        return self.api.call("POST", "/refs/resolve", list[RefOut], json={"refs": list(refs)})
+
+    def backlinks(self, ref: str) -> list[RefOut]:
+        return self.api.call("GET", "/refs/backlinks", list[RefOut], params={"ref": ref})
 
 
 class RemoteProjects(_Part):
@@ -414,6 +453,7 @@ class RemoteDataSource:
         self.api = api
         self.tasks = RemoteTasks(api)
         self.agenda = RemoteAgenda(api)
+        self.notes = RemoteNotes(api)
         self.projects = RemoteProjects(api)
         self.tags = RemoteTags(api)
         self.undo = RemoteUndo(api)
@@ -431,6 +471,11 @@ class RemoteDataSource:
 
     def attachment_url(self, attachment_id: str) -> str:
         return f"{self.api.base_url}/api/v1/attachments/{quote(attachment_id)}"
+
+    def web_url(self, path: str) -> str | None:
+        """Adresse web d'une page (« copier le lien ») : celle du serveur configuré, pas l'adresse locale de
+        la fenêtre du client."""
+        return f"{self.api.server_url.rstrip('/')}{path}"
 
     def backup_url(self, uploads: bool = True) -> str:
         return f"{self.api.base_url}/api/v1/admin/backup" + ("" if uploads else "?uploads=false")

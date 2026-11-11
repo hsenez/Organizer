@@ -92,7 +92,7 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - Mettre une date de rappel de mise à jour d'une tache obligatoire, par défaut 2 semaines après sa création
 - Taches récurrentes
 - Travail sur l'accueil pour display plus "straight to the point"
-- Possibilité d'éditer la liste des emojis proposés dans la création de projets
+- Possibilité d'éditer la liste des emojis proposés dans la création de projets (→ chantier Notes)
 - Dans les réglages une référence à la base de donnée utilisée (admin seulement)
 
 #### Support HTTPS & reverse proxy
@@ -111,6 +111,19 @@ fichiers (PC Linux, PC Windows, téléphone) ?
      quotidien du README sur le Pi (cron), vérifier les archives (`borg list`), puis faire un **exercice
      de restauration** (`borg export-tar … - | deploy/restore.sh -`) et contrôler que tout est revenu.
   5. ✅ Guide Cloudflare Tunnel pas à pas dans le README (section « Accès depuis Internet »).
+
+#### 📝 Chantier en cours : Notes (demandé le 11/11/2026, prioritaire)
+
+- Module 📝 Notes (colonne de gauche) : titre + texte markdown façon Obsidian, barre de boutons (puces, cases…),
+  emoji (liste personnelle modifiable dans les réglages, aussi pour les projets), projet, tags, épingle.
+- Partage modifiable / lecture seule, publique en lecture seule.
+- Cases à cocher : cocher trie la liste (non cochées en haut, la nouvelle cochée en tête des cochées ;
+  décochée → tout en haut). Seulement dans les notes.
+- Liens internes `[x](task:12)` / `event:` / `note:` cliquables (`[[` pour chercher), liens retour,
+  « Copier le lien » (adresse web), puis lien `organizer://` qui ouvre le client bureau (Linux, Windows).
+- Modifiée ailleurs pendant l'édition : mise à jour si on ne tape pas, sinon bandeau « recharger ».
+- Avancement : ✅ 1. modèle, service, API, client bureau ; 2. page et éditeur ; 3. liens internes dans
+  l'éditeur ; 4. `organizer://`.
 
 #### Chantier important: Création d'événements. 
 

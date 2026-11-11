@@ -210,6 +210,16 @@ OWNERSHIP_META: dict[Ownership, Meta] = {
 
 # Couleur d'un événement sans couleur choisie ni projet.
 EVENT_DEFAULT_COLOR = "#4c6ef5"
+
+# Emojis proposés pour les notes et les projets ; chaque utilisateur peut changer sa liste (préférence
+# EMOJIS_PREF, réglages → Apparence).
+DEFAULT_EMOJIS = (
+    "📝 💡 📌 📁 🏠 💼 🛒 🎓 💰 🏥 🚗 ✈️ 🎉 🛠️ 📚 💻 🎨 🌱 ⚽ 🍳 👶 🐶 🎵 📦 🧾 🔧 ❤️ ⭐ 🔒 ✅".split()
+)
+EMOJIS_PREF = "emojis"
+NOTE_DEFAULT_EMOJI = "📝"
+# Pictogramme des éléments désignés par un lien interne (la note garde son propre emoji).
+REF_EMOJI = {"task": "📋", "event": "📅", "note": "📝"}
 # Couleurs proposées dans l'éditeur d'événement (en plus de « couleur du projet » et d'une couleur libre).
 EVENT_PALETTE = (
     "#4c6ef5", "#15aabf", "#12b886", "#40c057", "#fab005", "#fd7e14",

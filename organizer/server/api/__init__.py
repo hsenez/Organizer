@@ -12,6 +12,7 @@ from organizer.server.api import (
     events,
     labels,
     local,
+    notes,
     notifications,
     tasks,
     undo,
@@ -21,5 +22,18 @@ from organizer.server.api import (
 API_PREFIX = "/api/v1"
 
 api_router = APIRouter(prefix=API_PREFIX)
-for module in (auth, users, labels, tasks, agenda, boards, undo, notifications, events, admin, local):
+for module in (
+    auth,
+    users,
+    labels,
+    tasks,
+    agenda,
+    notes,
+    boards,
+    undo,
+    notifications,
+    events,
+    admin,
+    local,
+):
     api_router.include_router(module.router)

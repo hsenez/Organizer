@@ -278,6 +278,53 @@ class EventFilter(_Schema):
     tag_ids: list[int] = Field(default_factory=list)
 
 
+# --- Notes ------------------------------------------------------------------------------------------------
+
+
+class NoteCreate(_Schema):
+    title: str = Field(min_length=1, max_length=300)
+    notes: str = ""  # texte markdown de la note
+    emoji: str = "📝"
+    is_public: bool = False
+    project_id: int | None = None
+    tag_ids: list[int] = Field(default_factory=list)
+
+
+class NotePatch(_Schema):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    notes: str | None = None
+    emoji: str | None = None
+    is_public: bool | None = None
+    project_id: int | None = None
+    tag_ids: list[int] | None = None
+
+
+class NoteOut(ItemOut):
+    emoji: str = "📝"
+    is_public: bool = False
+    shares: list[ShareSpec] = Field(default_factory=list)
+    can_edit: bool = False  # propriétaire, ou partage modifiable
+    pinned: bool = False  # épinglée par l'utilisateur courant
+
+
+class NoteFilter(_Schema):
+    text: str = ""
+    scope: str = "all"  # all | mine | shared (partagées avec moi ou publiques des autres)
+    project_ids: list[int | None] = Field(default_factory=list)
+    tag_ids: list[int] = Field(default_factory=list)
+
+
+class RefOut(_Schema):
+    """Élément désigné par un lien interne ``task:12`` / ``event:8`` / ``note:5`` (``rules.parse_ref``)."""
+
+    ref: str  # « note:5 »
+    kind: str  # task | event | note
+    id: int
+    title: str = ""  # vide si inaccessible
+    emoji: str = ""  # 📋 / 📅 / emoji de la note
+    available: bool = False  # existe et visible par l'utilisateur courant
+
+
 # --- Notifications ----------------------------------------------------------------------------------------
 
 
@@ -286,7 +333,7 @@ class NotificationOut(_Schema):
     actor_id: int
     actor_name: str
     kind: str  # share | unshare | change | delete
-    item_type: str  # task | event
+    item_type: str  # task | event | note
     item_id: int
     title: str
     text: str  # libellé de l'action

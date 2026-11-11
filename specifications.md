@@ -284,6 +284,30 @@ logique) ; chacun a sa table (`task` / `event`) et ses tables de liaison (`event
   `POST /agenda/{id}/links`, `PATCH|DELETE /agenda-links/{id}`, `POST /agenda/{id}/attachments`,
   `POST /agenda/{id}/to-task`, `POST /tasks/{id}/to-event`.
 
+### 4.8 📝 Notes
+
+Une note a un **titre**, un **texte markdown** (même éditeur façon Obsidian que les notes des tâches), un
+**emoji** (choisi dans une liste personnelle modifiable, §8.6), un **projet** et des **tags** facultatifs.
+Tables `note`, `note_tag`, `note_share`, `note_pin` (toutes dans l'historique annuler / rétablir).
+
+- **Visibilité et droits** (comme les événements) : privée par défaut, **partagée** avec des personnes —
+  chacune **modifiable** ou en **lecture seule** —, et/ou **publique** (lecture seule pour les autres).
+  Modifier **et supprimer** : propriétaire et partages modifiables ; partager, rendre publique :
+  propriétaire seulement. Tags privés d'un autre : invisibles et préservés.
+- **Épingler** est personnel (`note_pin` : chacun épingle les notes qu'il voit) ; ne plus voir une note
+  (partage retiré) retire son épingle.
+- Liste : épinglées d'abord, puis les plus récemment modifiées ; filtre texte (titre, texte, tags, projet),
+  « De qui ? », projets, tags.
+- **Liens internes** : `[texte](task:12)`, `[texte](event:8)`, `[texte](note:5)` dans le texte d'une note
+  (ou les notes d'une tâche / d'un événement). Identifiant stable : le lien survit à un renommage.
+  `NoteService.resolve` dit ce que désigne chaque lien **pour le lecteur** (titre actuel, emoji, ou
+  inaccessible : supprimé ou non visible, sans rien révéler) ; `NoteService.backlinks` trouve les notes,
+  tâches et événements visibles qui pointent vers un élément (**liens retour**, « Cité dans »).
+- Notifications : partage, modification, suppression d'une note (comme pour les tâches / événements) ;
+  épingler ne notifie personne.
+- API : `POST /notes/query`, `POST /notes`, `GET|PATCH|DELETE /notes/{id}`, `PUT /notes/{id}/shares`,
+  `PUT /notes/{id}/pin`, `POST /refs/resolve` (`{refs}`), `GET /refs/backlinks?ref=note:5`.
+
 ---
 
 ## 5. Sous-tâches
@@ -1057,3 +1081,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.33 | Événements : un partage **modifiable** permet aussi de **supprimer** (le propriétaire est notifié ; lecture seule et public d'un autre : toujours impossible) ; 417 tests |
 | 2026-11-10 | 1.34 | Calendrier : aujourd'hui repéré par un **fond** (jaune pâle ; rosé s'il y a des tâches en retard) au lieu d'un contour, qui faisait croire à une sélection |
 | 2026-11-10 | 1.35 | **🎉 Version 1.1.0** : calendrier, événements, notifications (voir `CHANGELOG.md`) ; `API_VERSION` inchangée (ajouts compatibles) ; branche `cloclo` fusionnée dans `main`, étiquette `v1.1.0` |
+| 2026-11-11 | 1.36 | **📝 Notes, étape 1** (§4.8) : tables `note`, `note_tag`, `note_share`, `note_pin` ; `NoteService` (droits comme les événements, épingles personnelles, filtres, liens internes `task:` / `event:` / `note:` résolus pour le lecteur, liens retour) ; tags / projets supprimés ou fusionnés aussi sur les notes ; notifications ; API `/notes` et `/refs`, `RemoteNotes` ; 430 tests |

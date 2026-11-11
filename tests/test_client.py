@@ -38,6 +38,9 @@ from organizer.core.schemas import (
     EventTimes,
     LinkIn,
     LinkPatch,
+    NoteCreate,
+    NoteFilter,
+    NotePatch,
     ProfilePatch,
     ProjectIn,
     ShareSpec,
@@ -172,6 +175,33 @@ def test_agenda_through_api_matches_local(remote, local, state):
         remote.agenda.get(custom.id)
     with pytest.raises(InvalidOperation):
         remote.agenda.create(EventCreate(title="X", start_date=day, start_time=time(9), end_time=time(8)))
+
+
+def test_notes_through_api_match_local(remote, local, state):
+    bob = state.users.create_user("bob", "motdepasse-12", "Bob", by=local.actor)
+    tag = remote.tags.create(TagIn(name="maison"))
+    task = remote.tasks.create(TaskCreate(title="Pain"))
+    note = remote.notes.create(NoteCreate(title="Courses", emoji="🛒", tag_ids=[tag.id]))
+    assert remote.notes.get(note.id) == local.notes.get(note.id)
+    # Patch partiel : seul le texte change.
+    updated = remote.notes.update(note.id, NotePatch(notes=f"- [ ] [pain](task:{task.id})"))
+    assert updated.emoji == "🛒" and updated.tags[0].id == tag.id
+    flt = NoteFilter(text="cours")
+    assert remote.notes.list(flt) == local.notes.list(flt) and len(remote.notes.list(flt)) == 1
+    shared = remote.notes.set_shares(note.id, [ShareSpec(user_id=bob.id, can_edit=False)])
+    assert shared.shares == [ShareSpec(user_id=bob.id, can_edit=False)]
+    assert remote.notes.set_pinned(note.id, True).pinned
+    refs = [f"task:{task.id}", f"note:{note.id}", "event:999"]
+    assert remote.notes.resolve(refs) == local.notes.resolve(refs)
+    assert remote.notes.resolve([]) == []
+    assert remote.notes.backlinks(f"task:{task.id}") == local.notes.backlinks(f"task:{task.id}")
+    assert [r.id for r in remote.notes.backlinks(f"task:{task.id}")] == [note.id]
+    with pytest.raises(InvalidOperation):
+        remote.notes.backlinks("rien")
+    remote.notes.delete(note.id)
+    with pytest.raises(NotFound, match="introuvable"):
+        remote.notes.get(note.id)
+    assert remote.web_url("/notes?note=1").endswith("/notes?note=1")
 
 
 def test_notifications_through_api_match_local(remote, local, state):

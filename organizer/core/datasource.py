@@ -24,6 +24,7 @@ from organizer.core.services.agenda import AgendaService
 from organizer.core.services.attachments import AttachmentService
 from organizer.core.services.boards import BoardService
 from organizer.core.services.labels import ProjectService, TagService
+from organizer.core.services.notes import NoteService
 from organizer.core.services.notifications import NotificationService
 from organizer.core.services.tasks import TaskService
 from organizer.core.services.undo import UndoService
@@ -34,6 +35,7 @@ class DataSource(Protocol):
     is_desktop: bool  # True : client bureau (peut ouvrir les fichiers locaux)
     tasks: TaskService
     agenda: AgendaService  # événements du calendrier
+    notes: NoteService  # notes et liens internes
     projects: ProjectService
     tags: TagService
     undo: UndoService
@@ -48,6 +50,8 @@ class DataSource(Protocol):
 
     def backup_url(self, uploads: bool = True) -> str: ...
 
+    def web_url(self, path: str) -> str | None: ...
+
 
 class LocalDataSource:
     """Accès direct aux services (côté serveur)."""
@@ -60,6 +64,7 @@ class LocalDataSource:
         self.account = account
         self.tasks = services.tasks
         self.agenda = services.agenda
+        self.notes = services.notes
         self.projects = services.projects
         self.tags = services.tags
         self.undo = services.undo
@@ -72,6 +77,10 @@ class LocalDataSource:
 
     def attachment_url(self, attachment_id: str) -> str:
         return f"/api/v1/attachments/{attachment_id}"
+
+    def web_url(self, path: str) -> str | None:
+        """Adresse web d'une page : None = celle par laquelle le navigateur est venu (``location.origin``)."""
+        return None
 
     def backup_url(self, uploads: bool = True) -> str:
         """Sauvegarde du serveur (admin), téléchargée par le navigateur avec le cookie de session."""

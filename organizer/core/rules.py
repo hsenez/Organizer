@@ -647,3 +647,48 @@ def ownership(owner_id: int, me: int, shared_with: Iterable[int], can_edit: bool
     if owner_id == me:
         return Ownership.SHARED_BY_ME if any(True for _ in shared_with) else Ownership.MINE
     return Ownership.SHARED_WITH_ME if can_edit else Ownership.READ_ONLY
+
+
+# ======================================================================================================
+# Liens internes (notes, tâches, événements) et listes d'emojis
+# ======================================================================================================
+
+REF_KINDS = ("task", "event", "note")
+_REF_TARGET = re.compile(r"^(task|event|note):(\d+)$")
+# Cible d'un lien markdown : [texte](note:5) — la parenthèse fermante évite de confondre note:5 et note:55.
+_REF_IN_TEXT = re.compile(r"\]\((task|event|note):(\d+)\)")
+
+
+def parse_ref(target: str) -> tuple[str, int] | None:
+    """``"note:5"`` → ``("note", 5)`` ; None si ce n'est pas un lien interne."""
+    match = _REF_TARGET.match(target.strip())
+    return (match.group(1), int(match.group(2))) if match else None
+
+
+def refs_in(text: str) -> list[str]:
+    """Liens internes d'un texte markdown (``[texte](task:12)``), sans doublon, dans l'ordre d'apparition."""
+    seen: dict[str, None] = {}
+    for match in _REF_IN_TEXT.finditer(text or ""):
+        seen.setdefault(f"{match.group(1)}:{match.group(2)}", None)
+    return list(seen)
+
+
+def ref_link(kind: str, item_id: int, title: str) -> str:
+    """Lien markdown vers un élément : ``[Titre](note:5)`` (crochets du titre neutralisés)."""
+    text = " ".join(title.split()).replace("[", "(").replace("]", ")")
+    return f"[{text}]({kind}:{item_id})"
+
+
+def ref_pattern(kind: str, item_id: int) -> str:
+    """Motif SQL ``LIKE`` qui repère un lien vers l'élément dans un texte."""
+    return f"%]({kind}:{item_id})%"
+
+
+def parse_emojis(text: str | Iterable[str], limit: int = 120) -> list[str]:
+    """Liste d'emojis saisie par l'utilisateur (séparés par des espaces), sans doublon ni élément vide."""
+    parts = text.split() if isinstance(text, str) else [str(p).strip() for p in text]
+    result: list[str] = []
+    for part in parts:
+        if part and part not in result and len(part) <= 16:
+            result.append(part)
+    return result[:limit]

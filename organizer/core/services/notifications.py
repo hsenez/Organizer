@@ -1,7 +1,8 @@
 """Notifications : ce que d'autres ont fait qui me concerne.
 
-**Qui est concerné** par une tâche ou un événement : son propriétaire et les utilisateurs avec qui il est
-partagé (pour une sous-tâche : aussi ceux de la tâche parente). L'auteur de l'action n'est jamais prévenu.
+**Qui est concerné** par une tâche, un événement ou une note : son propriétaire et les utilisateurs avec
+qui il est partagé (pour une sous-tâche : aussi ceux de la tâche parente). L'auteur de l'action n'est
+jamais prévenu.
 
 :func:`record` est appelée dans la transaction de **chaque action enregistrée dans l'historique** (voir
 ``BaseService.uow``) : les lignes modifiées disent quels éléments sont touchés, le libellé de l'action
@@ -30,6 +31,8 @@ from sqlmodel import Session, select
 from organizer.core.models import (
     Event,
     EventShare,
+    Note,
+    NoteShare,
     Notification,
     Project,
     Tag,
@@ -55,8 +58,15 @@ _ITEM_OF = {
     "event_tag": ("event", "event_id"),
     "event_link": ("event", "event_id"),
     "event_share": ("event", "event_id"),
+    "note": ("note", "id"),
+    "note_tag": ("note", "note_id"),
+    "note_share": ("note", "note_id"),
 }
-_MAIN = {"task": (Task, TaskShare, "task_id"), "event": (Event, EventShare, "event_id")}
+_MAIN = {
+    "task": (Task, TaskShare, "task_id"),
+    "event": (Event, EventShare, "event_id"),
+    "note": (Note, NoteShare, "note_id"),
+}
 _KIND_ORDER = {"share": 0, "change": 1, "unshare": 2, "delete": 3}
 
 

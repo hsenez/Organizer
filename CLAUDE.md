@@ -308,6 +308,20 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `data-cal-day`. Clic droit : `contextmenu` sur la case (`_context`) + `ui.context_menu` de la grille
   (marqueurs `calendar-menu`, `calendar-new-event`, `calendar-new-task`).
 
+## Notes (chantier en cours)
+
+- `core/services/notes.py` (`NoteService`, `sv.notes` / `ds.notes`, `RemoteNotes`) : sous-classe
+  d'`ItemService` sans table de liens (`link_model = None`) ; texte de la note = colonne `notes` (héritée
+  d'`ItemBase`). Droits comme `AgendaService` ; `NotePin` = épingle **par utilisateur** (hors `_ITEM_OF` :
+  ne notifie pas). Tables `note*` dans `UNDOABLE_TABLES`, `_ITEM_OF` / `_MAIN` (notifications), et
+  traitées par la suppression / fusion de tags et projets (`labels.py`).
+- Liens internes : `rules.parse_ref`, `refs_in`, `ref_link`, `ref_pattern` ; `NoteService.resolve(refs)`
+  (titre actuel pour le lecteur, `available=False` sinon) et `backlinks(ref)` (`LIKE` puis revérification).
+  Routes `/refs/resolve`, `/refs/backlinks`. `ds.web_url(path)` : adresse web à copier (None côté web =
+  `location.origin`).
+- Emojis proposés : `enums.DEFAULT_EMOJIS`, préférence `EMOJIS_PREF`, `rules.parse_emojis`.
+- Tests : `tests/test_notes.py`, `test_client.py::test_notes_through_api_match_local`.
+
 ## Notifications
 
 - `core/services/notifications.py` : `record(session, actor_id, label, changes)` est appelée par
@@ -569,7 +583,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 417 tests au total (+1 réservé à Windows).
+- 430 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

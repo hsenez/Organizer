@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 
 from organizer.core import rules
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
-from organizer.core.models import Event, EventTag, Notification, Project, Tag, Task, TaskTag
+from organizer.core.models import Event, EventTag, Note, NoteTag, Notification, Project, Tag, Task, TaskTag
 from organizer.core.schemas import ProjectIn, ProjectOut, ProjectPatch, TagIn, TagOut, TagPatch
 from organizer.core.services.base import BaseService, quoted
 
@@ -186,12 +186,12 @@ class ProjectService(_LabelService):
         return super().update(obj_id, patch)
 
     def delete(self, project_id: int) -> None:
-        """Supprime le projet ; les tâches et événements qui l'utilisaient n'ont plus de projet."""
+        """Supprime le projet ; les tâches, événements et notes qui l'utilisaient n'ont plus de projet."""
         with self.uow() as probe:
             name = self._get_visible(probe.session, project_id).name
         with self.uow(label=f"Supprimer le projet {quoted(name)}") as w:
             project = self._get_editable(w.session, project_id)
-            for model in (Task, Event):
+            for model in (Task, Event, Note):
                 for item in w.session.exec(select(model).where(model.project_id == project_id)).all():
                     item.project_id = None
                     w.session.add(item)
@@ -210,7 +210,7 @@ class ProjectService(_LabelService):
             s = w.session
             source = self._get_editable(s, source_id)
             target = self._get_visible(s, target_id)
-            for model in (Task, Event):
+            for model in (Task, Event, Note):
                 for item in s.exec(select(model).where(model.project_id == source_id)).all():
                     item.project_id = target_id
                     s.add(item)
@@ -251,7 +251,7 @@ class TagService(_LabelService):
             name = self._get_visible(probe.session, tag_id).name
         with self.uow(label=f"Supprimer le tag {quoted(name)}") as w:
             tag = self._get_editable(w.session, tag_id)
-            for model in (TaskTag, EventTag):
+            for model in (TaskTag, EventTag, NoteTag):
                 for link in w.session.exec(select(model).where(model.tag_id == tag_id)).all():
                     w.session.delete(link)
             w.session.flush()
@@ -269,7 +269,7 @@ class TagService(_LabelService):
             s = w.session
             source = self._get_editable(s, source_id)
             target = self._get_visible(s, target_id)
-            for model, fk in ((TaskTag, "task_id"), (EventTag, "event_id")):
+            for model, fk in ((TaskTag, "task_id"), (EventTag, "event_id"), (NoteTag, "note_id")):
                 column = getattr(model, fk)
                 already = set(s.exec(select(column).where(model.tag_id == target_id)).all())
                 for link in s.exec(select(model).where(model.tag_id == source_id)).all():

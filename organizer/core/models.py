@@ -174,6 +174,45 @@ class EventLink(LinkBase, table=True):
     event_id: int = Field(foreign_key="event.id", index=True)
 
 
+class Note(ItemBase, table=True):
+    """Note markdown (module 📝 Notes) : titre, texte (``notes``), emoji, projet, tags ; partage modifiable ou
+    en lecture seule, publique en lecture seule (comme les événements)."""
+
+    __tablename__ = "note"
+    __undoable__ = True
+
+    id: int | None = Field(default=None, primary_key=True)
+    emoji: str = "📝"
+    is_public: bool = False  # visible (en lecture) par tous les comptes
+
+
+class NoteTag(SQLModel, table=True):
+    __tablename__ = "note_tag"
+    __undoable__ = True
+
+    note_id: int = Field(foreign_key="note.id", primary_key=True)
+    tag_id: int = Field(foreign_key="tag.id", primary_key=True)
+
+
+class NoteShare(SQLModel, table=True):
+    __tablename__ = "note_share"
+    __undoable__ = True
+
+    note_id: int = Field(foreign_key="note.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    can_edit: bool = True  # sinon : lecture seule
+
+
+class NotePin(SQLModel, table=True):
+    """Note épinglée en haut de la liste **par un utilisateur** (personnel : chacun épingle les siennes)."""
+
+    __tablename__ = "note_pin"
+    __undoable__ = True
+
+    note_id: int = Field(foreign_key="note.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+
+
 class Board(SQLModel, table=True):
     """Board kanban personnalisé (les boards prédéfinis — statut, échéance… — ne sont pas stockés)."""
 
@@ -295,7 +334,7 @@ class Notification(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)  # destinataire
     actor_id: int = Field(foreign_key="user.id")  # auteur de l'action
     kind: str  # share | unshare | change | delete
-    item_type: str  # task | event
+    item_type: str  # task | event | note
     item_id: int
     title: str  # titre de l'élément au moment de l'action
     text: str  # libellé de l'action (celui de l'historique : « Changer l'échéance de « … » »)
@@ -348,5 +387,9 @@ UNDOABLE_TABLES: dict[str, type[SQLModel]] = {
         EventTag,
         EventShare,
         EventLink,
+        Note,
+        NoteTag,
+        NoteShare,
+        NotePin,
     )
 }
