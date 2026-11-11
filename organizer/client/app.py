@@ -58,6 +58,7 @@ from organizer.core.schemas import LoginOut, TaskOut, UserOut
 from organizer.ui.auth_shell import auth_shell
 from organizer.ui.components.connection_badge import desktop_connection
 from organizer.ui.components.ref_links import open_ref
+from organizer.ui.components.viewport import VIEWPORT
 from organizer.ui.context import Banner, Connection, UiContext
 from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
@@ -556,7 +557,7 @@ class DesktopClient:
         live: bool = True,
         lan: bool = True,
     ) -> None:
-        common = {"favicon": FAVICON, "dark": None}
+        common = {"favicon": FAVICON, "dark": None, "viewport": VIEWPORT}
         ui.page("/connect", title="Connexion · Organizer", **common)(self.connect_page)
         register_app_pages(self.context)
         app.on_page_exception(self.page_error)
@@ -654,6 +655,7 @@ def main(args: argparse.Namespace) -> None:
         native=native,
         window_size=(1400, 900) if native else None,
         title="Organizer",
+        viewport=VIEWPORT,
         favicon=(_icon("ico") if sys.platform == "win32" else None) or FAVICON,
         dark=None,
         language="fr",

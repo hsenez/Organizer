@@ -11,6 +11,7 @@ from organizer.server import pwa
 from organizer.server.pages import register_pages
 from organizer.server.state import AppState, create_state
 from organizer.server.wiring import install
+from organizer.ui.components.viewport import VIEWPORT
 
 log = logging.getLogger("organizer")
 
@@ -50,6 +51,7 @@ def main() -> None:
         host=state.settings.host,
         port=state.settings.port,
         title="Organizer",
+        viewport=VIEWPORT,  # téléphones : la page rapetisse avec le clavier
         favicon="📋",
         dark=None,  # suit le thème du système
         language="fr",

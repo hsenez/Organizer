@@ -229,3 +229,40 @@ async def test_settings_public_url(user: User):
     await user.should_see("Adresse publique enregistrée")
     assert state().users.get_setting("public_url") == "https://organizer.exemple.fr"
     assert sv.actor.is_admin
+
+
+async def test_fab_menu_creates_a_note_here_or_on_the_notes_page(user: User):
+    sv = await login(user)
+    await user.open("/")
+    user.find(marker="fab-new-note").click()  # ailleurs : on va sur la page Notes, note créée
+    await user.should_see(marker="note-text")
+    [note] = sv.notes.list()
+    assert note.title == "Sans titre"
+    user.find(marker="fab-new-note").click()  # dans la page Notes : créée sur place
+    await user.should_see(marker="note-title")
+    assert len(sv.notes.list()) == 2
+
+
+async def test_fab_menu_opens_an_event_draft(user: User):
+    sv = await login(user)
+    await user.open("/tasks")
+    user.find(marker="fab-new-event").click()
+    await user.should_see("✨ Nouvel événement")
+    assert sv.agenda.list() == []
+
+
+async def test_phone_writing_zone_and_details_toggle(user: User):
+    sv = await login(user)
+    note = sv.notes.create(NoteCreate(title="Courses", notes="- [ ] lait"))
+    await user.open(f"/notes?note={note.id}")
+    await user.should_see(marker="note-text")
+    # Texte + barre : zone du mode écriture (viewport.js), uniquement pour une note modifiable.
+    zone = element(user, "note-text").parent_slot.parent
+    assert "writing-zone" in zone.classes and "data-writing" in zone.props
+    # Téléphone : projet, tags et partage repliés derrière un bouton (CSS), qui les déplie.
+    details = next(e for e in user.client.layout.descendants() if "note-details" in e.classes)
+    assert "note-details-open" not in details.classes
+    user.find(marker="note-details-toggle").click()
+    assert "note-details-open" in details.classes
+    # Viewport : la page rapetisse avec le clavier (Chrome Android).
+    assert "interactive-widget=resizes-content" in user.client.page.resolve_viewport()

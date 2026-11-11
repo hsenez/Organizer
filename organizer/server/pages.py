@@ -22,6 +22,7 @@ from organizer.server.state import AppState
 from organizer.server.web_auth import safe_next
 from organizer.ui.auth_shell import auth_shell as _auth_shell
 from organizer.ui.components.connection_badge import web_connection
+from organizer.ui.components.viewport import VIEWPORT
 from organizer.ui.context import UiContext
 from organizer.ui.live import LiveRefresh
 from organizer.ui.pages import register_app_pages
@@ -163,7 +164,7 @@ def server_context(request: Request) -> UiContext | RedirectResponse:
 
 def register_pages() -> None:
     """Enregistre les pages auprès de NiceGUI (appelé par ``organizer.server.app.build``)."""
-    common = {"favicon": FAVICON, "dark": None}
+    common = {"favicon": FAVICON, "dark": None, "viewport": VIEWPORT}
     ui.page("/login", title="Connexion · Organizer", **common)(login_page)
     ui.page("/setup", title="Bienvenue · Organizer", **common)(setup_page)
     register_app_pages(server_context)

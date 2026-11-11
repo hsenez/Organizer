@@ -62,6 +62,10 @@ fichiers (PC Linux, PC Windows, téléphone) ?
   (`.venv/bin/pytest`).
 - 📲 PWA jamais essayée sur un vrai téléphone (iPhone en HTTP, Android en HTTPS) : à faire une fois en ligne
   par Cloudflare Tunnel (mkcert devient inutile, sauf pour du HTTPS local).
+- 📱 **Clavier du téléphone** (11/11/2026) : réglé et vérifié en émulation Android seulement (clavier
+  simulé). À essayer sur le vrai téléphone (Android + Chrome) et sur **iPhone + Safari** (qui ignore
+  `interactive-widget` : le mode écriture des notes y repose sur `visualViewport`) ; éditeur de tâche,
+  recherche, filtres, notes.
 - ✏️ Temps réel : si la tâche ouverte dans l'éditeur est modifiée ailleurs, l'éditeur ne se met pas à jour
   (volontairement : il ne doit pas changer sous les doigts) — afficher plutôt « modifiée ailleurs » ?
 - 🪟 Client bureau sous **Windows** : installé et lancé (Python 3.13, novembre 2026) ; reste à essayer

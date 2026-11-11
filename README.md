@@ -300,6 +300,10 @@ Ouvrir `http://<ip-du-pi>:2603` puis :
   Chrome ; pour le vrai mode application, il faut le HTTPS : passer par l'adresse publique
   (`https://organizer.blou.top`, voir ci-dessous).
 
+Le bouton ➕ propose tâche, événement ou note. Dans une note, toucher le texte passe en **mode écriture** :
+seuls le texte et la barre de boutons (collée au clavier) restent à l'écran ; le bouton ⚙ de l'en-tête
+déplie projet, tags et partage.
+
 ## 🌍 Accès depuis Internet (Cloudflare Tunnel)
 
 Objectif : `https://organizer.blou.top` partout (téléphone en 4G, client bureau hors de la maison), avec un

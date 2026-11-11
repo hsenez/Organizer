@@ -18,6 +18,7 @@ from organizer.ui.components.dnd import DragDrop
 from organizer.ui.components.file_drop import FileDrop
 from organizer.ui.components.item_editor import Editor
 from organizer.ui.components.search_dialog import SearchDialog
+from organizer.ui.components.viewport import install_viewport_script
 from organizer.ui.context import Banner, UiContext
 from organizer.ui.theme import apply_theme
 
@@ -78,8 +79,9 @@ def app_frame(
     ctx.editor = Editor(ctx)
     search = SearchDialog(ctx)
     DragDrop(on_drop=ctx.handle_drop, on_attach=ctx.attach, on_state=ctx.set_dragging).mark("dnd")
-    FileDrop(ctx).mark("file-drop")
-    install_copy_script()  # « 🔗 Copier le lien »  # fichiers du système déposés sur la page (pièces jointes)
+    FileDrop(ctx).mark("file-drop")  # fichiers du système déposés sur la page (pièces jointes)
+    install_copy_script()  # « 🔗 Copier le lien »
+    install_viewport_script()  # téléphone : clavier virtuel, mode écriture des notes
     # Ctrl+K est réservé par certains navigateurs (barre de recherche de Firefox) : on le garde pour nous.
     ui.add_body_html(
         "<script>document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && "
@@ -150,10 +152,7 @@ def app_frame(
     menu_button.on_click(drawer.toggle)
 
     connection_badge(ctx)
-    with ui.page_sticky(position="bottom-right", x_offset=20, y_offset=20):
-        ui.button(icon="add", on_click=ctx.editor.open_new).props("fab color=primary").tooltip(
-            "Nouvelle tâche (N)"
-        ).mark("fab-add")
+    new_buttons(ctx)
 
     def on_key(e: events.KeyEventArguments) -> None:
         if not e.action.keydown:
@@ -208,6 +207,31 @@ def app_frame(
                     "flat dense no-caps"
                 )
         yield content
+
+
+def new_buttons(ctx: UiContext) -> None:
+    """➕ en bas à droite : ouvre vers le haut « Tâche », « Événement », « Note ». La touche N crée toujours
+    une tâche. Une note se crée dans la page Notes (``ctx.new_note`` si on y est, sinon on y va)."""
+
+    def new_note() -> None:
+        if ctx.new_note is not None:
+            ctx.new_note()
+        else:
+            ui.navigate.to("/notes?note=new")
+
+    # ``app-sticky`` : au-dessus du contenu de la page (sinon les cartes, venues après dans la page,
+    # passaient par-dessus et recevaient le toucher).
+    with ui.page_sticky(position="bottom-right", x_offset=20, y_offset=20).classes("app-sticky"):
+        # Pas d'infobulle sur le bouton : elle masquerait « Tâche », juste au-dessus.
+        with ui.fab("add", direction="up").props("vertical-actions-align=right").mark("fab-add"):
+            for icon, label, handler, mark in (
+                ("task_alt", "Tâche (N)", ctx.editor.open_new, "fab-new-task"),  # au plus près du pouce
+                ("event", "Événement", ctx.editor.open_new_event, "fab-new-event"),
+                ("description", "Note", new_note, "fab-new-note"),
+            ):
+                ui.fab_action(icon, label=label, on_click=handler).props(
+                    "external-label label-position=left label-class='fab-label'"
+                ).mark(mark)
 
 
 _BANNER_COLORS = {

@@ -49,6 +49,8 @@ class UiContext:
         self.editor: Any = None  # Editor de la page (tâche / événement, créé par le layout)
         # Ouvre une note (page Notes : la sélectionne ; ailleurs, None : on navigue vers /notes?note=…).
         self.open_note: Callable[[int], None] | None = None
+        # Crée une note (page Notes ; ailleurs, None : on navigue vers /notes?note=new).
+        self.new_note: Callable[[], None] | None = None
         self.dark: Any = None  # ui.dark_mode de la page (créé par le layout)
         # Dépôt d'une carte dans une zone de la page : fonction (task_id, zone, index) fournie par la page.
         self.drop_handler: Callable[[int, str, int | None], None] | None = None

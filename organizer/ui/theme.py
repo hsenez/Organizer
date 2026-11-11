@@ -66,6 +66,31 @@ CSS = """
 body { background: #f5f7fb; }
 body.body--dark { background: #12141a; }
 
+/* --- Téléphones : clavier virtuel (voir components/viewport.py) ---------------------------------------- */
+/* Safari (iOS) zoome sur un champ écrit en moins de 16 px, et ne dézoome pas : tout « bougeait ». Placé
+   avant les autres règles : à spécificité égale, les tailles propres (titre d'une note…) l'emportent. */
+@media (pointer: coarse) {
+    .q-field__native:not([class*="text-"]), .q-field__input, .q-select__filter { font-size: 16px; }
+    .md-editor .cm-editor { font-size: 16px; }
+}
+/* Boutons flottants (➕, indicateur réseau) : au-dessus du contenu, cachés quand le clavier est sorti. */
+.app-sticky { z-index: 1500; }
+body.keyboard-open .app-sticky { display: none; }
+.fab-label { font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px rgba(20, 30, 60, .18); }
+/* Mode écriture (texte d'une note, clavier sorti) : la zone occupe toute la partie visible de l'écran, la
+   barre de boutons en bas, collée au clavier. */
+body.writing { overflow: hidden; }
+.writing-zone.writing-active { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px);
+    height: var(--vv-height, 100vh); z-index: 2500; margin: 0; padding: 8px 10px 0; gap: 0;
+    flex-wrap: nowrap; background: #f5f7fb; }
+.body--dark .writing-zone.writing-active { background: #12141a; }
+.writing-active > .md-editor { order: 1; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.writing-active > .md-toolbar { order: 2; flex: none; flex-wrap: nowrap; overflow-x: auto; padding: 4px 0;
+    border-top: 1px solid rgba(120, 130, 150, .25); scrollbar-width: none; }
+.writing-active > .md-toolbar .q-btn { flex: none; min-width: 40px; min-height: 40px; }
+.writing-active .cm-editor { min-height: 100% !important; border-color: transparent !important;
+    box-shadow: none !important; padding: 0 4px; }
+
 /* --- Cartes de tâches ------------------------------------------------------------------------------- */
 .task-card {
     border-left: var(--imp-w) solid var(--imp-c);
@@ -415,13 +440,19 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 .note-title .q-field__native { font-size: 1.5rem; font-weight: 700; line-height: 1.3; }
 .note-text .cm-editor { min-height: 50vh; }
 .notes-stale { background: rgba(253, 126, 20, .16); }
-.notes-back { display: none; }
+.notes-back, .notes-details-toggle { display: none; }
 @media (max-width: 767px) {
     .notes-page { flex-direction: column; }
     .notes-list { width: 100%; flex: 1 1 auto; }
     .notes-page.has-note .notes-list { display: none; }
     .notes-page:not(.has-note) .notes-view { display: none; }
     .notes-back { display: inline-flex; }
+    .notes-details-toggle { display: inline-flex; }
+    .note-details:not(.note-details-open) { display: none; }
+}
+/* Téléphone : la barre de boutons n'apparaît qu'en écrivant (mode écriture, collée au clavier). */
+@media (max-width: 767px) and (pointer: coarse) {
+    .writing-zone:not(.writing-active) > .md-toolbar { display: none; }
 }
 
 /* --- Curseurs de niveaux ---------------------------------------------------------------------------- */

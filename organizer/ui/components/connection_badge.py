@@ -45,7 +45,7 @@ def connection_badge(ctx: UiContext) -> None:
     if ctx.connection is None:
         return
     get = ctx.connection
-    with ui.page_sticky(position="bottom-left", x_offset=14, y_offset=14):
+    with ui.page_sticky(position="bottom-left", x_offset=14, y_offset=14).classes("app-sticky"):
         badge = ui.button(color=None).props("round dense unelevated").classes("connection-badge")
         badge.mark("connection-badge")
         with badge:

@@ -34,6 +34,7 @@ from organizer.ui.components.ownership import ownership_emoji, ownership_text
 from organizer.ui.components.ref_links import RefLinks, as_ref, open_ref
 from organizer.ui.components.sharing import public_switch, share_editor
 from organizer.ui.components.tag_chips import tag_chip
+from organizer.ui.components.viewport import writing_zone
 from organizer.ui.context import UiContext
 from organizer.ui.layout import app_frame, empty_state
 
@@ -82,6 +83,7 @@ class NotesView:
         self.editor: MarkdownEditor | None = None
         self.ref_links: RefLinks | None = None
         ctx.open_note = self.select
+        ctx.new_note = self.new
         with ui.row().classes("notes-page w-full page-fill-grow no-wrap gap-4 items-stretch") as self.root:
             with ui.column().classes("notes-list gap-2"):
                 with ui.row().classes("w-full items-center gap-2 no-wrap"):
@@ -225,7 +227,9 @@ class NotesView:
                 )
             self._header(note, focus_title)
             if note.can_edit:
-                self._details(note)
+                # Téléphone : repliés derrière le bouton « Projet, tags, partage » (texte en haut).
+                with ui.column().classes("note-details w-full gap-3") as self.details:
+                    self._details(note)
             else:
                 self._read_only_details(note)
             self._text(note)
@@ -260,6 +264,12 @@ class NotesView:
             else:
                 ui.label(note.emoji).classes("text-3xl")
                 ui.label(note.title).classes("text-2xl font-bold flex-1 truncate").mark("note-title")
+            if note.can_edit:
+                ui.button(
+                    icon="tune", on_click=lambda: self.details.classes(toggle="note-details-open")
+                ).props("flat round dense").classes("notes-details-toggle").tooltip(
+                    "Projet, tags, partage"
+                ).mark("note-details-toggle")
             self._pin_button(note)
             self._copy_button(note)
             if note.can_delete:
@@ -309,6 +319,8 @@ class NotesView:
     def _text(self, note: NoteOut) -> None:
         editable = note.can_edit
         with ui.column().classes("w-full gap-1") as box:
+            if editable:
+                writing_zone(box)  # téléphone : clavier sorti, seuls le texte et la barre restent à l'écran
             self.editor = MarkdownEditor(
                 note.notes,
                 placeholder="Écrire ici… - liste, 1. numérotée, - [ ] case à cocher, # titre, "

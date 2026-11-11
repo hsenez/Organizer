@@ -545,8 +545,10 @@ dans la barre de filtres du calendrier.
 8. 🔔 **Notifications** — bulle rouge avec le nombre de non lues
 9. ⚙️ **Réglages**
 
-Bouton flottant **➕ Nouvelle tâche** sur tous les écrans (raccourci **N**) : ouvre l'éditeur complet en
-mode création (voir §6).
+Bouton flottant **➕** sur tous les écrans, au-dessus du contenu : il s'ouvre vers le haut sur **📋 Tâche**
+(au plus près du pouce ; raccourci **N**, qui crée directement une tâche), **📅 Événement** et **📝 Note**.
+Tâche et événement ouvrent l'éditeur complet en mode création (voir §6) ; « Note » crée une note et l'ouvre
+dans le module 📝 Notes (sur place si l'on y est déjà). Caché quand le clavier du téléphone est sorti.
 
 **En-tête** : ☰ (afficher / masquer la colonne), ↩️ / ↪️ (annuler / rétablir, infobulle = action concernée,
 grisés s'il n'y a rien), menu du compte (réglages, déconnexion).
@@ -755,6 +757,10 @@ recherche, « De qui ? ») et **note à droite**. Sur téléphone : la liste, pu
 - **Modifiée ailleurs** (temps réel) : la note affichée se met à jour si l'on n'a pas tapé depuis 5 s ;
   sinon bandeau « ✏️ Cette note a été modifiée ailleurs · ↻ Recharger » (pas de fusion des frappes : la
   prochaine frappe enregistre son texte).
+- **Téléphone** : en lecture, le texte commence sous le titre (projet, tags et partage repliés derrière le
+  bouton ⚙ « Projet, tags, partage ») et la barre de boutons est cachée. **Mode écriture** : dès que le
+  clavier sort dans le texte, seuls le texte et la barre de boutons restent à l'écran, la barre **collée au
+  clavier** (une ligne qui défile au doigt) ; le clavier rentré, la page revient telle quelle.
 
 ### 8.4 ter 🔔 Notifications
 
@@ -822,6 +828,11 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 - Kanbans : colonnes en défilement horizontal au doigt (repliables, redimensionnables) ; matrice 2×2 empilée.
 - Éditeur en plein écran ; curseurs utilisables au doigt.
 - Glisser-déposer tactile (appui long pour saisir une carte).
+- **Clavier virtuel** : la page **rapetisse** quand le clavier sort (`interactive-widget=resizes-content`,
+  Chrome Android) au lieu de glisser sous la partie visible (en-tête et panneaux partaient hors de
+  l'écran) ; Safari (iOS) ignore ce réglage : un script suit la partie visible (`visualViewport`) pour le
+  mode écriture des notes (§8.4 quater). Champs en 16 px sur écran tactile (sinon Safari zoome à chaque
+  saisie, sans dézoomer). Boutons flottants (➕, réseau) cachés pendant la saisie.
 - **PWA** (✅ étape 8) : manifeste (`/manifest.webmanifest`), icônes (dont « maskable » pour Android et
   `apple-touch-icon` pour iOS), plein écran (`standalone`), raccourcis « Nouvelle tâche » et « Kanbans »
   (appui long sur l'icône), couleur de la barre d'état selon le thème. Service worker minimal, actif en
@@ -1150,3 +1161,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-11 | 1.38 | **🔗 Liens à partager** (§4.9) : « Copier le lien » aussi sur les tâches et les événements ; adresse publique réglable par l'admin (table `app_setting`, `/server/public-url`) utilisée par tous les liens copiés ; page `/open/<type>/<id>` (client bureau ou navigateur, choix retenu par appareil, téléphone → navigateur) ; protocole `organizer://` déclaré par les installeurs Linux et Windows, transmis au client lancé (commande `open`) ou ouvert au démarrage ; adresse d'Organizer collée dans une note → pastille, cliquée → ouverte dans l'application ; `organizer/links.py` ; correction : `instance.forward` ; 469 tests + vérifié dans Firefox (copie, collage, page /open) et déclaration xdg-mime en bac à sable |
 | 2026-11-11 | 1.39 | **Compte désactivé** (§3) : ses événements et notes ne restent visibles que pour les partages modifiables (public et lecture seule ignorés), qui peuvent les supprimer ; ses tâches peuvent être supprimées par ceux avec qui elles sont partagées ; réactivation = tout revient ; notifications alignées ; infobulle du bouton dans Réglages → Utilisateurs ; `ItemService._shared_visible_clause` ; 472 tests |
 | 2026-11-11 | 1.40 | **🎉 Version 1.2.0** : notes, liens à partager, comptes désactivés (voir `CHANGELOG.md`) ; `API_VERSION` inchangée (ajouts compatibles) ; schéma de la base inchangé (nouvelles tables seulement) ; branche `cloclo` fusionnée dans `main`, étiquette `v1.2.0` |
+| 2026-11-11 | 1.41 | **📱 Ergonomie téléphone** (§5, §8.4 quater, §9) : ➕ au-dessus du contenu (les cartes le recouvraient) et menu Tâche / Événement / Note ; clavier virtuel : page qui rapetisse (`interactive-widget=resizes-content`), suivi `visualViewport` (`components/viewport.py` + `.js`), champs en 16 px au doigt, boutons flottants cachés pendant la saisie ; notes : mode écriture (texte + barre collée au clavier), détails repliés et barre cachée en lecture ; 474 tests + vérifié dans Vivaldi en émulation Android (clavier simulé en rapetissant la fenêtre) |

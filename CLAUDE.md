@@ -312,6 +312,31 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `data-cal-day`. Clic droit : `contextmenu` sur la case (`_context`) + `ui.context_menu` de la grille
   (marqueurs `calendar-menu`, `calendar-new-event`, `calendar-new-task`).
 
+## Téléphone : clavier virtuel, ➕, mode écriture
+
+- Balise viewport `VIEWPORT` (`components/viewport.py`) : `interactive-widget=resizes-content` — passée à
+  **toutes** les `ui.page` (`common`) et à `ui.run(viewport=)` (serveur et client). Chrome Android rapetisse
+  alors la page avec le clavier ; sans elle, la page glissait sous la partie visible (« tout bouge »).
+- `viewport.js` (injecté par `app_frame`) : variables `--vv-top` / `--vv-height`, classe `keyboard-open`
+  (écran tactile + saisie + hauteur visible réduite de plus de 120 px par rapport à la hauteur sans saisie),
+  mode écriture : un élément `[data-writing]` (`writing_zone(element)`) contenant le champ actif reçoit
+  `writing-active` (CSS : `position: fixed` sur la partie visible, `.md-toolbar` en bas) et `<body>`
+  `writing` ; événement `organizer-viewport` → `markdown_editor.js` ramène le curseur en vue. iOS ignore
+  `interactive-widget` : tout ce qui doit suivre le clavier passe par ces variables.
+- CSS `@media (pointer: coarse)` : champs en 16 px (Safari zoome sinon) — sauf ceux qui ont une classe
+  `text-*` (titres). Boutons flottants : classe `app-sticky` (`z-index` au-dessus du contenu, cachés si
+  `keyboard-open`). ⚠️ Un `ui.page_sticky` sans `z-index` passe **sous** les cartes venues après lui.
+- ➕ : `layout.new_buttons` (`ui.fab` vers le haut, marqueurs `fab-add`, `fab-new-task`, `fab-new-event`,
+  `fab-new-note`) ; `ctx.new_note` (page Notes) sinon `/notes?note=new`.
+- Notes au téléphone : `note-details` repliés (`note-details-open`, bouton `note-details-toggle`), barre
+  cachée hors mode écriture.
+- Essais : Vivaldi `--headless=new` en CDP, `Emulation.setDeviceMetricsOverride` (`mobile`, 412 × 915,
+  `deviceScaleFactor=1` et `--window-size` plus grand que l'écran émulé, sinon capture découpée en tuiles),
+  `setTouchEmulationEnabled` ; naviguer d'abord vers `about:blank` (sinon `Runtime.enable` ne répond pas sur
+  la page d'accueil de Vivaldi) ; `Input.dispatchTouchEvent` est **décalé** de l'interface de Vivaldi
+  (calibrer avec un premier toucher) ; clavier simulé en rapetissant la hauteur (= `resizes-content`). Le
+  comportement iOS (Safari) ne se simule pas ici.
+
 ## Notes
 
 - `core/services/notes.py` (`NoteService`, `sv.notes` / `ds.notes`, `RemoteNotes`) : sous-classe
@@ -620,7 +645,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 472 tests au total (+1 réservé à Windows).
+- 474 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

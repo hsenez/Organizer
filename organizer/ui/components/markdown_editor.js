@@ -599,8 +599,19 @@ export default {
       if (event.key === "Escape") this.flush();
       else event.stopPropagation();
     });
+    // Téléphone : le clavier sort ou rentre, le mode écriture change la mise en page (viewport.js) ; le
+    // curseur doit rester visible.
+    this.onViewport = () => {
+      if (!this.view?.hasFocus) return;
+      requestAnimationFrame(() => {
+        const head = this.view.state.selection.main.head;
+        this.view.dispatch({ effects: CM.EditorView.scrollIntoView(head, { y: "nearest", yMargin: 48 }) });
+      });
+    };
+    window.addEventListener("organizer-viewport", this.onViewport);
   },
   beforeUnmount() {
+    window.removeEventListener("organizer-viewport", this.onViewport);
     if (this.view) {
       this.flush();
       this.view.destroy();

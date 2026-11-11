@@ -301,7 +301,7 @@ async def test_editor_switches_between_task_and_event(user: User):
     sv = await login(user)
     project = sv.projects.create(ProjectIn(name="Maison"))
     await user.open("/calendar")
-    user.find(marker="fab-add").click()  # brouillon de tâche
+    user.find(marker="fab-new-task").click()  # brouillon de tâche
     select_value(user, "editor-project", project.id)
     user.find(marker="slider-importance-4").click()
     select_value(user, "editor-kind", "event")  # → brouillon d'événement, projet gardé
@@ -683,7 +683,7 @@ async def test_calendar_undated_column_resizes_and_collapses(user: User):
 async def test_new_task_opens_full_editor_and_creates_on_title(user: User):
     sv = await login(user)
     await user.open("/tasks")
-    user.find(marker="fab-add").click()
+    user.find(marker="fab-new-task").click()
     await user.should_see("Nouvelle tâche")
     # Réglages faits avant le titre : gardés dans le brouillon, rien en base.
     user.find(marker="slider-importance-4").click()
@@ -705,7 +705,7 @@ async def test_new_task_opens_full_editor_and_creates_on_title(user: User):
 async def test_new_task_without_title_creates_nothing(user: User):
     sv = await login(user)
     await user.open("/tasks")
-    user.find(marker="fab-add").click()
+    user.find(marker="fab-new-task").click()
     user.find(marker="slider-importance-1").click()
     with user.client:
         ctx_editor = user.find(marker="task-editor").elements.pop()
@@ -897,7 +897,7 @@ async def test_dropped_file_paths_need_the_desktop_client(user: User):
 async def test_editor_drop_on_draft_asks_for_a_title(user: User):
     sv = await login(user)
     await user.open("/tasks")
-    user.find(marker="fab-add").click()
+    user.find(marker="fab-new-task").click()
     await user.should_see("Nouvelle tâche")
     await _upload_files(user, ("devis.txt", b"devis"))
     await user.should_see("Donnez d'abord un titre")
