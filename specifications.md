@@ -307,6 +307,9 @@ Tables `note`, `note_tag`, `note_share`, `note_pin` (toutes dans l'historique an
   épingler ne notifie personne.
 - API : `POST /notes/query`, `POST /notes`, `GET|PATCH|DELETE /notes/{id}`, `PUT /notes/{id}/shares`,
   `PUT /notes/{id}/pin`, `POST /refs/resolve` (`{refs}`), `GET /refs/backlinks?ref=note:5`.
+- Page et éditeur : §8.4 quater. **Liens hors du logiciel** : « 🔗 Copier le lien » donne l'adresse web
+  (`https://…/notes?note=5`, valable partout : navigateur, téléphone, mail) ; un lien `organizer://` qui
+  ouvrirait le client bureau (Linux, Windows) est prévu ensuite.
 
 ---
 
@@ -386,6 +389,10 @@ S'ouvre en panneau latéral (bureau) ou en plein écran (téléphone). Le même 
     chemin : copié dans le presse-papiers ; client bureau : ouverture du fichier), sans déplacer le curseur.
     Si le curseur est déjà dans le lien (on l'édite, sa syntaxe est visible), le clic sert à éditer et
     **Ctrl+clic** (⌘+clic sur Mac) l'ouvre. Le double-clic ouvre aussi (une seule ouverture) ;
+  - **liens internes** `[texte](task:12)` / `(event:8)` / `(note:5)` : affichés en **pastille** (📋 tâche,
+    📅 événement, emoji de la note ; texte vide → titre actuel ; 🔒 barré si supprimé ou invisible pour le
+    lecteur) ; un clic ouvre l'élément ; **« [[ »** ouvre une recherche (notes, tâches, événements) qui
+    insère le lien (Entrée : le premier résultat) ;
   - **Ctrl+Z / Ctrl+Maj+Z dans les notes** = annulation de la frappe (historique propre à l'éditeur) ; ils
     ne déclenchent pas l'annulation des actions de la page ;
   - enregistrement : au plus toutes les 1,5 s pendant la frappe, à la sortie du champ et à la fermeture de
@@ -511,9 +518,10 @@ dans la barre de filtres du calendrier.
 3. 📊 **Kanbans** — boards prédéfinis + personnalisés
 4. 🎯 **Matrice d'Eisenhower**
 5. 📅 **Calendrier** — mois / semaine / 6 semaines, événements et échéances
-6. 🔍 **Recherche** (aussi accessible partout par `Ctrl+K`)
-7. 🔔 **Notifications** — bulle rouge avec le nombre de non lues
-8. ⚙️ **Réglages**
+6. 📝 **Notes** — notes markdown partageables, liens vers tâches / événements / notes
+7. 🔍 **Recherche** (aussi accessible partout par `Ctrl+K` : notes et tâches)
+8. 🔔 **Notifications** — bulle rouge avec le nombre de non lues
+9. ⚙️ **Réglages**
 
 Bouton flottant **➕ Nouvelle tâche** sur tous les écrans (raccourci **N**) : ouvre l'éditeur complet en
 mode création (voir §6).
@@ -695,6 +703,35 @@ Page `/calendar` (pleine largeur, pleine hauteur) :
   la case** (même vide) : vue d'un jour (ci-dessus ; animation depuis la case, Échap ou ✕ referme).
 - Téléphone : mêmes 7 colonnes, cases plus basses, pastilles plus petites ; légende masquée.
 
+### 8.4 quater 📝 Notes
+
+Page `/notes` (`?note=<id>` ouvre une note, `?note=new` en crée une) : **liste à gauche** (épinglées
+d'abord, puis les plus récentes ; emoji, titre, 📌, pictogramme de partage, « il y a … » et début du texte ;
+recherche, « De qui ? ») et **note à droite**. Sur téléphone : la liste, puis la note en plein écran
+(« ← » pour revenir).
+
+- **➕ Nouvelle** crée tout de suite une note « Sans titre » (titre sélectionné pour être retapé).
+- En-tête : **emoji** (menu : la liste personnelle des réglages, ou un emoji tapé), **titre** (enregistré
+  à la sortie du champ / Entrée), **📌 épingler** (personnel), **🔗 copier le lien** (adresse web),
+  **🗑️ supprimer** (Ctrl+Z annule).
+- Projet et tags (comme l'éditeur de tâche) ; propriétaire : section repliable **👥 Partage** (📢 publique,
+  partage par personne ✏️ modifiable / 👁️ lecture seule).
+- **Texte** : éditeur façon Obsidian (§6) avec **barre de boutons** (titre, sous-titre, gras, italique,
+  barré, puces, numéros, **cases à cocher**, citation, code, lien web, séparation, **🔗 Lier à…** ; un
+  second clic retire le format de ligne) ; les boutons agissent dans le navigateur (instantané, la
+  sélection est gardée).
+- **Cases à cocher triées** (notes seulement) : cocher une case d'une liste dont tous les éléments sont des
+  cases la range **en tête des cochées** ; décocher la ramène **tout en haut** ; non cochées au-dessus,
+  cochées en dessous, chacune dans son ordre ; les sous-éléments suivent leur élément ; une liste numérotée
+  est renumérotée. Une seule étape d'annulation (Ctrl+Z dans le texte).
+- **🔗 Cité dans** : les notes, tâches et événements visibles qui pointent vers cette note (cliquables).
+- **Lecture seule** (publique d'un autre, partage non modifiable) : même rendu, cases et texte inactifs,
+  liens cliquables, « 👁️ Lecture seule · À Bob… ».
+- Enregistrement automatique (texte : au plus toutes les 1,5 s pendant la frappe, et à la sortie).
+- **Modifiée ailleurs** (temps réel) : la note affichée se met à jour si l'on n'a pas tapé depuis 5 s ;
+  sinon bandeau « ✏️ Cette note a été modifiée ailleurs · ↻ Recharger » (pas de fusion des frappes : la
+  prochaine frappe enregistre son texte).
+
 ### 8.4 ter 🔔 Notifications
 
 Page `/notifications` : ce que **les autres** ont fait qui me concerne. Je suis concerné par une tâche ou
@@ -732,9 +769,10 @@ Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders
 - 👤 **Profil** : nom affiché ; changement de mot de passe (12 caractères minimum ; déconnecte les autres
   appareils).
 - 🎨 **Apparence** : thème 🖥️ comme le système / ☀️ clair / 🌙 sombre, appliqué immédiatement et mémorisé
-  pour le compte.
+  pour le compte ; **😀 emojis proposés** (notes et projets) : liste personnelle, séparés par des espaces,
+  « ↺ Liste par défaut ».
 - 🔔 **Rappels** : décalage par défaut (jours avant l'échéance), notifications bureau oui/non.
-- 📁 **Projets** : créer, modifier (nom, emoji avec palette, couleur, description, 🌍 public / 🔒 privé),
+- 📁 **Projets** : créer, modifier (nom, emoji parmi les emojis proposés, couleur, description, 🌍 public / 🔒 privé),
   réordonner (↑ ↓), archiver / désarchiver, supprimer (les tâches restent, sans projet) ; les projets
   publics d'autres utilisateurs sont en lecture seule (sauf pour les admins).
 - 🏷️ **Tags** : créer, modifier (nom, couleur, public / privé), réordonner, **fusionner** dans un autre tag,
@@ -1082,3 +1120,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.34 | Calendrier : aujourd'hui repéré par un **fond** (jaune pâle ; rosé s'il y a des tâches en retard) au lieu d'un contour, qui faisait croire à une sélection |
 | 2026-11-10 | 1.35 | **🎉 Version 1.1.0** : calendrier, événements, notifications (voir `CHANGELOG.md`) ; `API_VERSION` inchangée (ajouts compatibles) ; branche `cloclo` fusionnée dans `main`, étiquette `v1.1.0` |
 | 2026-11-11 | 1.36 | **📝 Notes, étape 1** (§4.8) : tables `note`, `note_tag`, `note_share`, `note_pin` ; `NoteService` (droits comme les événements, épingles personnelles, filtres, liens internes `task:` / `event:` / `note:` résolus pour le lecteur, liens retour) ; tags / projets supprimés ou fusionnés aussi sur les notes ; notifications ; API `/notes` et `/refs`, `RemoteNotes` ; 430 tests |
+| 2026-11-11 | 1.37 | **📝 Notes, étapes 2-3** (§8.4 quater) : module 📝 Notes (liste + note, téléphone en deux écrans), emoji (liste personnelle modifiable dans Réglages → Apparence, aussi pour les projets), épingle, copier le lien, partage / publique, lecture seule ; éditeur markdown : barre de boutons, lecture seule, **tri des cases** à la coche (notes), **liens internes** en pastilles (titre actuel, 🔒 inaccessible), recherche « [[ » / « 🔗 Lier à… » (aussi dans les notes des tâches et des événements), « Cité dans » ; notes dans Ctrl+K et les notifications ; composants `ref_links`, `sharing`, `emoji_picker`, `label_selects` / `tag_ids_from` partagés ; 442 tests + vérifié dans Firefox (tri, Ctrl+Z, boutons, [[, pastilles, lecture seule, téléphone) |

@@ -47,6 +47,8 @@ class UiContext:
         self._refreshers: list[Callable[[], Any]] = []
         self._light_refreshers: list[Callable[[], Any]] = []
         self.editor: Any = None  # Editor de la page (tâche / événement, créé par le layout)
+        # Ouvre une note (page Notes : la sélectionne ; ailleurs, None : on navigue vers /notes?note=…).
+        self.open_note: Callable[[int], None] | None = None
         self.dark: Any = None  # ui.dark_mode de la page (créé par le layout)
         # Dépôt d'une carte dans une zone de la page : fonction (task_id, zone, index) fournie par la page.
         self.drop_handler: Callable[[int, str, int | None], None] | None = None

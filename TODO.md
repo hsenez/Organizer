@@ -122,8 +122,12 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 - Liens internes `[x](task:12)` / `event:` / `note:` cliquables (`[[` pour chercher), liens retour,
   « Copier le lien » (adresse web), puis lien `organizer://` qui ouvre le client bureau (Linux, Windows).
 - Modifiée ailleurs pendant l'édition : mise à jour si on ne tape pas, sinon bandeau « recharger ».
-- Avancement : ✅ 1. modèle, service, API, client bureau ; 2. page et éditeur ; 3. liens internes dans
-  l'éditeur ; 4. `organizer://`.
+- Avancement : ✅ 1. modèle, service, API, client bureau ; ✅ 2. page et éditeur ; ✅ 3. liens internes
+  dans l'éditeur (aussi dans les notes des tâches / événements) ; 4. `organizer://` (à faire).
+- À essayer à l'usage : thème sombre de la page (pastilles), téléphone réel, client bureau (« copier le
+  lien » = adresse du serveur configuré).
+- Plus tard peut-être : édition simultanée sans écraser (fusion des frappes) ; liste des notes filtrable
+  par projet / tag dans la page (le service le permet).
 
 #### Chantier important: Création d'événements. 
 

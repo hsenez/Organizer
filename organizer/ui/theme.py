@@ -389,6 +389,40 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 .body--dark .md-editor .cm-selectionBackground, .body--dark .md-editor .cm-focused .cm-selectionBackground
     { background: rgba(92, 124, 250, .35) !important; }
 .body--dark .md-editor .cm-cursor { border-left-color: #e9ecef; }
+/* Liens internes : pastille « 📋 Titre » (tâche), « 📅 » (événement), emoji de la note. */
+.md-editor .cm-md-ref { display: inline-block; padding: 0 8px; margin: 0 1px; border-radius: 999px; cursor: pointer;
+    background: rgba(92, 124, 250, .13); color: #364fc7; font-size: .93em; line-height: 1.5;
+    text-decoration: none; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    vertical-align: bottom; }
+.md-editor .cm-md-ref:hover { background: rgba(92, 124, 250, .24); }
+.md-editor .cm-md-ref-task { background: rgba(18, 184, 134, .14); color: #087f5b; }
+.md-editor .cm-md-ref-event { background: rgba(253, 126, 20, .14); color: #c2410c; }
+.md-editor .cm-md-ref-missing { background: rgba(134, 142, 150, .16); color: #868e96; text-decoration: line-through; }
+.body--dark .md-editor .cm-md-ref { color: #bac8ff; }
+.body--dark .md-editor .cm-md-ref-task { color: #63e6be; }
+.body--dark .md-editor .cm-md-ref-event { color: #ffc078; }
+.body--dark .md-editor .cm-md-ref-missing { color: #adb5bd; }
+.md-editor .cm-md-ref-edit { color: #364fc7; }
+.md-editor .cm-md-checkbox:disabled { cursor: default; }
+.md-toolbar .q-btn { min-width: 30px; }
+
+/* --- Page Notes : liste à gauche, note à droite (téléphone : l'une ou l'autre) ----------------------- */
+.notes-list { width: 300px; flex: 0 0 300px; min-height: 0; overflow-y: auto; }
+.notes-view { flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; max-width: 980px; }
+.note-row { border: 1px solid transparent; }
+.note-row:hover { background: rgba(120, 130, 150, .10); }
+.note-row-selected { background: rgba(92, 124, 250, .12) !important; border-color: rgba(92, 124, 250, .35); }
+.note-title .q-field__native { font-size: 1.5rem; font-weight: 700; line-height: 1.3; }
+.note-text .cm-editor { min-height: 50vh; }
+.notes-stale { background: rgba(253, 126, 20, .16); }
+.notes-back { display: none; }
+@media (max-width: 767px) {
+    .notes-page { flex-direction: column; }
+    .notes-list { width: 100%; flex: 1 1 auto; }
+    .notes-page.has-note .notes-list { display: none; }
+    .notes-page:not(.has-note) .notes-view { display: none; }
+    .notes-back { display: inline-flex; }
+}
 
 /* --- Curseurs de niveaux ---------------------------------------------------------------------------- */
 .level-option { cursor: pointer; user-select: none; border-radius: 8px; padding: 2px 4px;

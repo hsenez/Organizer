@@ -7,34 +7,85 @@
 // - Cases à cocher cliquables ; liens, adresses web et chemins de fichiers ouverts d'un clic (Ctrl+clic si le
 //   curseur est déjà dans le lien pour l'éditer ; le double-clic fonctionne aussi). Événement « open-link »
 //   envoyé au serveur, qui décide quoi faire selon la plateforme.
+// - Liens internes [texte](task:12) / (event:8) / (note:5) : pastille cliquable (emoji + texte, ou titre actuel
+//   si le texte est vide) ; prop « refs » = ce que le serveur sait de chaque lien (titre, inaccessible).
+//   « [[ » tapé (prop refPicker) émet « ref-request » : le serveur ouvre la recherche, puis insertRef().
+// - Lecture seule (prop readonly), barre de boutons (méthode format()), tri des cases (prop sortChecks :
+//   cocher envoie la case en tête des cochées, décocher tout en haut ; non cochées au-dessus).
 import * as CM from "nicegui-codemirror";
 
 // Chemins de fichiers locaux écrits tels quels dans le texte : /home/…, ~/…, C:\…
 const PATH_RE = /(^|[\s(])((?:~\/|\/)[^\s()]+|[A-Za-z]:\\[^\s()]*)/g;
+// Cible d'un lien interne (identique à rules.parse_ref côté Python).
+const REF_RE = /^(task|event|note):(\d+)$/;
+const REF_EMOJI = { task: "📋", event: "📅", note: "📝" };
+// Relance du rendu quand les props refs / readonly changent (sans modifier le texte).
+const redraw = CM.StateEffect.define();
 
 class CheckboxWidget extends CM.WidgetType {
-  constructor(checked, pos) {
+  constructor(checked, pos, readOnly) {
     super();
     this.checked = checked;
     this.pos = pos; // position du caractère entre les crochets (« » ou « x »)
+    this.readOnly = readOnly;
   }
   eq(other) {
-    return other.checked === this.checked && other.pos === this.pos;
+    return other.checked === this.checked && other.pos === this.pos && other.readOnly === this.readOnly;
   }
   toDOM(view) {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.checked = this.checked;
+    box.disabled = this.readOnly;
     box.className = "cm-md-checkbox";
-    box.title = this.checked ? "Fait — cliquer pour décocher" : "À faire — cliquer pour cocher";
+    box.title = this.readOnly ? "Lecture seule" : this.checked ? "Fait — cliquer pour décocher" : "À faire — cliquer pour cocher";
     box.addEventListener("mousedown", (event) => {
       event.preventDefault();
-      view.dispatch({ changes: { from: this.pos, to: this.pos + 1, insert: this.checked ? " " : "x" } });
+      if (view.state.readOnly) return;
+      const sorted = view.organizer?.sortChecks ? sortedChecklist(view.state, this.pos, !this.checked) : null;
+      view.dispatch(sorted || { changes: { from: this.pos, to: this.pos + 1, insert: this.checked ? " " : "x" } });
     });
     return box;
   }
   ignoreEvent() {
     return true;
+  }
+}
+
+// Lien interne rendu en pastille : « 📋 Acheter du pain ». Inaccessible (supprimé, pas visible) : 🔒 barré.
+class RefWidget extends CM.WidgetType {
+  constructor(target, text, info) {
+    super();
+    this.target = target;
+    this.text = text;
+    this.info = info || null;
+  }
+  eq(other) {
+    return (
+      other.target === this.target &&
+      other.text === this.text &&
+      JSON.stringify(other.info) === JSON.stringify(this.info)
+    );
+  }
+  toDOM() {
+    const kind = REF_RE.exec(this.target)[1];
+    const info = this.info;
+    const missing = info && !info.available;
+    const chip = document.createElement("span");
+    chip.className = `cm-md-ref cm-md-ref-${kind}` + (missing ? " cm-md-ref-missing" : "");
+    chip.dataset.target = this.target;
+    chip.dataset.kind = "ref";
+    const emoji = missing ? "🔒" : info?.emoji || REF_EMOJI[kind];
+    const label = this.text || info?.title || (missing ? "inaccessible" : this.target);
+    chip.textContent = `${emoji} ${label}`;
+    const current = info?.title && info.title !== label ? `\nTitre actuel : ${info.title}` : "";
+    chip.title = missing
+      ? "Élément supprimé, ou que vous ne pouvez pas voir"
+      : `${{ task: "Tâche", event: "Événement", note: "Note" }[kind]}${current}\nCliquer pour ouvrir`;
+    return chip;
+  }
+  ignoreEvent() {
+    return false; // le clic arrive au gestionnaire « mousedown » de l'éditeur (ouverture)
   }
 }
 
@@ -139,6 +190,16 @@ function buildDecorations(view) {
             const url = node.node.getChild("URL");
             if (marks.length < 2 || !url) break;
             const target = doc.sliceString(url.from, url.to);
+            if (REF_RE.test(target)) {
+              const text = doc.sliceString(marks[0].to, marks[1].from).trim();
+              const info = view.organizer?.refs?.[target];
+              if (!touches(node.from, node.to)) {
+                add(CM.Decoration.replace({ widget: new RefWidget(target, text, info) }), node.from, node.to);
+              } else if (marks[0].to < marks[1].from) {
+                add(linkMark(target, "ref", "cm-md-link cm-md-ref-edit"), marks[0].to, marks[1].from);
+              }
+              break;
+            }
             if (marks[0].to < marks[1].from) add(linkMark(target, "link"), marks[0].to, marks[1].from);
             if (!touches(node.from, node.to)) {
               add(hidden, marks[0].from, marks[0].to);
@@ -180,7 +241,11 @@ function buildDecorations(view) {
               if (!isBullet) add(mark("cm-md-olmark"), node.from, node.to);
               if (!overlaps(start, end)) {
                 const checked = /x/i.test(doc.sliceString(marker.from, marker.to));
-                add(CM.Decoration.replace({ widget: new CheckboxWidget(checked, marker.from + 1) }), start, end);
+                add(
+                  CM.Decoration.replace({ widget: new CheckboxWidget(checked, marker.from + 1, state.readOnly) }),
+                  start,
+                  end,
+                );
               }
             } else if (isBullet) {
               const end = withSpace(node.to);
@@ -225,6 +290,7 @@ const livePreview = CM.ViewPlugin.fromClass(
         update.viewportChanged ||
         update.selectionSet ||
         update.focusChanged ||
+        update.transactions.some((tr) => tr.effects.some((e) => e.is(redraw))) ||
         CM.syntaxTree(update.startState) !== CM.syntaxTree(update.state)
       ) {
         this.decorations = buildDecorations(update.view);
@@ -233,6 +299,133 @@ const livePreview = CM.ViewPlugin.fromClass(
   },
   { decorations: (plugin) => plugin.decorations },
 );
+
+// Tri d'une liste de cases au moment où l'on coche / décoche celle dont la marque est en « markerPos » :
+// non cochées d'abord, puis cochées, chacune dans son ordre ; la case cochée passe en tête des cochées, la
+// case décochée tout en haut. Les sous-éléments suivent leur élément. Seulement si tous les éléments de ce
+// niveau sont des cases (sinon : simple bascule, rien ne bouge). Une seule transaction (un seul Ctrl+Z).
+function sortedChecklist(state, markerPos, nowChecked) {
+  const doc = state.doc;
+  let item = null;
+  for (let node = CM.syntaxTree(state).resolveInner(markerPos, 1); node; node = node.parent) {
+    if (node.name === "ListItem") {
+      item = node;
+      break;
+    }
+  }
+  const list = item?.parent;
+  if (!list) return null;
+  const items = list.getChildren("ListItem");
+  const blocks = [];
+  for (const node of items) {
+    const marker = node.getChild("Task")?.getChild("TaskMarker");
+    if (!marker) return null;
+    blocks.push({ node, marker, checked: /x/i.test(doc.sliceString(marker.from, marker.to)) });
+  }
+  if (blocks.length < 2) return null;
+  for (const block of blocks) block.start = doc.lineAt(block.node.from).from;
+  for (let i = 0; i < blocks.length; i++) {
+    blocks[i].end =
+      i + 1 < blocks.length
+        ? doc.lineAt(blocks[i + 1].node.from).from - 1
+        : doc.lineAt(Math.max(blocks[i].node.from, blocks[i].node.to - 1)).to;
+    blocks[i].text = doc.sliceString(blocks[i].start, blocks[i].end);
+  }
+  const index = blocks.findIndex((b) => b.marker.from < markerPos && markerPos < b.marker.to);
+  if (index < 0) return null;
+  const toggled = blocks[index];
+  const offset = markerPos - toggled.start;
+  toggled.text = toggled.text.slice(0, offset) + (nowChecked ? "x" : " ") + toggled.text.slice(offset + 1);
+  const others = blocks.filter((_, i) => i !== index);
+  const unchecked = others.filter((b) => !b.checked).map((b) => b.text);
+  const checked = others.filter((b) => b.checked).map((b) => b.text);
+  let texts = nowChecked ? [...unchecked, toggled.text, ...checked] : [toggled.text, ...unchecked, ...checked];
+  if (list.name === "OrderedList") {
+    const first = /^\s*(\d+)/.exec(blocks[0].text);
+    let number = first ? Number(first[1]) : 1;
+    texts = texts.map((text) => text.replace(/^(\s*)\d+/, (_, indent) => `${indent}${number++}`));
+  }
+  const from = blocks[0].start;
+  const to = blocks[blocks.length - 1].end;
+  return { changes: { from, to, insert: texts.join("\n") }, userEvent: "input.check" };
+}
+
+// Préfixes de ligne de la barre de boutons (un clic de plus retire le préfixe).
+const LINE_PREFIX = { h1: "# ", h2: "## ", h3: "### ", bullet: "- ", ordered: "1. ", task: "- [ ] ", quote: "> " };
+const ANY_PREFIX = /^(\s*)(#{1,6} |> |[-*+] \[[ xX]\] |[-*+] |\d+[.)] )?/;
+const INLINE_MARK = { bold: "**", italic: "*", strike: "~~", code: "`" };
+
+function formatLines(view, kind) {
+  const { state } = view;
+  const wanted = LINE_PREFIX[kind];
+  const lines = [];
+  for (const range of state.selection.ranges) {
+    for (let pos = range.from; pos <= range.to; ) {
+      const line = state.doc.lineAt(pos);
+      if (!lines.some((l) => l.number === line.number)) lines.push(line);
+      pos = line.to + 1;
+    }
+  }
+  const same = (line) => {
+    const prefix = ANY_PREFIX.exec(line.text)[2] || "";
+    return kind === "ordered" ? /^\d+[.)] $/.test(prefix) : prefix.replace(/\[[xX]\]/, "[ ]") === wanted;
+  };
+  const remove = lines.every(same); // toutes déjà au bon format : on retire
+  let number = 1;
+  const changes = lines.map((line) => {
+    const match = ANY_PREFIX.exec(line.text);
+    const indent = match[1];
+    const prefix = match[2] || "";
+    const insert = remove ? "" : kind === "ordered" ? `${number++}. ` : wanted;
+    return { from: line.from + indent.length, to: line.from + indent.length + prefix.length, insert };
+  });
+  view.dispatch({ changes, userEvent: "input.format" });
+}
+
+function formatInline(view, kind) {
+  const mark = INLINE_MARK[kind];
+  const { state } = view;
+  view.dispatch(
+    state.changeByRange((range) => {
+      const before = state.doc.sliceString(range.from - mark.length, range.from);
+      const after = state.doc.sliceString(range.to, range.to + mark.length);
+      if (before === mark && after === mark && range.from - mark.length >= 0) {
+        return {
+          changes: [
+            { from: range.from - mark.length, to: range.from },
+            { from: range.to, to: range.to + mark.length },
+          ],
+          range: CM.EditorSelection.range(range.from - mark.length, range.to - mark.length),
+        };
+      }
+      return {
+        changes: [
+          { from: range.from, insert: mark },
+          { from: range.to, insert: mark },
+        ],
+        range: CM.EditorSelection.range(range.from + mark.length, range.to + mark.length),
+      };
+    }),
+    { userEvent: "input.format" },
+  );
+}
+
+function formatLink(view) {
+  const { state } = view;
+  view.dispatch(
+    state.changeByRange((range) => {
+      const text = state.doc.sliceString(range.from, range.to);
+      const isUrl = /^(https?:\/\/|www\.)\S+$/.test(text);
+      const insert = isUrl ? `[](${text})` : `[${text || "texte"}](https://)`;
+      // Curseur : dans le texte pour une adresse sélectionnée, sinon dans l'adresse.
+      const cursor = isUrl ? range.from + 1 : range.from + insert.length - 1;
+      const anchor = isUrl ? cursor : text ? cursor - "https://".length : range.from + 1;
+      const head = isUrl ? cursor : text ? cursor : range.from + 1 + "texte".length;
+      return { changes: { from: range.from, to: range.to, insert }, range: CM.EditorSelection.range(anchor, head) };
+    }),
+    { userEvent: "input.format" },
+  );
+}
 
 // Cible d'un lien à une position donnée (double-clic hors d'un élément rendu).
 function targetAt(state, pos) {
@@ -260,8 +453,24 @@ export default {
     markdownModule: String,
     placeholder: String,
     loopback: Boolean,
+    readonly: Boolean,
+    sortChecks: Boolean,
+    refPicker: Boolean,
+    refs: Object,
   },
   watch: {
+    readonly(value) {
+      if (!this.view) return;
+      this.view.dispatch({ effects: [this.editable.reconfigure(this.editableExtension(value)), redraw.of(null)] });
+    },
+    sortChecks(value) {
+      if (this.view) this.view.organizer.sortChecks = value;
+    },
+    refs(value) {
+      if (!this.view) return;
+      this.view.organizer.refs = value || {};
+      this.view.dispatch({ effects: redraw.of(null) });
+    },
     value(newValue) {
       if (!this.view) return;
       const text = newValue ?? "";
@@ -305,15 +514,22 @@ export default {
     });
     const sync = CM.EditorView.updateListener.of((update) => {
       if (update.docChanged && !this.applyingRemote) this.scheduleEmit();
+      if (update.docChanged && this.refPicker && update.transactions.some((tr) => tr.isUserEvent("input.type"))) {
+        const pos = update.state.selection.main.head;
+        const before = update.state.doc.sliceString(Math.max(0, pos - 3), pos);
+        if (before.endsWith("[[") && !before.endsWith("[[[")) this.$emit("ref-request");
+      }
       if (update.focusChanged && !update.view.hasFocus) {
         this.flush();
         this.$emit("blur");
       }
     });
+    this.editable = new CM.Compartment();
     this.view = new CM.EditorView({
       parent: this.$el,
       doc: this.value ?? "",
       extensions: [
+        this.editable.of(this.editableExtension(this.readonly)),
         CM.history(),
         CM.drawSelection(),
         CM.EditorView.lineWrapping,
@@ -326,6 +542,8 @@ export default {
         sync,
       ],
     });
+    this.view.organizer = { refs: this.refs || {}, sortChecks: this.sortChecks };
+    this.view.dispatch({ effects: redraw.of(null) }); // premier rendu avec les titres des liens internes
     // Les raccourcis globaux de la page (Ctrl+Z serveur, « N »…) ne doivent pas réagir à la frappe ici :
     // Ctrl+Z dans l'éditeur annule la frappe. Échap reste transmis (fermeture du panneau).
     this.$el.addEventListener("keydown", (event) => {
@@ -345,6 +563,7 @@ export default {
       const now = Date.now();
       if (this.lastOpen && this.lastOpen.target === target && now - this.lastOpen.time < 800) return;
       this.lastOpen = { target, time: now };
+      this.flush(); // le texte part avant : le serveur peut l'enregistrer avant d'ouvrir autre chose
       this.$emit("open-link", { target, kind: kind || "link" });
     },
     scheduleEmit() {
@@ -361,6 +580,34 @@ export default {
     },
     focus() {
       this.view?.focus();
+    },
+    editableExtension(readonly) {
+      return [CM.EditorState.readOnly.of(!!readonly), CM.EditorView.editable.of(!readonly)];
+    },
+    // Barre de boutons : gras, italique, barré, code, lien ; titres, puces, numéros, cases, citation.
+    format(kind) {
+      const view = this.view;
+      if (!view || view.state.readOnly) return;
+      if (kind in INLINE_MARK) formatInline(view, kind);
+      else if (kind in LINE_PREFIX) formatLines(view, kind);
+      else if (kind === "link") formatLink(view);
+      else if (kind === "hr") {
+        const line = view.state.doc.lineAt(view.state.selection.main.head);
+        const insert = (line.length ? "\n" : "") + "---\n";
+        view.dispatch({ changes: { from: line.to, insert }, selection: { anchor: line.to + insert.length } });
+      }
+      view.focus();
+    },
+    // Insère un lien interne au curseur (en remplaçant le « [[ » qui a ouvert la recherche).
+    insertRef(text) {
+      const view = this.view;
+      if (!view || view.state.readOnly) return;
+      const { from, to } = view.state.selection.main;
+      const start = from >= 2 && view.state.doc.sliceString(from - 2, from) === "[[" ? from - 2 : from;
+      const end = view.state.doc.sliceString(to, to + 2) === "]]" ? to + 2 : to;
+      view.dispatch({ changes: { from: start, to: end, insert: text }, selection: { anchor: start + text.length } });
+      view.focus();
+      this.flush();
     },
   },
 };

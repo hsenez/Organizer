@@ -31,6 +31,7 @@ from organizer.ui.components.file_drop import (
     reusable_upload,
 )
 from organizer.ui.components.markdown_editor import MarkdownEditor
+from organizer.ui.components.ref_links import RefLinks, open_ref
 from organizer.ui.components.tag_chips import color_tag_select
 from organizer.ui.context import UiContext
 
@@ -409,62 +410,15 @@ class ItemEditor:
     # --- projet, tags ---
 
     def _labels(self, item: Any) -> None:
-        # Noms rendus distincts : un privé et un public d'un autre peuvent porter le même nom.
-        visible_projects = self.ds.projects.list()
-        project_names = rules.label_names(visible_projects)
-        projects = {NO_PROJECT: "— Aucun projet —"}
-        projects.update({p.id: f"{p.emoji} {project_names[p.id]}" for p in visible_projects})
-        if item.project is not None and item.project.id not in projects:  # projet archivé
-            projects[item.project.id] = f"{item.project.emoji} {item.project.name} (archivé)"
-        all_tags = self.ds.tags.list()
-        tag_names = rules.label_names(all_tags)
-        tags = {t.id: tag_names[t.id] for t in all_tags}
-        with ui.element("div").classes("grid grid-cols-1 sm:grid-cols-2 gap-3 w-full"):
-            ui.select(
-                projects,
-                label="📁 Projet / sujet",
-                value=item.project.id if item.project else NO_PROJECT,
-                on_change=lambda e: self._save(rebuild=self.kind == "event", project_id=e.value or None),
-            ).props("outlined dense options-dense").mark("editor-project")
-            self.tags_select = (
-                ui.select(
-                    tags,
-                    label="🏷️ Tags (taper pour créer)",
-                    value=[t.id for t in item.tags],
-                    multiple=True,
-                    with_input=True,
-                    new_value_mode="add-unique",
-                    on_change=lambda e: self._tags_changed(e.value),
-                )
-                .props("outlined dense use-chips options-dense")
-                .mark("editor-tags")
-            )
-            color_tag_select(self.tags_select, {tag_names[t.id]: t.color for t in all_tags})
+        self.tags_select = label_selects(
+            self.ctx,
+            item,
+            on_project=lambda value: self._save(rebuild=self.kind == "event", project_id=value),
+            on_tags=self._tags_changed,
+        )
 
     def _tags_changed(self, values: list) -> None:
-        # Nom tapé : son propre tag d'abord (un public d'un autre peut porter le même nom).
-        all_tags = sorted(self.ds.tags.list(), key=lambda t: t.owner_id == self.ctx.user.id)
-        existing = {t.name.casefold(): t.id for t in all_tags}
-        ids: list[int] = []
-        created = False
-        colors = {t.id: t.color for t in self.ds.tags.list()}
-        avoid = [colors[v] for v in values or [] if isinstance(v, int) and v in colors]
-        for value in values or []:
-            if isinstance(value, int):
-                ids.append(value)
-                continue
-            name = str(value).strip()
-            if not name:
-                continue
-            if name.casefold() in existing:
-                ids.append(existing[name.casefold()])
-            else:
-                # Couleur choisie loin de celles des tags déjà sur cet élément (et des autres tags).
-                tag = self.ctx.call(self.ds.tags.create, TagIn(name=name, avoid_colors=avoid))
-                if tag is not None:
-                    ids.append(tag.id)
-                    avoid.append(tag.color)
-                    created = True
+        ids, created = tag_ids_from(self.ctx, values)
         if sorted(ids) != sorted(t.id for t in self.item.tags) or created:
             self._save(rebuild=created, tag_ids=ids)
 
@@ -569,23 +523,35 @@ class ItemEditor:
         with ui.column().classes("w-full gap-1"):
             with ui.row().classes("w-full items-baseline gap-2"):
                 ui.label("📝 Notes").classes("font-semibold")
-                ui.label("markdown · clic sur un lien pour l'ouvrir").classes("text-xs text-gray-500")
+                ui.label("markdown · clic sur un lien pour l'ouvrir · [[ pour citer").classes(
+                    "text-xs text-gray-500"
+                )
             self.notes_editor = (
                 MarkdownEditor(
                     item.notes,
                     placeholder="Écrire ici… « - » liste, « 1. » numérotée, « - [ ] » case à cocher, "
-                    "**gras**, # titre",
+                    "**gras**, # titre, [[ lien vers une note / tâche / événement",
                     on_open_link=self._open_note_link,
+                    on_ref_request=lambda: self.ref_links.pick(),
                 )
                 .classes("w-full")
                 .mark("editor-notes")
             )
+            self.ref_links = RefLinks(self.ctx, self.notes_editor, exclude=self._self_ref(item))
+        self.notes_editor.on("update:value", lambda: self.ref_links.update(self.notes_editor.value or ""))
         self.notes_editor.on("update:value", self._save_notes, throttle=1.5, leading_events=False)
         self.notes_editor.on("blur", self._save_notes)
 
+    def _self_ref(self, item: Any) -> str | None:
+        return f"{self.kind}:{item.id}" if item is not None and item.id else None
+
     def _open_note_link(self, target: str, kind: str) -> None:
-        """Clic sur un lien des notes : une adresse reconnue comme web par le markdown est toujours ouverte ;
-        sinon on devine (adresse web ou chemin de fichier)."""
+        """Clic sur un lien des notes : lien interne → l'élément (après avoir enregistré) ; une adresse
+        reconnue comme web par le markdown est toujours ouverte ; sinon on devine (adresse web ou chemin)."""
+        if kind == "ref" or rules.parse_ref(target) is not None:
+            self._leave()
+            open_ref(self.ctx, target)
+            return
         link_kind = LinkKind.URL if kind == "url" else rules.detect_link_kind(target)
         self.ctx.call(open_link, link_kind, target, self.ds)
 
@@ -607,6 +573,79 @@ class ItemEditor:
             if item.owner_id != self.ctx.user.id:
                 owner = next((u.display_name for u in self.ds.users_public() if u.id == item.owner_id), "?")
                 ui.label(f"👤 Appartient à {owner}")
+
+
+# ======================================================================================================
+# Projet et tags (éditeurs de tâche / d'événement, page Notes)
+# ======================================================================================================
+
+
+def label_selects(ctx: UiContext, item: Any, *, on_project, on_tags) -> ui.select:
+    """Listes « 📁 Projet » et « 🏷️ Tags » (création d'un tag en tapant son nom) ; renvoie celle des tags.
+
+    ``on_project(id | None)`` ; ``on_tags(valeurs)`` (identifiants ou noms tapés, :func:`tag_ids_from`).
+    Noms rendus distincts : un privé et un public d'un autre peuvent porter le même nom."""
+    ds = ctx.ds
+    visible_projects = ds.projects.list()
+    project_names = rules.label_names(visible_projects)
+    projects = {NO_PROJECT: "— Aucun projet —"}
+    projects.update({p.id: f"{p.emoji} {project_names[p.id]}" for p in visible_projects})
+    if item.project is not None and item.project.id not in projects:  # projet archivé
+        projects[item.project.id] = f"{item.project.emoji} {item.project.name} (archivé)"
+    all_tags = ds.tags.list()
+    tag_names = rules.label_names(all_tags)
+    tags = {t.id: tag_names[t.id] for t in all_tags}
+    with ui.element("div").classes("grid grid-cols-1 sm:grid-cols-2 gap-3 w-full"):
+        ui.select(
+            projects,
+            label="📁 Projet / sujet",
+            value=item.project.id if item.project else NO_PROJECT,
+            on_change=lambda e: on_project(e.value or None),
+        ).props("outlined dense options-dense").mark("editor-project")
+        tags_select = (
+            ui.select(
+                tags,
+                label="🏷️ Tags (taper pour créer)",
+                value=[t.id for t in item.tags],
+                multiple=True,
+                with_input=True,
+                new_value_mode="add-unique",
+                on_change=lambda e: on_tags(e.value),
+            )
+            .props("outlined dense use-chips options-dense")
+            .mark("editor-tags")
+        )
+        color_tag_select(tags_select, {tag_names[t.id]: t.color for t in all_tags})
+    return tags_select
+
+
+def tag_ids_from(ctx: UiContext, values: list | None) -> tuple[list[int], bool]:
+    """Identifiants des tags choisis ; un nom tapé désigne d'abord son propre tag (un public d'un autre peut
+    porter le même nom), sinon le tag est créé (couleur loin de celles déjà posées). Renvoie aussi « un tag
+    a été créé »."""
+    ds = ctx.ds
+    all_tags = sorted(ds.tags.list(), key=lambda t: t.owner_id == ctx.user.id)
+    existing = {t.name.casefold(): t.id for t in all_tags}
+    colors = {t.id: t.color for t in all_tags}
+    avoid = [colors[v] for v in values or [] if isinstance(v, int) and v in colors]
+    ids: list[int] = []
+    created = False
+    for value in values or []:
+        if isinstance(value, int):
+            ids.append(value)
+            continue
+        name = str(value).strip()
+        if not name:
+            continue
+        if name.casefold() in existing:
+            ids.append(existing[name.casefold()])
+        else:
+            tag = ctx.call(ds.tags.create, TagIn(name=name, avoid_colors=avoid))
+            if tag is not None:
+                ids.append(tag.id)
+                avoid.append(tag.color)
+                created = True
+    return ids, created
 
 
 # ======================================================================================================

@@ -25,7 +25,7 @@ KINDS = {
     "delete": ("🗑️", "a supprimé {item}"),
     "conflict": ("⚠️", "a rendu public un {noun} du même nom que votre {noun} privé {item}"),
 }
-ITEM_EMOJI = {"task": "📋", "event": "📅", "tag": "🏷️", "project": "📁"}
+ITEM_EMOJI = {"task": "📋", "event": "📅", "note": "📝", "tag": "🏷️", "project": "📁"}
 NOUNS = {"tag": "tag", "project": "projet"}
 
 
@@ -119,6 +119,8 @@ class NotificationsView:
             return
         if n.item_type == "event":
             self.ctx.editor.open_event(n.item_id)
+        elif n.item_type == "note":
+            ui.navigate.to(f"/notes?note={n.item_id}")
         else:
             self.ctx.editor.open(n.item_id)
 

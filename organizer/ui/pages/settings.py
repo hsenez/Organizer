@@ -13,6 +13,7 @@ from nicegui import run, ui
 from pydantic import ValidationError
 
 from organizer.core import rules
+from organizer.core.enums import DEFAULT_EMOJIS, EMOJIS_PREF
 from organizer.core.errors import OrganizerError
 from organizer.core.schemas import (
     AdminUserPatch,
@@ -26,10 +27,9 @@ from organizer.core.schemas import (
 )
 from organizer.core.services.users import MIN_PASSWORD_LENGTH
 from organizer.ui import format as fmt
+from organizer.ui.components.emoji_picker import emoji_choices, emoji_grid
 from organizer.ui.context import UiContext
 from organizer.ui.layout import THEMES, app_frame, empty_state
-
-EMOJIS = "📁 🏠 💼 🛒 🎓 💰 🏥 🚗 ✈️ 🎉 🛠️ 📚 💻 🎨 🌱 ⚽ 🍳 👶 🐶 🎵 📦 🧾 🔧 ❤️".split()
 
 TABS = {
     "profile": "👤 Profil",
@@ -192,6 +192,33 @@ def _appearance(ctx: UiContext) -> None:
             value=ctx.user.theme,
             on_change=changed,
         ).props("no-caps unelevated").mark("theme-toggle")
+    _emojis(ctx)
+
+
+def _emojis(ctx: UiContext) -> None:
+    with _card(
+        "😀 Emojis proposés",
+        "Ceux du choix d'emoji des notes et des projets (séparés par des espaces). Liste personnelle.",
+    ):
+        field = (
+            ui.textarea(value=" ".join(emoji_choices(ctx)))
+            .props("outlined autogrow")
+            .classes("w-full text-xl")
+            .mark("emojis-input")
+        )
+
+        def save(values) -> None:
+            emojis = rules.parse_emojis(values)
+            if _try(lambda: ctx.ds.account.set_pref(EMOJIS_PREF, emojis), "✔ Emojis enregistrés"):
+                field.set_value(" ".join(emojis or DEFAULT_EMOJIS))
+
+        with ui.row().classes("gap-2"):
+            ui.button("💾 Enregistrer", on_click=lambda: save(field.value or "")).props("no-caps").mark(
+                "emojis-save"
+            )
+            ui.button("↺ Liste par défaut", on_click=lambda: save(list(DEFAULT_EMOJIS))).props(
+                "flat no-caps"
+            ).mark("emojis-reset")
 
 
 def _reminders(ctx: UiContext) -> None:
@@ -337,13 +364,9 @@ def _row_button(icon: str, tooltip: str, on_click) -> None:
     ui.button(icon=icon, on_click=on_click).props("flat round dense size=sm").tooltip(tooltip)
 
 
-def _emoji_field(value: str) -> ui.input:
+def _emoji_field(ctx: UiContext, value: str) -> ui.input:
     field = ui.input("Emoji", value=value).props("outlined dense").classes("w-28")
-    with ui.row().classes("gap-0 flex-wrap"):
-        for emoji in EMOJIS:
-            ui.button(emoji, on_click=lambda e=emoji: field.set_value(e)).props("flat dense").classes(
-                "text-lg min-w-0 px-1"
-            )
+    emoji_grid(emoji_choices(ctx), field.set_value)
     return field
 
 
@@ -355,7 +378,7 @@ def _project_dialog(ctx: UiContext, project, on_saved) -> None:
             .props("outlined dense autofocus")
             .classes("w-full")
         )
-        emoji = _emoji_field(project.emoji if project else "📁")
+        emoji = _emoji_field(ctx, project.emoji if project else "📁")
         color = ui.color_input("Couleur", value=project.color if project else "#5c7cfa", preview=True).props(
             "outlined dense"
         )

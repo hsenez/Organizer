@@ -66,7 +66,10 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
   aujourd'hui ; glisser une pastille pour changer son échéance ; colonne des tâches sans échéance, réglable et repliable ;
   double-clic sur une case : vue du jour avec ses tâches et l'agenda sur deux colonnes, où l'on glisse
   les événements et leurs bords ; clic droit ou clic-glisser sur des jours pour créer un
-  événement ou une tâche ; un même éditeur pour les deux, avec une bascule 📋 / 📅), 🔍 Recherche (Ctrl+K), 🔔 Notifications (ce que les autres ont
+  événement ou une tâche ; un même éditeur pour les deux, avec une bascule 📋 / 📅), 📝 Notes (markdown façon
+  Obsidian avec barre de boutons, cases à cocher qui se rangent toutes seules, liens vers des notes / tâches /
+  événements en tapant `[[`, « Cité dans », partage modifiable ou en lecture seule, publique, épingles,
+  « copier le lien »), 🔍 Recherche (Ctrl+K), 🔔 Notifications (ce que les autres ont
   partagé ou modifié qui vous concerne, bulle avec le nombre de non lues), ⚙️ Réglages.
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs` (une fois connecté).
 

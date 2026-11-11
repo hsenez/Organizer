@@ -308,7 +308,7 @@ Référence fonctionnelle complète : **`specifications.md`**.
   `data-cal-day`. Clic droit : `contextmenu` sur la case (`_context`) + `ui.context_menu` de la grille
   (marqueurs `calendar-menu`, `calendar-new-event`, `calendar-new-task`).
 
-## Notes (chantier en cours)
+## Notes (chantier en cours : reste `organizer://`)
 
 - `core/services/notes.py` (`NoteService`, `sv.notes` / `ds.notes`, `RemoteNotes`) : sous-classe
   d'`ItemService` sans table de liens (`link_model = None`) ; texte de la note = colonne `notes` (héritée
@@ -319,8 +319,30 @@ Référence fonctionnelle complète : **`specifications.md`**.
   (titre actuel pour le lecteur, `available=False` sinon) et `backlinks(ref)` (`LIKE` puis revérification).
   Routes `/refs/resolve`, `/refs/backlinks`. `ds.web_url(path)` : adresse web à copier (None côté web =
   `location.origin`).
-- Emojis proposés : `enums.DEFAULT_EMOJIS`, préférence `EMOJIS_PREF`, `rules.parse_emojis`.
-- Tests : `tests/test_notes.py`, `test_client.py::test_notes_through_api_match_local`.
+- Emojis proposés : `enums.DEFAULT_EMOJIS`, préférence `EMOJIS_PREF`, `rules.parse_emojis` ;
+  `components/emoji_picker.py` (`emoji_choices` tolérant, `emoji_grid`, `emoji_button`) ; réglages →
+  Apparence (`_emojis`) et dialogue des projets.
+- Page `ui/pages/notes.py` (`NotesView`, `app_frame(wide=True)`) : liste `notes-list` + note `notes-view`
+  (CSS `.notes-page.has-note` pour le téléphone). Un gestionnaire dont le bouton est détruit par
+  `_render_view` doit passer par `with self.root:` pour `ui.*` (`_set_url`). `ctx.open_note` (UiContext)
+  = ouvrir une note dans la page (None ailleurs : navigation vers `/notes?note=`). Modifiée ailleurs :
+  `_on_refresh` met à jour si pas de frappe depuis `TYPING_SECONDS`, sinon bandeau `notes-stale`.
+- **Éditeur markdown** (`markdown_editor.js`) : props `readonly` (Compartment), `sortChecks`
+  (`sortedChecklist` : une transaction, `userEvent "input.check"`), `refPicker` (« [[ » → `ref-request`),
+  `refs` (titres, posés sur `view.organizer` + effet `redraw` — y compris après la création de la vue) ;
+  méthodes `format(kind)` (barre : `markdown_toolbar`, boutons en `js_handler` → `getElement(id).format`,
+  `mousedown` sans action par défaut pour garder la sélection) et `insertRef(text)`. `RefWidget` (pastille,
+  `ignoreEvent` faux pour que le clic arrive à `mousedown`), `openTarget` vide le texte (`flush`) avant
+  `open-link`.
+- `components/ref_links.py` : `RefLinks` (résout les nouveaux liens à chaque `update:value`), `RefPicker`
+  (dialogue « Lier à… »), `open_ref`. Utilisé par la page Notes et `ItemEditor._notes` (notes des tâches /
+  événements ; lecture seule d'un événement = `MarkdownEditor(readonly=True)`).
+- Partagés : `components/sharing.py` (`public_switch`, `share_editor`, marqueurs `editor-shares`,
+  `editor-share-<id>`), `item_editor.label_selects` / `tag_ids_from`.
+- Tests : `tests/test_notes.py`, `tests/test_notes_pages.py` (le simulateur ne déclenche pas
+  `update:model-value` avec `.type()` : le déclencher à la main ; `trigger("update:value", texte)` pour une
+  frappe dans l'éditeur), `test_client.py::test_notes_through_api_match_local`. Le JS (tri, boutons, « [[ »,
+  pastilles) se vérifie dans Firefox (BiDi : `getElement(document.querySelector('.note-text')).view`).
 
 ## Notifications
 
@@ -583,7 +605,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 430 tests au total (+1 réservé à Windows).
+- 442 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

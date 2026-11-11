@@ -19,6 +19,9 @@ from organizer.core.models import utcnow
 from organizer.core.schemas import EventCreate, EventOut, EventPatch, EventTimes, ShareSpec
 from organizer.ui import format as fmt
 from organizer.ui.components.item_editor import ItemEditor, open_link, parse_date, parse_time
+from organizer.ui.components.markdown_editor import MarkdownEditor
+from organizer.ui.components.ref_links import RefLinks
+from organizer.ui.components.sharing import public_switch, share_editor
 from organizer.ui.components.tag_chips import tag_chip
 
 TIME_KEYS = ("start_date", "start_time", "end_date", "end_time")
@@ -294,22 +297,14 @@ class EventEditor(ItemEditor):
     # --- public, partage ---
 
     def _public(self, event: EventOut) -> None:
-        ui.switch(
+        public_switch(
             "📢 Public — visible (en lecture seule) par tous les comptes",
-            value=event.is_public,
-            on_change=lambda e: (
-                self._save(rebuild=True, is_public=bool(e.value)) if e.value != self.event.is_public else None
-            ),
-        ).props("dense").mark("editor-public")
+            event.is_public,
+            lambda value: self._save(rebuild=True, is_public=value),
+        ).mark("editor-public")
 
     def _sharing(self, event: EventOut) -> None:
-        people = {u.id: u.display_name for u in self.ds.users_public() if u.id != self.ctx.user.id}
-        if not people:
-            return
-        rights = {share.user_id: share.can_edit for share in event.shares}
-
-        def save(new_rights: dict[int, bool]) -> None:
-            shares = [ShareSpec(user_id=u, can_edit=e) for u, e in new_rights.items()]
+        def save(shares: list[ShareSpec]) -> None:
             updated = self.ctx.call(self.ds.agenda.set_shares, self.event.id, shares)
             if updated is not None:
                 self.item = updated
@@ -317,29 +312,7 @@ class EventEditor(ItemEditor):
                 self._page_changed()
                 self._build()
 
-        def chosen(values: list) -> None:
-            wanted = list(values or [])
-            if set(wanted) != set(rights):
-                save({u: rights.get(u, True) for u in wanted})
-
-        with ui.column().classes("w-full gap-1"):
-            ui.select(
-                {u: f"👤 {name}" for u, name in people.items()},
-                label="👥 Partager avec",
-                value=event.shared_with,
-                multiple=True,
-                on_change=lambda e: chosen(e.value),
-            ).props("outlined dense use-chips").classes("w-full").mark("editor-shares")
-            for user_id, can_edit in rights.items():
-                with ui.row().classes("w-full items-center gap-2 pl-2"):
-                    ui.label(f"👤 {people.get(user_id, '?')}").classes("text-sm flex-1")
-                    ui.toggle(
-                        {True: "✏️ Peut modifier", False: "👁️ Lecture seule"},
-                        value=can_edit,
-                        on_change=lambda e, u=user_id: (
-                            save({**rights, u: bool(e.value)}) if bool(e.value) != rights[u] else None
-                        ),
-                    ).props("dense no-caps unelevated size=sm").mark(f"editor-share-{user_id}")
+        share_editor(self.ctx, event.shares, save)
 
     # --- lecture seule ---
 
@@ -375,7 +348,9 @@ class EventEditor(ItemEditor):
         self._links(editable=False)
         if event.notes:
             ui.label("📝 Notes").classes("font-semibold")
-            ui.markdown(event.notes).classes("w-full")
+            notes = MarkdownEditor(event.notes, readonly=True, on_open_link=self._open_note_link)
+            notes.classes("w-full")
+            self.ref_links = RefLinks(self.ctx, notes)
         ui.separator()
         with ui.row().classes("w-full items-center gap-2 text-xs text-gray-500"):
             self._dates_footer(event, feminine=False)
