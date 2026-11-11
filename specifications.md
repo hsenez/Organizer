@@ -718,7 +718,9 @@ recherche, « De qui ? ») et **note à droite**. Sur téléphone : la liste, pu
   partage par personne ✏️ modifiable / 👁️ lecture seule).
 - **Texte** : éditeur façon Obsidian (§6) avec **barre de boutons** (titre, sous-titre, gras, italique,
   barré, puces, numéros, **cases à cocher**, citation, code, lien web, séparation, **🔗 Lier à…** ; un
-  second clic retire le format de ligne) ; les boutons agissent dans le navigateur (instantané, la
+  second clic retire le format de ligne ; puce, numéro, case et citation sont toujours suivis d'une espace
+  et le **curseur se place après** (sur une ligne vide ou en début de ligne ; au milieu du texte, il reste
+  où il était)) ; les boutons agissent dans le navigateur (instantané, la
   sélection est gardée).
 - **Cases à cocher triées** (notes seulement) : cocher une case d'une liste dont tous les éléments sont des
   cases la range **en tête des cochées** ; décocher la ramène **tout en haut** ; non cochées au-dessus,
@@ -1121,3 +1123,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-10 | 1.35 | **🎉 Version 1.1.0** : calendrier, événements, notifications (voir `CHANGELOG.md`) ; `API_VERSION` inchangée (ajouts compatibles) ; branche `cloclo` fusionnée dans `main`, étiquette `v1.1.0` |
 | 2026-11-11 | 1.36 | **📝 Notes, étape 1** (§4.8) : tables `note`, `note_tag`, `note_share`, `note_pin` ; `NoteService` (droits comme les événements, épingles personnelles, filtres, liens internes `task:` / `event:` / `note:` résolus pour le lecteur, liens retour) ; tags / projets supprimés ou fusionnés aussi sur les notes ; notifications ; API `/notes` et `/refs`, `RemoteNotes` ; 430 tests |
 | 2026-11-11 | 1.37 | **📝 Notes, étapes 2-3** (§8.4 quater) : module 📝 Notes (liste + note, téléphone en deux écrans), emoji (liste personnelle modifiable dans Réglages → Apparence, aussi pour les projets), épingle, copier le lien, partage / publique, lecture seule ; éditeur markdown : barre de boutons, lecture seule, **tri des cases** à la coche (notes), **liens internes** en pastilles (titre actuel, 🔒 inaccessible), recherche « [[ » / « 🔗 Lier à… » (aussi dans les notes des tâches et des événements), « Cité dans » ; notes dans Ctrl+K et les notifications ; composants `ref_links`, `sharing`, `emoji_picker`, `label_selects` / `tag_ids_from` partagés ; 442 tests + vérifié dans Firefox (tri, Ctrl+Z, boutons, [[, pastilles, lecture seule, téléphone) |
+| 2026-11-11 | 1.37.1 | Barre de boutons des notes : après une puce, un numéro ou une case (toujours suivis d'une espace), le curseur se place après le préfixe au lieu de rester devant ; vérifié dans Firefox |

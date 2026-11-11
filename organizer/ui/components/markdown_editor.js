@@ -372,14 +372,28 @@ function formatLines(view, kind) {
   };
   const remove = lines.every(same); // toutes déjà au bon format : on retire
   let number = 1;
-  const changes = lines.map((line) => {
+  const edits = lines.map((line) => {
     const match = ANY_PREFIX.exec(line.text);
     const indent = match[1];
     const prefix = match[2] || "";
+    // Le préfixe se termine toujours par une espace (« - », « 1. », « - [ ] » suivis d'une espace).
     const insert = remove ? "" : kind === "ordered" ? `${number++}. ` : wanted;
-    return { from: line.from + indent.length, to: line.from + indent.length + prefix.length, insert };
+    return { line, from: line.from + indent.length, to: line.from + indent.length + prefix.length, insert };
   });
-  view.dispatch({ changes, userEvent: "input.format" });
+  const changes = state.changes(edits.map(({ from, to, insert }) => ({ from, to, insert })));
+  // Curseur : après le nouveau préfixe s'il était dedans ou avant (ligne vide, début de ligne) ; sinon il
+  // garde sa place dans le texte.
+  const selection = CM.EditorSelection.create(
+    state.selection.ranges.map((range) => {
+      const place = (pos) => {
+        const edit = edits.find((e) => e.line.from <= pos && pos <= e.line.to);
+        return edit && pos <= edit.to ? changes.mapPos(edit.to, 1) : changes.mapPos(pos, 1);
+      };
+      return CM.EditorSelection.range(place(range.anchor), place(range.head));
+    }),
+    state.selection.mainIndex,
+  );
+  view.dispatch({ changes, selection, userEvent: "input.format" });
 }
 
 function formatInline(view, kind) {
