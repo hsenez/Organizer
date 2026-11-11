@@ -112,10 +112,13 @@ TOOLBAR = (
 
 def markdown_toolbar(editor: MarkdownEditor, on_ref: Callable[[], None] | None = None):
     """Barre de mise en forme au-dessus d'un :class:`MarkdownEditor`. Les boutons agissent dans le
-    navigateur ; ``mousedown`` sans action par défaut : l'éditeur garde le focus et la sélection."""
+    navigateur ; ``mousedown`` sans action par défaut : l'éditeur garde le focus et la sélection (au doigt,
+    voir ``data-keep-focus`` dans ``viewport.js``)."""
     from nicegui import ui
 
-    with ui.row().classes("md-toolbar w-full items-center gap-0 flex-wrap") as bar:
+    # ``data-keep-focus`` : au doigt, toucher un bouton garde le focus (et le clavier) dans le texte
+    # (viewport.js).
+    with ui.row().classes("md-toolbar w-full items-center gap-0 flex-wrap").props("data-keep-focus") as bar:
         for kind, icon, tooltip in TOOLBAR:
             button = ui.button(icon=None if icon.startswith("H") else icon).props("flat dense size=sm")
             if icon.startswith("H"):

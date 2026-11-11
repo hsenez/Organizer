@@ -20,6 +20,8 @@
   let orientation = null;
   let frame = 0;
   let state = { keyboard: false, writer: null };
+  const BAR_GRACE = 800; // ms
+  let lastBarTouch = 0;
 
   function typing(element) {
     if (!element) return false;
@@ -41,12 +43,21 @@
     }
     const active = document.activeElement;
     const isTyping = typing(active);
-    base = isTyping ? Math.max(base, visible) : visible;
+    // Hauteur de référence : ne baisse pas tant que le clavier est réputé sorti (une perte de focus brève la
+    // fixerait à la hauteur réduite, et le clavier ne serait plus jamais détecté).
+    base = isTyping || state.keyboard ? Math.max(base, visible) : visible;
     const keyboard = touch.matches && isTyping && base - visible > KEYBOARD_MIN;
     root.style.setProperty("--vv-top", `${Math.round(top)}px`);
     root.style.setProperty("--vv-height", `${Math.round(height)}px`);
     const writer = keyboard ? active.closest("[data-writing]") : null;
     if (keyboard === state.keyboard && writer === state.writer) return;
+    // Doigt posé sur la barre de boutons du texte : si le focus part quand même, on garde le mode écriture
+    // le temps que le clic arrive (sinon la barre disparaît sous le doigt et le bouton n'agit pas).
+    const sinceBar = Date.now() - lastBarTouch;
+    if (state.writer && !writer && sinceBar < BAR_GRACE) {
+      setTimeout(schedule, BAR_GRACE - sinceBar + 20);
+      return;
+    }
     document.body.classList.toggle("keyboard-open", keyboard);
     document.body.classList.toggle("writing", !!writer);
     if (state.writer && state.writer !== writer) state.writer.classList.remove("writing-active");
@@ -67,6 +78,31 @@
   // focusout : l'élément suivant n'a pas encore le focus pendant l'événement ; la frame d'après, si.
   document.addEventListener("focusin", schedule);
   document.addEventListener("focusout", schedule);
+  // Barre de boutons attachée à un texte ([data-keep-focus] : barre markdown). Au doigt, QBtn (Quasar) donne
+  // le focus à son « q-focus-helper » quand le doigt se relève : le texte perdait le focus, Chrome Android
+  // fermait le clavier, le mode écriture cachait la barre et le clic n'arrivait jamais. Le touchstart ne va
+  // donc pas jusqu'à QBtn (le défilement de la barre reste possible) ; le touchend est annulé (ni souris
+  // simulée, ni clic, ni changement de focus) et le clic rejoué. Touchend non annulable = la barre a défilé
+  // sous le doigt : rien n'est rejoué.
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      if (!event.target.closest?.("[data-keep-focus]")) return;
+      lastBarTouch = Date.now();
+      if (event.target.closest("[data-keep-focus] button")) event.stopPropagation();
+    },
+    { capture: true, passive: true }
+  );
+  document.addEventListener(
+    "touchend",
+    (event) => {
+      const button = event.target.closest?.("[data-keep-focus] button");
+      if (!button || !event.cancelable || button.disabled) return;
+      event.preventDefault();
+      button.click();
+    },
+    { capture: true, passive: false }
+  );
   window.organizerViewport = { update, state: () => state };
   schedule();
 })();

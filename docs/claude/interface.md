@@ -168,6 +168,13 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
   `keyboard-open`). ⚠️ Un `ui.page_sticky` sans `z-index` passe **sous** les cartes venues après lui.
 - ➕ : `layout.new_buttons` (`ui.fab` vers le haut, marqueurs `fab-add`, `fab-new-task`, `fab-new-event`,
   `fab-new-note`) ; `ctx.new_note` (page Notes) sinon `/notes?note=new`.
+- Barre markdown au doigt (`data-keep-focus`, `viewport.js`) : ⚠️ **QBtn donne le focus à son
+  `q-focus-helper` quand le doigt se relève** (`cleanup()` de Quasar, appelé au `touchend`) — le texte perdait
+  le focus, Android fermait le clavier, le mode écriture cachait la barre et le clic n'arrivait pas. Le
+  `touchstart` d'un bouton s'arrête donc avant QBtn, le `touchend` est annulé et le clic rejoué
+  (`button.click()`) ; touchend non annulable = barre défilée, rien n'est rejoué. Filet : le mode écriture
+  tient 0,8 s après un toucher sur la barre ; la hauteur de référence du clavier ne baisse pas tant que le
+  clavier est réputé sorti. Le `mousedown` sans action par défaut ne protège que la souris.
 - Notes au téléphone : `note-details` repliés (`note-details-open`, bouton `note-details-toggle`), barre
   cachée hors mode écriture.
 - Essais : Vivaldi `--headless=new` en CDP, `Emulation.setDeviceMetricsOverride` (`mobile`, 412 × 915,
