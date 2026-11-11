@@ -7,6 +7,10 @@ voit).
 
 Règle commune : un tag **privé** d'un autre utilisateur est invisible sur un élément partagé et **préservé**
 quand quelqu'un d'autre modifie les tags de cet élément.
+
+**Compte désactivé** : ses éléments disparaissent pour tous (ils restent en base : une réactivation les fait
+revenir), sauf pour ceux qui peuvent les modifier — ceux-là les gardent et peuvent aussi les supprimer.
+Le « public » et les partages en lecture seule ne comptent plus.
 """
 
 from __future__ import annotations
@@ -15,12 +19,12 @@ from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlmodel import Session, SQLModel, select
 
 from organizer.core.enums import LinkKind
 from organizer.core.errors import InvalidOperation, NotFound
-from organizer.core.models import Project, Tag, utcnow
+from organizer.core.models import Project, Tag, User, utcnow
 from organizer.core.schemas import LinkIn, LinkOut, LinkPatch, ProjectOut, TagOut
 from organizer.core.services.base import BaseService, ServiceContext, quoted
 from organizer.core.services.labels import ProjectService, TagService
@@ -38,6 +42,30 @@ class ItemService(BaseService):
         super().__init__(ctx)
         self.projects = projects
         self.tags = tags
+
+    # --- comptes désactivés ---
+
+    @staticmethod
+    def _inactive_owners():
+        """Sous-requête : identifiants des comptes désactivés."""
+        return select(User.id).where(User.is_active.is_(False))
+
+    def _shared_visible_clause(self):
+        """Visibilité d'un élément à droits par partage (événements, notes) : à moi ; partagé avec moi en
+        modification ; partagé (même en lecture) ou public, si son propriétaire est actif."""
+        model, share = self.model, self.share_model
+        me = self.actor.id
+        fk = self._column(share)
+        shared = select(fk).where(share.user_id == me)
+        editable = select(fk).where(share.user_id == me, share.can_edit.is_(True))
+        return or_(
+            model.owner_id == me,
+            model.id.in_(editable),
+            and_(
+                model.owner_id.not_in(self._inactive_owners()),
+                or_(model.id.in_(shared), model.is_public.is_(True)),
+            ),
+        )
 
     # --- à fournir par les sous-classes ---
 

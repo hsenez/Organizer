@@ -273,6 +273,10 @@ Référence fonctionnelle complète : **`specifications.md`**.
 - Dates **locales** `start_date` / `start_time` / `end_date` / `end_time` (pas de `datetime` : pas de
   fuseau à gérer) ; `start_time is None` ⇔ toute la journée (`EventOut.all_day`). Toujours passer par
   `rules.event_span` pour normaliser. Jours touchés : `rules.event_days`.
+- Compte désactivé : `ItemService._inactive_owners` / `_shared_visible_clause` (événements et notes : public
+  et lecture seule ignorés si le propriétaire est désactivé) ; tâches : `TaskService._can_delete` et
+  `can_delete` acceptent un propriétaire désactivé ; `NotificationService._visible` suit la même règle.
+  Tests : `tests/test_deactivated.py`.
 - Droits : `_get` (voir : propriétaire, partage, public), `_get_editable` (modifier **et supprimer** :
   propriétaire ou `EventShare.can_edit`), `_get_owned` (partager, rendre public, transformer).
 - Pièces jointes : `AttachmentService.upload_event` ; `_can_read` parcourt les liens des tâches **et** des
@@ -616,7 +620,7 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 469 tests au total (+1 réservé à Windows).
+- 472 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

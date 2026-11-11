@@ -263,14 +263,19 @@ class NotificationService(BaseService):
         row = s.get(model, item_id)
         if row is None:
             return False
-        if row.owner_id == self.actor.id or getattr(row, "is_public", False):
+        if row.owner_id == self.actor.id:
+            return True
+        owner = s.get(User, row.owner_id)
+        active = owner is not None and owner.is_active
+        if active and getattr(row, "is_public", False):
             return True
         shared = s.exec(
             select(share_model).where(
                 getattr(share_model, column) == item_id, share_model.user_id == self.actor.id
             )
         ).first()
-        if shared is not None:
+        # Propriétaire désactivé : seuls ceux qui peuvent modifier l'élément le voient encore.
+        if shared is not None and (active or getattr(shared, "can_edit", True)):
             return True
         parent_id = getattr(row, "parent_id", None)
         return parent_id is not None and self._visible(s, "task", parent_id)

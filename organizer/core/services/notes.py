@@ -53,9 +53,7 @@ class NoteService(ItemService):
     # ==================================================================================================
 
     def _visible_clause(self):
-        me = self.actor.id
-        shared = select(NoteShare.note_id).where(NoteShare.user_id == me)
-        return or_(Note.owner_id == me, Note.id.in_(shared), Note.is_public.is_(True))
+        return self._shared_visible_clause()
 
     def _get(self, s: Session, note_id: int) -> Note:
         note = s.exec(select(Note).where(Note.id == note_id, self._visible_clause())).first()

@@ -156,7 +156,11 @@ run_client.py
     appartient, mais reste visible de tous ceux qui voient le parent) ;
   - **supprimer** et **partager** sont réservés au propriétaire (pour supprimer : propriétaire de la tâche ou
     de son parent) ;
-  - être admin ne donne **pas** accès aux tâches privées des autres.
+  - être admin ne donne **pas** accès aux tâches privées des autres ;
+  - **compte désactivé** : ses tâches, événements et notes disparaissent pour les autres (ils restent en
+    base : une réactivation les fait revenir), **sauf pour ceux qui peuvent les modifier**, qui les gardent
+    et peuvent alors **aussi les supprimer**. Le « public » et les partages en lecture seule ne comptent
+    plus (une tâche partagée étant toujours modifiable, elle reste chez ceux avec qui elle est partagée).
 - **Projets et tags** : chacun est **🌍 public** (visible et utilisable par tous) ou **🔒 privé** (visible
   uniquement par son créateur), au choix. Voir 4.5.
 - **Accès** : réseau local en HTTP (`http://<pi>:2603`) et, en option, **depuis Internet** en HTTPS par un
@@ -1143,3 +1147,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-11 | 1.37 | **📝 Notes, étapes 2-3** (§8.4 quater) : module 📝 Notes (liste + note, téléphone en deux écrans), emoji (liste personnelle modifiable dans Réglages → Apparence, aussi pour les projets), épingle, copier le lien, partage / publique, lecture seule ; éditeur markdown : barre de boutons, lecture seule, **tri des cases** à la coche (notes), **liens internes** en pastilles (titre actuel, 🔒 inaccessible), recherche « [[ » / « 🔗 Lier à… » (aussi dans les notes des tâches et des événements), « Cité dans » ; notes dans Ctrl+K et les notifications ; composants `ref_links`, `sharing`, `emoji_picker`, `label_selects` / `tag_ids_from` partagés ; 442 tests + vérifié dans Firefox (tri, Ctrl+Z, boutons, [[, pastilles, lecture seule, téléphone) |
 | 2026-11-11 | 1.37.1 | Barre de boutons des notes : après une puce, un numéro ou une case (toujours suivis d'une espace), le curseur se place après le préfixe au lieu de rester devant ; vérifié dans Firefox |
 | 2026-11-11 | 1.38 | **🔗 Liens à partager** (§4.9) : « Copier le lien » aussi sur les tâches et les événements ; adresse publique réglable par l'admin (table `app_setting`, `/server/public-url`) utilisée par tous les liens copiés ; page `/open/<type>/<id>` (client bureau ou navigateur, choix retenu par appareil, téléphone → navigateur) ; protocole `organizer://` déclaré par les installeurs Linux et Windows, transmis au client lancé (commande `open`) ou ouvert au démarrage ; adresse d'Organizer collée dans une note → pastille, cliquée → ouverte dans l'application ; `organizer/links.py` ; correction : `instance.forward` ; 469 tests + vérifié dans Firefox (copie, collage, page /open) et déclaration xdg-mime en bac à sable |
+| 2026-11-11 | 1.39 | **Compte désactivé** (§3) : ses événements et notes ne restent visibles que pour les partages modifiables (public et lecture seule ignorés), qui peuvent les supprimer ; ses tâches peuvent être supprimées par ceux avec qui elles sont partagées ; réactivation = tout revient ; notifications alignées ; infobulle du bouton dans Réglages → Utilisateurs ; `ItemService._shared_visible_clause` ; 472 tests |

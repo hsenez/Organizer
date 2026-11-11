@@ -58,9 +58,7 @@ class AgendaService(ItemService):
     # ==================================================================================================
 
     def _visible_clause(self):
-        me = self.actor.id
-        shared = select(EventShare.event_id).where(EventShare.user_id == me)
-        return or_(Event.owner_id == me, Event.id.in_(shared), Event.is_public.is_(True))
+        return self._shared_visible_clause()
 
     def _get(self, s: Session, event_id: int) -> Event:
         event = s.exec(select(Event).where(Event.id == event_id, self._visible_clause())).first()

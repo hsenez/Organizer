@@ -612,7 +612,10 @@ def _users(ctx: UiContext) -> None:
                 if not me:
                     _row_button(
                         "person_off" if user.is_active else "person",
-                        "Désactiver (déconnecté partout)" if user.is_active else "Réactiver",
+                        "Désactiver : déconnecté partout ; ses tâches, événements et notes ne restent "
+                        "visibles que pour ceux qui peuvent les modifier (qui peuvent alors les supprimer)"
+                        if user.is_active
+                        else "Réactiver (ses éléments réapparaissent pour tous)",
                         lambda u=user: update(u, AdminUserPatch(is_active=not u.is_active)),
                     )
                     _row_button(

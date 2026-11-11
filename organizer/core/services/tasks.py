@@ -78,7 +78,12 @@ class TaskService(ItemService):
         return task
 
     def _can_delete(self, s: Session, task: Task) -> bool:
+        """Propriétaire de la tâche ou de son parent ; ou toute personne qui la voit (donc peut la
+        modifier) si son propriétaire est désactivé."""
         if task.owner_id == self.actor.id:
+            return True
+        owner = s.get(User, task.owner_id)
+        if owner is not None and not owner.is_active:
             return True
         if task.parent_id is not None:
             parent = s.get(Task, task.parent_id)
@@ -94,6 +99,7 @@ class TaskService(ItemService):
             return []
         ids = [t.id for t in tasks]
         me = self.actor.id
+        inactive = set(s.exec(self._inactive_owners()).all())
 
         visible_projects = self._visible_projects(s)
         tags_by_task = self._tags_by_item(s, ids)
@@ -164,7 +170,9 @@ class TaskService(ItemService):
                     created_at=t.created_at,
                     updated_at=t.updated_at,
                     completed_at=t.completed_at,
-                    can_delete=t.owner_id == me or bool(parent and parent.owner_id == me),
+                    can_delete=t.owner_id == me
+                    or bool(parent and parent.owner_id == me)
+                    or t.owner_id in inactive,
                 )
             )
         return outs
