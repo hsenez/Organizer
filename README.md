@@ -287,7 +287,7 @@ le dossier des données) ; en cas d'échec, rien n'est modifié et le serveur ne
 (`journalctl -u organizer`). Revenir à une version plus ancienne d'Organizer après une telle évolution est
 refusé : restaurer plutôt une sauvegarde.
 
-**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **1.1.0** ; notes de version : [`CHANGELOG.md`](CHANGELOG.md)),
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **1.2.0** ; notes de version : [`CHANGELOG.md`](CHANGELOG.md)),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
 
 ## 📲 Sur le téléphone
@@ -415,8 +415,7 @@ curl -sI http://organizer.blou.top/ | head -1      # 301 : redirigé vers https
 - **Liens à partager** : Réglages → 🗄️ Données → 🌍 **Adresse publique** = `https://organizer.blou.top`.
   Les boutons « 🔗 Copier le lien » (notes, tâches, événements) donnent alors un lien valable partout ; il
   propose d'ouvrir l'élément dans le client bureau (protocole `organizer://`, déclaré par l'installeur du
-  client : relancer `install/linux/install.sh --reuse` ou `install.bat -Reuse` sur les postes déjà
-  installés) ou dans le navigateur.
+  client et par ses scripts de mise à jour) ou dans le navigateur.
 - **Réseau local** : `http://<ip-du-pi>:2603` continue de fonctionner (le serveur écoute toujours sur
   `0.0.0.0`). Pour n'autoriser **que** le tunnel : `deploy/install.sh --reuse --host 127.0.0.1` (les appareils
   de la maison passent alors eux aussi par `https://organizer.blou.top`). La sauvegarde par jeton marche

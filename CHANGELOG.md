@@ -2,6 +2,54 @@
 
 Détail de chaque étape : historique de [`specifications.md`](specifications.md) (§12).
 
+## 1.2.0 — 11 novembre 2026
+
+Notes, et liens à partager.
+
+### Nouveautés
+
+- **📝 Notes** (colonne de gauche) : liste à gauche (épinglées d'abord, recherche, « De qui ? »), note à
+  droite ; sur téléphone, la liste puis la note en plein écran.
+  - Titre, **emoji** (liste personnelle modifiable dans Réglages → Apparence, aussi utilisée pour les
+    projets), projet, tags, **📌 épingle** (personnelle).
+  - Texte en **markdown façon Obsidian** avec une **barre de boutons** : titres, gras, italique, barré,
+    puces, numéros, **cases à cocher**, citation, code, lien, séparation.
+  - **Cases à cocher rangées toutes seules** : cocher une case l'envoie en tête des cochées, décocher la
+    remonte tout en haut ; les non cochées restent au-dessus (Ctrl+Z annule).
+  - **Partage** avec chaque personne en « peut modifier » ou « lecture seule », ou **publique** (lecture
+    seule pour tous). Mise à jour en direct si la note est modifiée ailleurs (bandeau si l'on est en train
+    d'écrire).
+- **Liens entre notes, tâches et événements** : taper `[[` (ou « 🔗 Lier à… ») pour chercher et insérer un
+  lien, affiché en **pastille cliquable** au titre de l'élément (🔒 s'il est supprimé ou invisible pour le
+  lecteur) ; aussi dans les notes des tâches et des événements. **« Cité dans »** en bas de chaque note.
+- **🔗 Copier le lien** d'une note, d'une tâche ou d'un événement, à coller dans un mail ou un message :
+  - construit sur l'**adresse publique** du serveur (Réglages → 🗄️ Données, admin), valable de partout ;
+  - le lien propose d'ouvrir l'élément dans le **client bureau** (liens `organizer://`, déclarés par
+    l'installeur du client) ou de **continuer dans le navigateur** (choix retenu par appareil ; un
+    téléphone va directement au navigateur) ;
+  - collé dans une note, il devient une pastille.
+- **Recherche Ctrl+K** : trouve aussi les notes. **Notifications** : partage et modification des notes.
+- **Compte désactivé** : ses tâches, événements et notes ne restent visibles que pour ceux qui peuvent les
+  modifier, qui peuvent alors aussi les supprimer ; tout revient si le compte est réactivé.
+
+### Corrections
+
+- Client bureau : une commande transmise au client déjà lancé partait avec de mauvais paramètres (sans
+  effet visible jusqu'ici ; nécessaire pour les liens `organizer://`).
+
+### Mise à jour depuis la 1.1.0
+
+Sur le Pi : `deploy/update.sh` (ou, si le Pi est sur la branche de test, `deploy/install_test.sh --main`).
+Les nouvelles tables sont créées au démarrage ; le schéma de la base ne change pas. Puis chaque poste :
+`install/linux/update.sh` ou `install\windows\update.bat` (qui déclarent aussi les liens `organizer://`).
+Ensuite, un administrateur règle l'**adresse publique** (Réglages → 🗄️ Données).
+
+### Limites connues
+
+- Édition d'une même note à deux en même temps : pas de fusion (le dernier qui écrit l'emporte, un bandeau
+  prévient).
+- Liens `organizer://` pas encore essayés en conditions réelles sous Windows.
+
 ## 1.1.0 — 10 novembre 2026
 
 Calendrier et événements.
