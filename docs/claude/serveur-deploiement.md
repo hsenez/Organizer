@@ -89,16 +89,14 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
 - Ajouter une colonne : modèle + `Migration(n + 1, "…", lambda conn: add_column(conn, "task", "x", "DATE"))`
   à la fin de `MIGRATIONS` ; `NOT NULL` exige un `DEFAULT` en SQL. Ne jamais modifier une étape publiée ;
   une étape doit tolérer une table déjà au dernier schéma.
-- Étapes publiées : 1 = 1.0.0 (point de départ) ; **2** (13/11/2026, branche `cloclo`) =
-  `event.reminder_minutes`. Une base passée au schéma 2 refuse le retour sur `main` tant que `main` n'a pas
-  cette étape (`install_test.sh --main`).
+- Étapes publiées : 1 = 1.0.0 (point de départ) ; **2** = 1.2.1 (`event.reminder_minutes`).
 - Garde-fou : `tests/fixtures/organizer-0.9.0.db`, créée par le **vrai code de la v0.9.0** (`git worktree`
   sur l'étiquette, script hors dépôt) ; `test_old_database_reaches_the_current_schema` compare son schéma
   migré (`table_columns`) à celui d'une base neuve. Ne jamais modifier ce fichier.
 
 ## Versions et mises à jour
 
-- `organizer/__init__.py` : `__version__` (**1.2.0** depuis le 11/11/2026 — notes, liens à partager ; 1.1.0 le 10/11/2026 — calendrier, événements,
+- `organizer/__init__.py` : `__version__` (**1.2.1** depuis le 13/11/2026 — réglages des notifications, rappel des événements, macOS ; 1.2.0 le 11/11/2026 — notes, liens à partager ; 1.1.0 le 10/11/2026 — calendrier, événements,
   notifications ; 1.0.0 le 9/11/2026 ; ensuite MINEUR = nouveauté,
   CORRECTIF = correction, MAJEUR = incompatibilité) et `API_VERSION`.
   **À chaque version livrée** (passage sur `main` approuvé par l'utilisateur) : augmenter `__version__`, l'indiquer dans
@@ -155,6 +153,8 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
   `PYTHONUTF8=1` dans le service généré et dans `restore.sh` (+ `PYTHONIOENCODING=utf-8`),
   `restore._utf8_output()`, et les tests du script lancés avec `PYTHONIOENCODING=latin-1`. Tout nouveau
   programme Python lancé en ligne de commande sur le Pi doit en faire autant.
+- ✅ **Version 1.2.1** (13/11/2026) : réglages des notifications (niveaux, « ne plus me notifier », pop-ups
+  du client bureau), rappel des événements (schéma 2), ergonomie téléphone, client bureau sous macOS.
 - ✅ **Version 1.2.0** (11/11/2026) : 📝 notes (markdown, cases triées, liens internes, liens retour, partage),
   liens à partager (adresse publique, page `/open`, protocole `organizer://`), règle des comptes désactivés.
 - ✅ **Version 1.1.0** (10/11/2026) : calendrier, événements (agenda, partage modifiable / lecture seule,

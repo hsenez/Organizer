@@ -311,7 +311,7 @@ le dossier des données) ; en cas d'échec, rien n'est modifié et le serveur ne
 (`journalctl -u organizer`). Revenir à une version plus ancienne d'Organizer après une telle évolution est
 refusé : restaurer plutôt une sauvegarde.
 
-**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **1.2.0** ; notes de version : [`CHANGELOG.md`](CHANGELOG.md)),
+**Versions** : `MAJEUR.MINEUR.CORRECTIF` (actuellement **1.2.1** ; notes de version : [`CHANGELOG.md`](CHANGELOG.md)),
 visible sur `http://<ip>:2603/api/v1/version` et dans Réglages → 🔌 Connexion du client bureau.
 
 ## 📲 Sur le téléphone

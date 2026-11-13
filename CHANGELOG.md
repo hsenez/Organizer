@@ -2,6 +2,49 @@
 
 Détail de chaque étape : historique de [`specifications.md`](specifications.md) (§12).
 
+## 1.2.1 — 13 novembre 2026
+
+Réglages des notifications, rappels des événements, téléphone, client bureau sous macOS.
+
+### Nouveautés
+
+- **🔔 Réglages → Notifications** (remplace l'onglet « Rappels ») : pour les ✅ tâches, 📅 événements et
+  📝 notes, choisir ce qui est notifié — 🔕 **Rien**, 🤝 **Partages seulement** (partage, fin de partage,
+  suppression), ✏️ **Mes éléments** (+ modifications de ce qui vous appartient), 📣 **Tout** (+ modifications
+  de ce qu'on partage avec vous ; par défaut, rien ne change).
+- **🔕 Ne plus me notifier** pour un élément précis : bouton cloche dans la fenêtre d'une tâche ou d'un
+  événement partagé et dans la barre d'une note partagée (couper une tâche coupe aussi ses sous-tâches ;
+  Ctrl+Z annule).
+- **⏰ Rappel des événements** : de « à l'heure du début » à « 1 semaine avant » (aucun par défaut ; un
+  rappel par défaut des nouveaux événements se règle dans Réglages → Notifications). Il apparaît sur
+  l'accueil (⏰ Événements) et en notification sur le client bureau, pour vous et ceux avec qui
+  l'événement est partagé.
+- **Client bureau : pop-ups des notifications** — chaque nouvelle notification (partage, modification…)
+  s'affiche aussi en notification système, aussitôt ; case « 🖥️ Pop-up sur le bureau » par type d'élément ;
+  un clic ouvre l'élément.
+- **🍎 Client bureau sous macOS** : `install/macos/install.sh` et `install/macos/update.sh` (application
+  dans le Launchpad, liens `organizer://`, démarrage avec la session, raccourcis Ctrl+Alt+O / N, ⌘Q pour
+  quitter). ⚠️ Pas encore essayé sur un vrai Mac.
+- **📱 Téléphone** : bouton ➕ au premier plan (menu Tâche / Événement / Note), clavier virtuel mieux géré
+  (la page rapetisse, boutons flottants cachés pendant la saisie), mode écriture des notes (texte + barre
+  collée au clavier).
+
+### Corrections
+
+- Téléphone : toucher un bouton de la barre des notes fermait le clavier sans rien faire.
+
+### Mise à jour depuis la 1.2.0
+
+Sur le Pi : `deploy/update.sh` (ou `deploy/install_test.sh --main` si le Pi est sur la branche de test).
+**La base passe au schéma 2** (colonne du rappel des événements, ajoutée au démarrage ; sans copie de
+sécurité, aucune donnée n'est modifiée) : une base au schéma 2 ne peut plus être ouverte par la 1.2.0.
+Puis chaque poste : `install/linux/update.sh`, `install\windows\update.bat` ou `install/macos/update.sh`.
+
+### Limites connues
+
+- Pas de notification sur le téléphone (notifications push de la PWA : prévues, voir `TODO.md`).
+- Convertir une tâche en événement (ou l'inverse) ne garde pas son « ne plus me notifier ».
+
 ## 1.2.0 — 11 novembre 2026
 
 Notes, et liens à partager.
