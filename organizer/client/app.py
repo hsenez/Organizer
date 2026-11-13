@@ -484,15 +484,23 @@ class DesktopClient:
             return
         self._hidden_hint_shown = True
         keys = {**DEFAULT_SHORTCUTS, **self.config.shortcuts}
-        quit_hint = (
-            "Icône dans la zone de notification (près de l'horloge) : clic pour rouvrir, "
-            "clic droit pour quitter."
-            if sys.platform == "win32"
-            else "Pour quitter : menu du compte → ⏻ Quitter Organizer."
+        if sys.platform == "win32":
+            quit_hint = (
+                "Icône dans la zone de notification (près de l'horloge) : clic pour rouvrir, "
+                "clic droit pour quitter."
+            )
+        elif sys.platform == "darwin":
+            quit_hint = "Clic sur l'icône du Dock pour rouvrir ; ⌘Q pour quitter."
+        else:
+            quit_hint = "Pour quitter : menu du compte → ⏻ Quitter Organizer."
+        shortcuts = " · ".join(
+            f"{label} : {keys[name]}"
+            for name, label in (("show", "Rouvrir"), ("new_task", "Nouvelle tâche"))
+            if keys.get(name)
         )
         await make_sender()(
             "📋 Organizer reste ouvert en arrière-plan",
-            f"Rouvrir : {keys['show']} · Nouvelle tâche : {keys['new_task']}\n{quit_hint}",
+            f"{shortcuts}\n{quit_hint}" if shortcuts else quit_hint,
             None,
         )
 
@@ -646,6 +654,14 @@ def main(args: argparse.Namespace) -> None:
 
                     GLib.set_prgname("organizer")
                     GLib.set_application_name("Organizer")
+        elif sys.platform == "darwin":
+            if _icon("png"):
+                app.native.start_args["icon"] = str(ASSETS / "organizer-512.png")  # icône du Dock
+            if not is_main:  # « Organizer » au lieu de « Python » dans la barre des menus
+                with contextlib.suppress(Exception):
+                    from organizer.client import macshell
+
+                    macshell.rename_app()
     elif is_main and not args.hidden:
         app.on_startup(lambda: system.open_url(start_url))
         print(f"Organizer (client) : {start_url}", flush=True)

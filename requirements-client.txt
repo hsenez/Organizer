@@ -1,7 +1,7 @@
-# Organizer — dépendances client bureau (Linux / Windows)
+# Organizer — dépendances client bureau (Linux / Windows / macOS ; pywebview ajoute PyObjC sous macOS)
 -r requirements.txt
 pywebview==6.2.1
 # Linux uniquement : backend GTK de pywebview (nécessite webkit2gtk-4.1 côté système)
 PyGObject==3.58.1 ; sys_platform == "linux"
-# Notifications système des rappels (D-Bus sous Linux, WinRT sous Windows)
+# Notifications système des rappels (D-Bus sous Linux, WinRT sous Windows ; osascript sous macOS)
 desktop-notifier==6.2.0

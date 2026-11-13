@@ -10,7 +10,7 @@
 Un organiseur de tâches **agréable à l'œil, très user friendly**, avec des emojis et des infobulles partout pour
 s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry Pi du réseau local, utilisable :
 
-- 🖥️ depuis un **client bureau** (Linux / Windows) ;
+- 🖥️ depuis un **client bureau** (Linux / Windows / macOS) ;
 - 🌐 depuis un **navigateur** (`http://<ip-du-pi>:2603`) ;
 - 📱 depuis un **téléphone** (interface adaptée, installable sur l'écran d'accueil — PWA).
 
@@ -52,9 +52,9 @@ s'y retrouver d'un coup d'œil. Multi-utilisateurs, hébergé sur un Raspberry P
 | Hachage des mots de passe | argon2-cffi | 25.1.0 |
 | Jetons de session | `secrets` + SHA-256 (bibliothèque standard) | — |
 | Client HTTP (client bureau → API) | httpx | 0.28.1 |
-| Fenêtre native du client bureau | pywebview (+ PyGObject sous Linux) | 6.2.1 |
+| Fenêtre native du client bureau | pywebview (+ PyGObject sous Linux, PyObjC sous macOS) | 6.2.1 |
 | Éditeur markdown | CodeMirror 6 **fourni par NiceGUI** (paquet ESM `nicegui-codemirror`) + composant maison `markdown_editor.js` | 6.x |
-| Notifications système (client bureau) | desktop-notifier (D-Bus sous Linux, WinRT sous Windows ; `notify-send` en secours) | 6.2.0 |
+| Notifications système (client bureau) | desktop-notifier (D-Bus sous Linux, WinRT sous Windows ; `notify-send` en secours) ; `osascript` sous macOS | 6.2.0 |
 | Tests / lint | pytest, pytest-asyncio (tests des pages NiceGUI), ruff (`target-version = py311`) | — |
 
 Fichiers : `requirements.txt` (serveur), `requirements-client.txt` (client bureau), `requirements-dev.txt` (dev).
@@ -326,7 +326,8 @@ Tables `note`, `note_tag`, `note_share`, `note_pin` (toutes dans l'historique an
   connexion demandée si besoin, puis retour à l'élément) ; « Toujours faire ce choix sur cet appareil »
   (`localStorage`) ; un téléphone va directement au navigateur.
 - **Protocole `organizer://`** déclaré par les installeurs du client bureau : Linux (`MimeType` du lanceur
-  + `xdg-mime default`), Windows (`HKCU\Software\Classes\organizer`). Le lanceur reçoit le lien,
+  + `xdg-mime default`), Windows (`HKCU\Software\Classes\organizer`), macOS (`CFBundleURLTypes` de
+  `Organizer.app`, reçu par le gestionnaire AppleScript `open location`). Le lanceur reçoit le lien,
   le transmet au client lancé (commande `open`) ou le démarre directement sur l'élément.
 - **Dans le texte** : une adresse d'Organizer **collée** (`…/open/task/12`, `…/notes?note=5`,
   `…/tasks?task=12`, `…/calendar?event=8`, `organizer://…`, quelle que soit l'adresse du serveur) devient
@@ -856,7 +857,7 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   (re)démarré, et le script attend la réponse de `/api/v1/version` avant d'afficher les adresses. Options
   retenues dans `deploy/server.conf` (non versionné) ; `--print-service`, `--uninstall`. Les étapes
   utilisateur (venv, pip, git) tournent sous ce compte, seules les étapes système passent par sudo.
-- **Client bureau** : Linux (GTK/WebKit) et Windows (Edge WebView2), lancé par `run_client.py`
+- **Client bureau** : Linux (GTK/WebKit), Windows (Edge WebView2) et macOS (Cocoa/WKWebView), lancé par `run_client.py`
   (`--browser` : dans le navigateur au lieu d'une fenêtre). Voir §10.1.
 
 ### 10.1 🖥️ Client bureau (✅ étape 7)
@@ -871,7 +872,8 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   dans `client.json` (lisible par l'utilisateur seul ; jamais le mot de passe). Reconnexion automatique ;
   jeton expiré ou révoqué → retour à `/connect` avec un message ; serveur injoignable → message et
   « 🔄 Réessayer ». Un serveur sans compte renvoie vers `/setup` dans un navigateur.
-- **Dossier de configuration** : `~/.config/organizer/` (Linux), `%APPDATA%\Organizer\` (Windows) ; cache des
+- **Dossier de configuration** : `~/.config/organizer/` (Linux), `%APPDATA%\Organizer\` (Windows),
+  `~/Library/Application Support/Organizer/` (macOS) ; cache des
   pièces jointes ouvertes : `~/.cache/organizer/` ; `ORGANIZER_CLIENT_DIR` remplace les deux.
 - **Verrou de la fenêtre** : le serveur local n'accepte que la fenêtre lancée (secret aléatoire par lancement,
   passé dans l'URL de départ puis gardé en cookie) ; un autre programme du poste reçoit « 🔒 Accès réservé ».
@@ -895,8 +897,12 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
 - **Raccourcis clavier globaux** (par défaut **Ctrl+Alt+O** : ouvrir, **Ctrl+Alt+N** : nouvelle tâche) :
   déclarés au système par l'installeur, qui lance alors ces commandes. Sous Wayland une application ne peut
   pas écouter le clavier hors de sa fenêtre : KDE Plasma (kglobalaccel, par D-Bus) et GNOME (gsettings) sont
-  configurés automatiquement, les autres bureaux reçoivent la commande à associer ; sous Windows, ce sont les
-  touches de raccourci des raccourcis du menu Démarrer.
+  configurés automatiquement, les autres bureaux reçoivent la commande à associer ; sous Windows
+  (`RegisterHotKey`) et macOS (API Carbon `RegisterEventHotKey`, sans autorisation à donner ; positions des
+  touches d'un clavier QWERTY), Organizer les capte lui-même quand il tourne.
+- **macOS** : nom « Organizer » et icône dans le Dock et la barre des menus (au lieu de « Python ») ; ⌘Q
+  quitte vraiment, fermer la fenêtre la cache, un clic sur l'icône du Dock la réaffiche ; notifications
+  par `osascript` (desktop-notifier exige une application signée), sans action au clic.
 - **Icône** de l'application (`organizer/assets/`, générée depuis un SVG par `scripts/make_icons.sh`) :
   fenêtre, lanceur, menu Démarrer ; identifiant d'application `organizer` (Wayland) pour que la barre des
   tâches associe la fenêtre au lanceur.
@@ -935,6 +941,15 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   Ctrl+Alt+N, « Organizer - Quitter »), du Bureau et du dossier Démarrage (`--hidden`) ; ils lancent
   `pythonw.exe` (sans console). Options : `-NoAutostart`, `-NoDesktop`, `-ShowKey`, `-NewKey`, `-Uninstall`
   (`uninstall.bat`).
+- **macOS** : `install/macos/install.sh` (sans droits administrateur, bash 3.2) — cherche Python ≥ 3.11
+  (Homebrew, python.org ; le `python3` de macOS est trop ancien), crée `.venv`, installe
+  `requirements-client.txt` (pywebview y ajoute PyObjC), puis `python -m organizer.client.install_macos` :
+  application `~/Applications/Organizer.app`, lanceur AppleScript compilé par `osacompile` (lance
+  `run_client.py` puis s'arrête ; reçoit les liens `organizer://`), icône `.icns` faite par `iconutil`,
+  resignée localement (`codesign -s -`) ; démarrage caché à l'ouverture de session par un agent launchd
+  (`~/Library/LaunchAgents/fr.organizer.client.autostart.plist`) ; raccourcis mémorisés dans
+  `client.json`. Options : `--no-autostart`, `--no-shortcuts`, `--show-key …`, `--new-key …`,
+  `--uninstall`.
 - Journal du client : `client.log` dans son dossier de configuration (utile quand il tourne sans console).
 - Les options choisies à l'installation sont retenues (`install.json` du dossier de configuration) ;
   `--reuse` / `-Reuse` les reprend.
@@ -954,7 +969,8 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   le client), 🔄 « ce poste est en retard » (commande de mise à jour du poste), ⚠️ en rouge si l'API n'est
   plus compatible, ℹ️ « c'est le serveur qui est en retard » (`deploy/update.sh` sur le Pi). Les deux versions sont aussi dans Réglages →
   🔌 Connexion.
-- **Mettre à jour un poste** : `install/linux/update.sh` ou `install\windows\update.bat` — arrête le
+- **Mettre à jour un poste** : `install/linux/update.sh`, `install\windows\update.bat` ou
+  `install/macos/update.sh` — arrête le
   client, `git pull --ff-only`, relance l'installeur avec les options retenues (dépendances, lanceur,
   icônes, raccourcis), relance le client en arrière-plan s'il tournait. Un simple `git pull` suffit pour du
   code seul, à condition de redémarrer le client (⏻ Quitter puis relancer).
@@ -1164,3 +1180,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-11 | 1.41 | **📱 Ergonomie téléphone** (§5, §8.4 quater, §9) : ➕ au-dessus du contenu (les cartes le recouvraient) et menu Tâche / Événement / Note ; clavier virtuel : page qui rapetisse (`interactive-widget=resizes-content`), suivi `visualViewport` (`components/viewport.py` + `.js`), champs en 16 px au doigt, boutons flottants cachés pendant la saisie ; notes : mode écriture (texte + barre collée au clavier), détails repliés et barre cachée en lecture ; 474 tests + vérifié dans Vivaldi en émulation Android (clavier simulé en rapetissant la fenêtre) |
 | 2026-11-12 | 1.41.1 | Consignes pour Claude : `CLAUDE.md` réduit aux règles communes (675 → 118 lignes) ; détails par domaine déplacés tels quels dans `docs/claude/` (interface, calendrier-agenda, notes, client-bureau, serveur-deploiement) |
 | 2026-11-12 | 1.41.2 | Correction (téléphone) : toucher un bouton de la barre des notes fermait le clavier sans rien faire (le bouton Quasar prenait le focus au relâcher du doigt) ; le texte garde maintenant le focus, la barre défile toujours au doigt ; vérifié en émulation Android |
+| 2026-11-13 | 1.42 | **🍎 Client bureau sous macOS** (§10.1, §10.2) : `install/macos/install.sh` et `update.sh` ; `~/Applications/Organizer.app` (lanceur AppleScript, icône, protocole `organizer://`), démarrage par un agent launchd ; dans la fenêtre (`client/macshell.py`) : nom et icône dans le Dock, ⌘Q quitte, clic sur le Dock rouvre, raccourcis globaux par l'API Carbon ; rappels par `osascript` ; commande de mise à jour du bandeau selon le système ; 486 tests (installation simulée avec de faux outils macOS) — **pas encore essayé sur un vrai Mac** |

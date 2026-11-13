@@ -70,8 +70,25 @@ def describe(tasks: list[TaskOut], today: date) -> list[tuple[str, str, int | No
 Sender = Callable[[str, str, Callable[[], None] | None], Awaitable[None]]
 
 
+def osascript_command(title: str, message: str) -> list[str]:
+    """Notification macOS par AppleScript (textes passés en arguments : rien à échapper)."""
+    script = ("on run argv", "display notification (item 2 of argv) with title (item 1 of argv)", "end run")
+    return ["osascript", *(part for line in script for part in ("-e", line)), title, message]
+
+
 def make_sender() -> Sender:
-    """Fonction d'envoi d'une notification système (desktop-notifier, sinon notify-send, sinon journal)."""
+    """Fonction d'envoi d'une notification système (desktop-notifier, sinon notify-send, sinon journal).
+
+    macOS : desktop-notifier n'y fonctionne que depuis une application signée (il resterait muet) ; on
+    passe donc par ``osascript`` (pas d'action au clic)."""
+    if sys.platform == "darwin" and shutil.which("osascript"):
+
+        async def mac_send(title: str, message: str, on_clicked: Callable[[], None] | None) -> None:
+            subprocess.Popen(
+                osascript_command(title, message), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+
+        return mac_send
     try:
         from desktop_notifier import DesktopNotifier, Icon
 

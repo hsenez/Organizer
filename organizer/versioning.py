@@ -76,7 +76,9 @@ def check(
 
 def update_command(platform: str) -> str:
     """Commande de mise à jour du client bureau (dans le dossier d'Organizer)."""
-    return r"install\windows\update.bat" if platform == "win32" else "install/linux/update.sh"
+    if platform == "win32":
+        return r"install\windows\update.bat"
+    return "install/macos/update.sh" if platform == "darwin" else "install/linux/update.sh"
 
 
 def message(result: VersionCheck, platform: str) -> str:

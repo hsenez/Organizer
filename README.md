@@ -6,7 +6,7 @@ Organiseur de tâches multi-utilisateurs, joli et simple, avec des emojis pour t
 - 🌳 Sous-tâches (même par Ctrl + glisser-déposer) · 📁 projets · 🏷️ tags (publics ou privés)
 - ↩️ Ctrl+Z partout pour annuler
 - 📝 Notes markdown façon Obsidian · 🔗 liens, fichiers et pièces jointes
-- 🖥️ Client bureau Linux / Windows · 🌐 web · 📱 téléphone
+- 🖥️ Client bureau Linux / Windows / macOS · 🌐 web · 📱 téléphone
 - 👥 Plusieurs utilisateurs, 🍪 reconnexion rapide, ⚡ mises à jour en temps réel sur tous les écrans
 - 📲 Installable sur le téléphone comme une application (PWA)
 
@@ -23,6 +23,9 @@ Le serveur tourne sur un Raspberry Pi et écoute sur le **port 2603** du réseau
 - Client bureau sous **Linux** : `webkit2gtk-4.1` et `gtk3` installés côté système
   (Manjaro/Arch : `sudo pacman -S webkit2gtk-4.1` ; Debian/Ubuntu : `sudo apt install gir1.2-webkit2-4.1 libgirepository1.0-dev`).
 - Client bureau sous **Windows** : Microsoft Edge WebView2 (présent par défaut sur Windows 10/11).
+- Client bureau sous **macOS** : git (`xcode-select --install`) et Python ≥ 3.11 (`brew install python@3.13`
+  ou l'installeur de python.org : le `python3` livré avec macOS est trop ancien). La fenêtre utilise WebKit,
+  déjà présent.
 
 ## Installation
 
@@ -76,7 +79,8 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
 **🖥️ Client bureau** : au premier lancement, indiquer l'adresse du Pi (`raspberrypi.local` ou son IP : le
 port 2603 est ajouté tout seul ; un nom de domaine public comme `organizer.blou.top` passe en `https://`),
 l'identifiant et le mot de passe. Seul un **jeton** est conservé
-(`~/.config/organizer/client.json`, ou `%APPDATA%\Organizer\` sous Windows) : les lancements suivants
+(`~/.config/organizer/client.json`, `%APPDATA%\Organizer\` sous Windows,
+`~/Library/Application Support/Organizer/` sous macOS) : les lancements suivants
 ouvrent directement l'application. Par rapport au site :
 
 - les **chemins de fichiers** s'ouvrent avec l'application par défaut du poste (au lieu d'être copiés), les
@@ -135,6 +139,21 @@ install/linux/install.sh --show-key Meta+O --new-key Meta+N   # autres raccourci
 `py install 3.13` avec le gestionnaire d'installation Python ;
 désinstallation : `uninstall.bat`).
 
+**macOS** (sans droits administrateur ; ⚠️ pas encore essayé sur un vrai Mac) :
+
+```bash
+git clone <dépôt> organizer && cd organizer
+install/macos/install.sh                  # options : --no-autostart --no-shortcuts --uninstall
+install/macos/install.sh --show-key Cmd+Alt+O --new-key Cmd+Alt+N   # autres raccourcis
+```
+
+Il crée `~/Applications/Organizer.app` (Launchpad, Spotlight ; à glisser dans le Dock pour l'y garder),
+qui reçoit aussi les liens `organizer://`. Les raccourcis sont captés par Organizer lui-même, sans
+autorisation à donner ; ils désignent la **position** des touches d'un clavier QWERTY (sur un AZERTY, A/Q,
+Z/W et M sont décalés ; O et N, choisis par défaut, ne bougent pas). ⌘Q quitte, un clic sur l'icône du
+Dock rouvre la fenêtre cachée. Les rappels passent par AppleScript : autoriser les notifications de
+« Éditeur de script » (Réglages Système → Notifications).
+
 L'installeur crée l'environnement Python, le lanceur « Organizer » (menu des applications / menu Démarrer),
 le démarrage en arrière-plan à l'ouverture de session et deux **raccourcis clavier globaux** :
 
@@ -153,8 +172,8 @@ Fermer la fenêtre la cache : Organizer continue en arrière-plan (rappels, racc
 menu du compte → **⏻ Quitter Organizer**. En ligne de commande : `run_client.py --new-task`, `--quit`,
 `--hidden` (une commande est transmise au client déjà lancé).
 
-**🔄 Mettre à jour un poste** : `install/linux/update.sh` (Linux) ou `install\windows\update.bat`
-(Windows). Le script arrête le client, récupère la nouvelle version (`git pull`), réinstalle avec les mêmes
+**🔄 Mettre à jour un poste** : `install/linux/update.sh` (Linux), `install\windows\update.bat`
+(Windows) ou `install/macos/update.sh` (macOS). Le script arrête le client, récupère la nouvelle version (`git pull`), réinstalle avec les mêmes
 options et relance le client. Le client affiche un bandeau quand le serveur a une version plus récente.
 
 ## Déploiement sur le Raspberry Pi

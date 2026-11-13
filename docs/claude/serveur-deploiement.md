@@ -119,7 +119,8 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
   en quittant main ; refuse de revenir sur main si la base a un schéma plus récent que celui de main
   (`SCHEMA_VERSION`), et reste alors sur la branche de test. Ensuite `deploy/update.sh` suit la branche
   active. Tests : `tests/test_deploy.py` (dépôt distant + clone temporaires, faux paquet `migrations`).
-- Scripts : `install/linux/update.sh`, `install/windows/update.ps1` (+ `.bat`), `deploy/update.sh` (Pi). Les
+- Scripts : `install/linux/update.sh`, `install/windows/update.ps1` (+ `.bat`), `install/macos/update.sh`,
+  `deploy/update.sh` (Pi). Les
   scripts bash sont enveloppés dans une fonction `main` (git pull peut les modifier pendant leur exécution).
   L'installeur retient ses options (`install.json`, `--reuse`).
 - `install.sh` fait `cd "$ROOT"` : `python -m organizer…` doit trouver le paquet d'où qu'on le lance.
@@ -130,7 +131,7 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 474 tests au total (+1 réservé à Windows).
+- 486 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

@@ -3,7 +3,7 @@
 ## Le projet
 
 Organiseur de tâches multi-utilisateurs : serveur NiceGUI/FastAPI sur Raspberry Pi (port 2603) + interface web
-(responsive, téléphone) + client bureau (fenêtre native pywebview, Linux/Windows) qui passe par l'API REST.
+(responsive, téléphone) + client bureau (fenêtre native pywebview, Linux/Windows/macOS) qui passe par l'API REST.
 Référence fonctionnelle complète : **`specifications.md`**.
 
 ## Règles de travail (demandées par l'utilisateur)
@@ -114,5 +114,5 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 
 ## État actuel
 
-- Feuille de route terminée (étapes 0 à 8) ; **version 1.2.0** (11/11/2026). 474 tests (+1 Windows).
+- Feuille de route terminée (étapes 0 à 8) ; **version 1.2.0** (11/11/2026). 486 tests (+1 Windows).
 - Historique détaillé : `docs/claude/serveur-deploiement.md` et `specifications.md` §12.

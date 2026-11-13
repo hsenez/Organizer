@@ -87,8 +87,32 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
   `AllowSetForegroundWindow(ASFW_ANY)`. Notifications : `Icon(path=organizer-256.png)`, sinon Windows
   affiche l'icône de Python (clé `HKCU\Software\Classes\AppUserModelId\Organizer`, écrite par
   desktop-notifier). Test réel : `keybd_event` simule l'appui (`tests/test_client_desktop.py`).
+- **macOS** (⚠️ jamais essayé sur un vrai Mac : écrit d'après les API, testé sous Linux pour la partie
+  pure) : `client/macshell.py`, lancé par `window._start_macos_shell` dans le sous-processus de la fenêtre,
+  `Shell.start` sur le **fil principal** (`PyObjCTools.AppHelper.callAfter` : exécuté une fois la boucle
+  Cocoa lancée, donc après la création de la fenêtre et du délégué de pywebview). Délégué
+  `OrganizerAppDelegate` (sous-classe de `BrowserView.AppDelegate`, posé à la place de celui de pywebview) :
+  `applicationShouldTerminate_` → `QUIT.set()` + `NSTerminateNow` (⌘Q quitte ; la fermeture de fenêtre
+  reste « cacher »), `applicationShouldHandleReopen_hasVisibleWindows_` → réaffiche. Raccourcis : Carbon
+  `RegisterEventHotKey` + `InstallEventHandler` sur `GetEventDispatcherTarget()` par `ctypes` (aucune
+  autorisation, contrairement à `NSEvent` / CGEventTap) ; codes kVK_ANSI (positions QWERTY) ; le rappel
+  lance l'action dans un fil. `rename_app` (CFBundleName dans `NSBundle.mainBundle().infoDictionary()`)
+  appelé par `app.main` dans le sous-processus **avant** l'import de `webview.platforms.cocoa` (qui crée
+  `NSApplication`) ; icône du Dock par `start_args["icon"]`. Notifications : desktop-notifier tombe sur
+  son backend muet hors d'une application signée → `osascript` (`notifications.osascript_command`).
+  Installation : `client/install_macos.py` — `Organizer.app` = applet AppleScript (`osacompile -e …`,
+  source passé ligne à ligne : pas de souci de codage), gestionnaires `run` et `open location` (les liens
+  `organizer://` arrivent par événement Apple, jamais en argument : un script shell ne les verrait pas),
+  `do shell script "… &"` puis l'applet s'arrête (`LSUIElement`) ; `Info.plist` complété
+  (`bundle_info` : identifiant, `CFBundleURLTypes`, `CFBundleIconFile`, sans `CFBundleIconName` ni
+  `Assets.car`, sinon icône d'AppleScript), `.icns` par `iconutil`, `codesign --force --deep -s -`,
+  `lsregister -f`. Agent launchd (`launch_agent`) jamais chargé par `launchctl` : lu à la session
+  suivante (un `bootout` tuerait le client lancé par launchd). Scripts : bash **3.2** (`${1+"$@"}` avec
+  `set -u`, pas de `setsid` → `nohup`). Tests : `tests/test_client_macos.py` (faux `osacompile`,
+  `iconutil`, `codesign` dans le PATH, `sys.platform` forcé).
 - Installeurs : `install/linux/install.sh`, `install/windows/install.ps1` (UTF-8 **avec BOM** et fins de
-  ligne CRLF, sinon Windows PowerShell 5.1 abîme les accents). Python 3.11 à 3.13 sous Windows (pythonnet).
+  ligne CRLF, sinon Windows PowerShell 5.1 abîme les accents), `install/macos/install.sh`. Python 3.11 à
+  3.13 sous Windows (pythonnet).
 - Icône : `scripts/make_icons.sh <svg> <svg plein>` régénère `organizer/assets/` (rsvg-convert + ImageMagick,
   outils de développement seulement ; les fichiers produits sont versionnés).
 

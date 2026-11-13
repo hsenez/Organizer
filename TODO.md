@@ -49,6 +49,27 @@ fichiers (PC Linux, PC Windows, téléphone) ?
 
 ---
 
+## 🍎 Client bureau macOS — à essayer sur un vrai Mac
+
+Écrit d'après les API (aucun Mac sous la main) ; seule la partie pure est testée sous Linux. Points à
+vérifier, par ordre d'importance :
+
+1. `install/macos/install.sh` va au bout (Python trouvé, PyObjC installé, `osacompile`, `iconutil`,
+   `codesign`) ; `Organizer.app` apparaît dans le Launchpad avec la bonne icône.
+2. La fenêtre s'ouvre ; **premier plan** au lancement et sur Ctrl+Alt+O quand elle était cachée (macOS 14+
+   peut refuser `activateIgnoringOtherApps` à une application qui n'est pas au premier plan).
+3. Dock et barre des menus affichent « Organizer » (et non « Python ») ; ⌘Q quitte ; clic sur le Dock
+   rouvre ; fermer la fenêtre la cache.
+4. Raccourcis globaux (Carbon) ; lien `organizer://…` depuis le navigateur ; démarrage à l'ouverture de
+   session (agent launchd) ; notifications des rappels (osascript, « Éditeur de script » à autoriser).
+5. Fichiers glissés depuis le Finder sur une tâche (WKWebView : `dataTransfer.files` rempli ?).
+6. `install/macos/update.sh` (arrêt, `git pull`, relance en arrière-plan).
+
+Pistes ensuite : icône dans la barre des menus (comme la zone de notification de Windows), raccourcis
+suivant la disposition du clavier (AZERTY) plutôt que la position des touches.
+
+---
+
 ## 🧩 Autres points en attente (relevés pendant le développement)
 
 - ↕️ Réordonner les sous-tâches par glisser-déposer dans l'éditeur (le service le permet déjà).

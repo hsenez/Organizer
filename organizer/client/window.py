@@ -6,6 +6,8 @@
 - Méthodes ajoutées à la fenêtre, appelées depuis le processus principal par la file de commandes de
   NiceGUI : ``organizer_present(jeton)`` (afficher et mettre au premier plan), ``organizer_quit()``
   (fermer pour de bon). Elles renvoient None : une valeur serait prise pour une réponse par NiceGUI.
+- macOS (``macshell``) : nom « Organizer » dans le Dock, ⌘Q quitte, clic sur le Dock réaffiche,
+  raccourcis globaux (API Carbon).
 - Fichiers glissés depuis le système (Linux, GTK) : WebKitGTK ne donne à la page ni leur contenu ni leur
   adresse (``dataTransfer.files`` vide, adresses ``file://`` masquées). GTK, lui, les reçoit (signal
   ``drag-data-received``) : on les transmet à la page (``window.organizerNativeDrop``, voir
@@ -26,7 +28,8 @@ from organizer.client import instance
 log = logging.getLogger("organizer.client")
 
 QUIT = threading.Event()
-SHELL = None  # Windows : raccourcis globaux et zone de notification (``winshell.Shell``)
+SHELL = None  # raccourcis globaux, zone de notification / Dock (``winshell.Shell``, ``macshell.Shell``)
+DEFAULT_KEYS = {"show": "Ctrl+Alt+O", "new_task": "Ctrl+Alt+N"}
 
 
 def _parent_alive() -> bool:
@@ -127,27 +130,57 @@ def setup_window() -> None:
     _forward_dropped_files(window)
     if sys.platform == "win32":
         _start_windows_shell(organizer_present)
+    elif sys.platform == "darwin":
+        _start_macos_shell(organizer_present)
+
+
+def _shortcut_keys() -> dict[str, str]:
+    """Raccourcis globaux choisis à l'installation (``client.json``) ; une valeur vide en retire un."""
+    from organizer.client import system
+    from organizer.client.config import ConfigStore
+
+    keys = dict(DEFAULT_KEYS)
+    try:
+        keys.update(ConfigStore(system.config_dir()).load().shortcuts)
+    except Exception:
+        log.exception("Raccourcis non lus")
+    return {name: keys[name] for name in ("show", "new_task") if keys.get(name)}
+
+
+def _start_macos_shell(present) -> None:
+    """Raccourcis globaux, ⌘Q et clic sur le Dock (macOS, voir ``macshell``)."""
+    global SHELL
+    try:
+        from PyObjCTools import AppHelper
+
+        from organizer.client import macshell
+    except ImportError:
+        log.exception("Intégration macOS indisponible")
+        return
+
+    def new_task() -> None:
+        present()
+        _tell_parent("new-task")
+
+    SHELL = macshell.Shell(
+        _shortcut_keys(), {"show": present, "new_task": new_task}, on_quit=QUIT.set, on_reopen=present
+    )
+    # Fil principal (boucle Cocoa) : exécuté une fois la fenêtre créée et la boucle lancée.
+    AppHelper.callAfter(SHELL.start)
 
 
 def _start_windows_shell(present) -> None:
     """Raccourcis clavier globaux et icône de la zone de notification (Windows, voir ``winshell``)."""
     global SHELL
     from organizer import ASSETS_DIR
-    from organizer.client import system, winshell
-    from organizer.client.config import ConfigStore
-
-    keys = {"show": "Ctrl+Alt+O", "new_task": "Ctrl+Alt+N"}
-    try:
-        keys.update(ConfigStore(system.config_dir()).load().shortcuts)
-    except Exception:
-        log.exception("Raccourcis non lus")
+    from organizer.client import winshell
 
     def new_task() -> None:
         present()  # tout de suite, tant que ce processus a le droit de passer au premier plan
         _tell_parent("new-task")
 
     SHELL = winshell.Shell(
-        {name: keys[name] for name in ("show", "new_task") if keys.get(name)},
+        _shortcut_keys(),
         {"show": present, "new_task": new_task, "quit": lambda: _tell_parent("quit")},
         ASSETS_DIR / "organizer.ico",
     )
