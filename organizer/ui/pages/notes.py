@@ -30,6 +30,7 @@ from organizer.ui.components.copy_link import copy_link_button
 from organizer.ui.components.emoji_picker import emoji_button
 from organizer.ui.components.item_editor import label_selects, open_link, tag_ids_from
 from organizer.ui.components.markdown_editor import MarkdownEditor, markdown_toolbar
+from organizer.ui.components.mute_button import concerns_others, mute_button
 from organizer.ui.components.ownership import ownership_emoji, ownership_text
 from organizer.ui.components.ref_links import RefLinks, as_ref, open_ref
 from organizer.ui.components.sharing import public_switch, share_editor
@@ -271,6 +272,8 @@ class NotesView:
                     "Projet, tags, partage"
                 ).mark("note-details-toggle")
             self._pin_button(note)
+            if concerns_others(self.ctx, note.owner_id, note.shared_with):
+                mute_button(self.ctx, "note", note.id, mark="note-mute")
             self._copy_button(note)
             if note.can_delete:
                 ui.button(icon="delete_outline", on_click=self._delete).props("flat round dense").tooltip(

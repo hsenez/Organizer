@@ -16,10 +16,26 @@ class ReadIn(BaseModel):
     ids: list[int] | None = None  # None : toutes
 
 
+class MuteIn(BaseModel):
+    muted: bool
+
+
 @router.get("/notifications", response_model=list[NotificationOut])
-def list_notifications(sv: Services = Depends(get_services)):
-    """Les plus récentes d'abord."""
-    return sv.notifications.list()
+def list_notifications(after: int | None = None, sv: Services = Depends(get_services)):
+    """Les plus récentes d'abord ; ``after`` : seulement les non lues de numéro supérieur."""
+    return sv.notifications.list(after=after)
+
+
+@router.get("/notifications/mute/{item_type}/{item_id}", response_model=bool)
+def is_muted(item_type: str, item_id: int, sv: Services = Depends(get_services)):
+    """Les notifications de cet élément sont-elles coupées pour moi ?"""
+    return sv.notifications.muted(item_type, item_id)
+
+
+@router.put("/notifications/mute/{item_type}/{item_id}", response_model=bool)
+def set_muted(item_type: str, item_id: int, data: MuteIn, sv: Services = Depends(get_services)):
+    """Coupe ou rétablit les notifications de cet élément pour moi (annulable)."""
+    return sv.notifications.set_muted(item_type, item_id, data.muted)
 
 
 @router.get("/notifications/unread-count", response_model=int)

@@ -116,6 +116,15 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
 - Icône : `scripts/make_icons.sh <svg> <svg plein>` régénère `organizer/assets/` (rsvg-convert + ImageMagick,
   outils de développement seulement ; les fichiers produits sont versionnés).
 
+- **Pop-ups** (`client/notifications.py`) : `ReminderNotifier` (suivis, 5 min), `EventReminderNotifier`
+  (événements, chaque minute, `now` = heure du poste ; journal `EventReminderLog` = `notified-events.json`,
+  clé `event_key` id + début + rappel, entrée gardée jusqu'à la fin de l'événement), `NotificationPopups`
+  (`fetch(after)` → `list(after=…)` ; premier passage = point de départ sans pop-up ; filtre
+  `settings.of(type).desktop` ; clic → `DesktopClient._open_notification` : `mark_read` dans un fil +
+  `open_item`). Boucle commune `repeat(check, interval, wake=…)` ; `DesktopClient._wake_popups` (appelé par
+  `_dispatch_change` dans le fil SSE) lève l'`asyncio.Event` par `loop.call_soon_threadsafe`, sauf pour ses
+  propres modifications (`event.user_id == me().id`).
+
 ## Étape 8 : temps réel, PWA
 
 - **Temps réel** : `core/events.py` (`EventBus`, `ChangeEvent` = tables + auteur + origine). Publié par

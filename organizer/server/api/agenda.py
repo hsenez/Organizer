@@ -3,6 +3,8 @@ partages et pièces jointes, et de la conversion tâche ↔ événement."""
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, File, Response, UploadFile
 from pydantic import BaseModel
 
@@ -38,6 +40,13 @@ class ToEventIn(BaseModel):
 def query_events(flt: EventFilter, sv: Services = Depends(get_services)):
     """Événements visibles qui touchent la période ``[start, end]``, filtrés comme dans le calendrier."""
     return sv.agenda.list(flt)
+
+
+@router.get("/agenda/reminders", response_model=list[EventOut])
+def event_reminders(now: datetime, sv: Services = Depends(get_services)):
+    """Événements (les miens et ceux partagés avec moi) dont le rappel est atteint à ``now`` (heure locale
+    du poste, sans fuseau) et qui ne sont pas finis."""
+    return sv.agenda.reminders_due(now.replace(tzinfo=None))
 
 
 @router.post("/agenda", response_model=EventOut, status_code=201)

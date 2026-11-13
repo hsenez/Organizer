@@ -57,8 +57,29 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
   type d'élément + colonne) ; concernés = propriétaire + partages (+ parent pour une sous-tâche), moins
   l'auteur. Nouvelle table liée à une tâche / un événement : l'ajouter à `_ITEM_OF`. Table `notification`
   **hors** historique (pas `__undoable__`). Annuler / rétablir (session directe) ne notifie pas.
-- `NotificationService` (`ds.notifications`) : `list`, `unread_count`, `mark_read(ids | None)` (renvoie le
-  nombre de non lues restantes). Client : `unread_count` en cache (`NOTIFICATIONS_KEY`, oublié à chaque
+- **Réglages** : préférence `NOTIFICATIONS_PREF` (= `notifications`, via `ds.account.get_pref / set_pref`,
+  aucune route dédiée) lue **toujours** par `rules.notification_settings(raw)` (tolérante : absente, abîmée
+  ou partielle → défauts) → `NotificationSettings` (`task` / `event` / `note` : `NotifyTypeSettings(level,
+  desktop)` ; `event_reminder`) ; `settings.of(item_type)`. Côté service : `notifications.settings_of(s,
+  user_id)` (lit `UserPref` dans la session). Niveaux : `enums.NotifyLevel` (+ `NOTIFY_LEVEL_META`),
+  filtrage `rules.wants_notification(level, kind, is_owner)` appelé par `record` (`_wanted`) **après** le
+  choix du type (share / change…) ; `_Concerned.owners` = propriétaire + propriétaire de la tâche parente.
+- **« Ne plus me notifier »** : table `ItemMute` (`item_mute` : user_id, item_type, item_id ; **annulable**,
+  dans `UNDOABLE_TABLES`, hors `_ITEM_OF` : ne notifie pas). Pas de clé étrangère (type variable) :
+  `notifications.forget_mutes(s, type, id)` est appelé par `TaskService._delete_row`,
+  `AgendaService._delete_row` et `NoteService.delete` (sinon un identifiant réutilisé par SQLite hériterait
+  du réglage). Une sous-tâche est muette si sa tâche parente l'est. `NotificationService.muted`,
+  `set_muted` (libellé « Couper / Rétablir les notifications de … »), routes `GET|PUT
+  /notifications/mute/{type}/{id}`. Bouton : `components/mute_button.py` (`concerns_others` : affiché si
+  l'élément est partagé ou d'un autre), marqueurs `editor-mute`, `note-mute`.
+- `NotificationService` (`ds.notifications`) : `list(limit, after=None)` (`after` : non lues de numéro
+  supérieur, plus récentes d'abord — pop-ups du client bureau), `unread_count`, `mark_read(ids | None)`
+  (renvoie le nombre de non lues restantes). Client : `unread_count` en cache (`NOTIFICATIONS_KEY`, oublié à chaque
   événement temps réel). Bulle : `layout.update_notification_badge` (rafraîchissement léger), marqueur
   `notifications-badge` ; page `ui/pages/notifications.py` (marqueurs `notification-<id>`,
-  `notifications-read-all`).
+  `notifications-read-all` ; `KINDS` et `describe` réutilisés par les pop-ups du client bureau).
+- Réglages → 🔔 Notifications : `settings._notifications` (marqueurs `notify-level-<type>`,
+  `notify-desktop-<type>`, `notify-event-reminder`, `notify-desktop-reminders`) ; `TAB_ALIASES` garde
+  `?tab=reminders`. Un `ui.select` n'accepte pas `None` comme clé : « Pas de rappel » = `NO_REMINDER` (-1).
+- Tests : `tests/test_notification_settings.py` (règles, services, notifieurs du client),
+  `tests/test_notification_pages.py`, `test_client.py::test_mutes_and_event_reminders_through_api_match_local`.

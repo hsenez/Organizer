@@ -29,6 +29,7 @@ from organizer.core.schemas import NoteCreate, NoteFilter, NoteOut, NotePatch, R
 from organizer.core.services.base import ServiceContext, quoted
 from organizer.core.services.items import ItemService
 from organizer.core.services.labels import ProjectService, TagService
+from organizer.core.services.notifications import forget_mutes
 
 _REQUIRED_FIELDS = {"title", "notes", "emoji", "is_public"}
 BACKLINKS_LIMIT = 100
@@ -226,6 +227,7 @@ class NoteService(ItemService):
             for model in (NoteTag, NoteShare, NotePin):
                 for row in s.exec(select(model).where(model.note_id == note.id)).all():
                     s.delete(row)
+            forget_mutes(s, "note", note.id)
             s.flush()
             s.delete(note)
 

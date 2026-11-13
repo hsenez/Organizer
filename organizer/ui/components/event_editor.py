@@ -13,7 +13,13 @@ from typing import Any
 from nicegui import ui
 
 from organizer.core import rules
-from organizer.core.enums import EVENT_DEFAULT_COLOR, EVENT_PALETTE, LinkKind
+from organizer.core.enums import (
+    EVENT_DEFAULT_COLOR,
+    EVENT_PALETTE,
+    EVENT_REMINDERS,
+    NOTIFICATIONS_PREF,
+    LinkKind,
+)
 from organizer.core.errors import OrganizerError
 from organizer.core.models import utcnow
 from organizer.core.schemas import EventCreate, EventOut, EventPatch, EventTimes, ShareSpec
@@ -26,7 +32,8 @@ from organizer.ui.components.tag_chips import tag_chip
 
 TIME_KEYS = ("start_date", "start_time", "end_date", "end_time")
 # Champs propres aux événements, réappliqués s'il redevient un événement dans la même session.
-EVENT_SPECIFIC = (*TIME_KEYS, "location", "color", "is_public")
+EVENT_SPECIFIC = (*TIME_KEYS, "location", "reminder_minutes", "color", "is_public")
+NO_REMINDER = -1  # valeur « Pas de rappel » de la liste (un select n'accepte pas None comme clé)
 
 
 class EventEditor(ItemEditor):
@@ -71,7 +78,9 @@ class EventEditor(ItemEditor):
         if not self.stash:
             return self.ctx.call(self.ds.agenda.from_task, other.item.id)
         times = EventTimes(**{k: self.stash[k] for k in TIME_KEYS})
-        extra = EventPatch(**{k: self.stash[k] for k in ("location", "color", "is_public")})
+        extra = EventPatch(
+            **{k: self.stash[k] for k in ("location", "reminder_minutes", "color", "is_public")}
+        )
         return self.ctx.call(self.ds.agenda.from_task, other.item.id, times, extra)
 
     def _draft_out(self) -> EventOut:
@@ -81,6 +90,9 @@ class EventEditor(ItemEditor):
         if values[0] is None:
             values = list(rules.event_times_from_due(None, None, today))
             self.draft.update(dict(zip(TIME_KEYS, values, strict=True)))
+        if "reminder_minutes" not in self.draft:  # rappel par défaut des réglages
+            settings = rules.notification_settings(self.ds.account.get_pref(NOTIFICATIONS_PREF))
+            self.draft["reminder_minutes"] = settings.event_reminder
         try:
             start_date, start_time, end_date, end_time = rules.event_span(*values)
         except OrganizerError:
@@ -104,6 +116,7 @@ class EventEditor(ItemEditor):
             end_time=end_time,
             all_day=start_time is None,
             location=d.get("location", ""),
+            reminder_minutes=self.draft.get("reminder_minutes"),
             color=d.get("color"),
             display_color=d.get("color") or (project.color if project else EVENT_DEFAULT_COLOR),
             is_public=d.get("is_public", False),
@@ -122,6 +135,7 @@ class EventEditor(ItemEditor):
         self._title(event)
         self._times(event)
         self._location(event)
+        self._reminder(event)
         self._colors(event)
         self._labels(event)
         if self.is_draft:
@@ -255,6 +269,26 @@ class EventEditor(ItemEditor):
             place.on("clear", save)
             self._map_buttons(event.location)
 
+    def _reminder(self, event: EventOut) -> None:
+        choices = {NO_REMINDER: "Pas de rappel", **EVENT_REMINDERS}
+        if event.reminder_minutes is not None and event.reminder_minutes not in choices:
+            choices[event.reminder_minutes] = (
+                f"{event.reminder_minutes} minutes avant"  # réglé ailleurs (API)
+            )
+        value = NO_REMINDER if event.reminder_minutes is None else event.reminder_minutes
+
+        def changed(e) -> None:
+            minutes = None if e.value in (None, NO_REMINDER) else int(e.value)
+            if minutes != self.event.reminder_minutes:
+                self._save(rebuild=True, reminder_minutes=minutes)
+
+        ui.select(choices, label="⏰ Rappel", value=value, on_change=changed).props(
+            "outlined dense options-dense"
+        ).classes("w-full max-w-xs").tooltip(
+            "Notification sur le client bureau et rappel sur l'accueil, pour vous et ceux avec qui "
+            "l'événement est partagé (toute la journée : à partir de 9 h le premier jour)"
+        ).mark("editor-reminder")
+
     def _map_buttons(self, location: str) -> None:
         maps, waze = rules.maps_url(location), rules.waze_url(location)
         if maps:
@@ -338,6 +372,10 @@ class EventEditor(ItemEditor):
             with ui.row().classes("w-full items-center gap-1"):
                 ui.label(f"📍 {event.location}").classes("flex-1")
                 self._map_buttons(event.location)
+        if event.reminder_minutes is not None:
+            ui.label(f"⏰ Rappel : {fmt.event_reminder(event.reminder_minutes).lower()}").mark(
+                "editor-reminder-text"
+            )
         if event.project or event.tags:
             with ui.row().classes("w-full items-center gap-1.5"):
                 if event.project:

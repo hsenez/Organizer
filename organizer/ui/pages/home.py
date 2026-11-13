@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import Request
 from fastapi.responses import Response
@@ -37,6 +37,8 @@ def _body(ctx: UiContext, view: dict, body) -> None:
     all_tasks = ctx.ds.tasks.list(TaskFilter(include_subtasks=True), TaskSort(key="priority"))
     open_tasks = [t for t in all_tasks if not t.status.is_closed]
     reminders = {t.id for t in ctx.ds.tasks.reminders_due()}
+    # Heure locale du poste (la date reste celle du contexte : figée dans les tests).
+    event_reminders = ctx.ds.agenda.reminders_due(datetime.combine(today, datetime.now().time()))
 
     with ui.column().classes("gap-0"):
         ui.label(f"Bonjour {ctx.user.display_name} 👋").classes("text-2xl sm:text-3xl font-bold")
@@ -125,6 +127,22 @@ def _body(ctx: UiContext, view: dict, body) -> None:
         "Suivis dont la date de rappel est atteinte",
         [t for t in open_tasks if t.id in reminders],
     )
+    if event_reminders:
+        section_title("⏰", "Événements", len(event_reminders), "Événements dont le rappel est atteint")
+        with ui.column().classes("w-full gap-2"):
+            for event in event_reminders:
+                with (
+                    ui.card()
+                    .classes("w-full rounded-xl p-3 gap-0 cursor-pointer")
+                    .style(f"border-left: 4px solid {event.display_color}")
+                    .on("click", lambda e=event: ctx.editor.open_event(e.id))
+                    .mark(f"home-event-{event.id}")
+                ):
+                    ui.label(f"📅 {event.title}").classes("font-medium")
+                    when = fmt.event_range(event.start_date, event.start_time, event.end_date, event.end_time)
+                    ui.label(f"{when}{f' · 📍 {event.location}' if event.location else ''}").classes(
+                        "text-sm text-gray-500"
+                    )
     section(
         "🎯",
         "À faire maintenant",
@@ -132,5 +150,5 @@ def _body(ctx: UiContext, view: dict, body) -> None:
         [t for t in open_tasks if rules.quadrant_of(t.importance, t.urgency) is Quadrant.DO],
     )
     section("🚧", "En cours", "Tâches commencées", [t for t in in_progress if t.parent_id is None])
-    if not shown:
+    if not shown and not event_reminders:
         empty_state("🎉", "Rien d'urgent ! Ajoutez une tâche avec le bouton ➕ (ou la touche N).")

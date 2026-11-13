@@ -18,19 +18,29 @@ jamais prévenu.
 
 Les actions rapprochées identiques (enregistrement automatique des notes…) sont **regroupées** dans la
 notification non lue précédente. Annuler / rétablir ne notifie pas.
+
+**Réglages** du destinataire (réglages → 🔔 Notifications, préférence ``NOTIFICATIONS_PREF``) : un niveau
+par type d'élément (``rules.wants_notification``), et les éléments qu'il a coupés (``ItemMute`` ; pour une
+sous-tâche, couper la tâche parente suffit). Une notification non voulue n'est jamais créée. Les conflits
+de nom (``conflict``) ne passent pas par là : ils sont toujours signalés.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from sqlalchemy import func, update
+from sqlalchemy import and_, func, or_, update
 from sqlmodel import Session, select
 
+from organizer.core import rules
+from organizer.core.enums import NOTIFICATIONS_PREF
+from organizer.core.errors import InvalidOperation, NotFound
 from organizer.core.models import (
     Event,
     EventShare,
+    ItemMute,
     Note,
     NoteShare,
     Notification,
@@ -39,10 +49,11 @@ from organizer.core.models import (
     Task,
     TaskShare,
     User,
+    UserPref,
     utcnow,
 )
-from organizer.core.schemas import NotificationOut
-from organizer.core.services.base import BaseService
+from organizer.core.schemas import NotificationOut, NotificationSettings
+from organizer.core.services.base import BaseService, quoted
 
 MERGE_WINDOW = timedelta(minutes=15)
 LIST_LIMIT = 200
@@ -103,14 +114,22 @@ def _items(changes) -> dict[tuple[str, int], _Item]:
     return items
 
 
-def _concerned(s: Session, item: _Item) -> tuple[str, set[int], set[int]]:
-    """(titre, concernés après l'action, concernés avant)."""
+@dataclass
+class _Concerned:
+    title: str = ""
+    after: set[int] = field(default_factory=set)  # concernés après l'action
+    before: set[int] = field(default_factory=set)  # concernés avant
+    owners: set[int] = field(default_factory=set)  # propriétaire (et celui de la tâche parente)
+    parent_id: int | None = None  # tâche parente d'une sous-tâche
+
+
+def _concerned(s: Session, item: _Item) -> _Concerned:
     model, share_model, column = _MAIN[item.type]
     row = item.row
     if row is None:
         current = s.get(model, item.id)
         if current is None:
-            return "", set(), set()
+            return _Concerned()
         row = {
             "title": current.title,
             "owner_id": current.owner_id,
@@ -120,27 +139,64 @@ def _concerned(s: Session, item: _Item) -> tuple[str, set[int], set[int]]:
     if not item.deleted:
         shares = set(s.exec(select(share_model.user_id).where(getattr(share_model, column) == item.id)).all())
     people = {int(row["owner_id"])}
-    parent_id = row.get("parent_id")
-    if item.type == "task" and parent_id is not None:  # une sous-tâche concerne aussi ceux du parent
+    owners = set(people)
+    parent_id = row.get("parent_id") if item.type == "task" else None
+    if parent_id is not None:  # une sous-tâche concerne aussi ceux du parent
         parent = s.get(Task, int(parent_id))
         if parent is not None:
             people.add(parent.owner_id)
+            owners.add(parent.owner_id)
             people |= set(s.exec(select(TaskShare.user_id).where(TaskShare.task_id == parent.id)).all())
     after = set() if item.deleted else people | shares
     before = people | (shares - item.added) | item.removed
-    return row.get("title", ""), after, before
+    return _Concerned(
+        row.get("title", ""), after, before, owners, int(parent_id) if parent_id is not None else None
+    )
+
+
+def settings_of(s: Session, user_id: int) -> NotificationSettings:
+    """Réglages des notifications d'un utilisateur (préférence du compte, tolérante)."""
+    row = s.get(UserPref, (user_id, NOTIFICATIONS_PREF))
+    try:
+        raw = json.loads(row.value) if row is not None else None
+    except ValueError:
+        raw = None
+    return rules.notification_settings(raw)
+
+
+def _muted(s: Session, user_id: int, item: _Item, parent_id: int | None) -> bool:
+    targets = [and_(ItemMute.item_type == item.type, ItemMute.item_id == item.id)]
+    if parent_id is not None:
+        targets.append(and_(ItemMute.item_type == "task", ItemMute.item_id == parent_id))
+    return s.exec(select(ItemMute).where(ItemMute.user_id == user_id, or_(*targets))).first() is not None
+
+
+def _wanted(s: Session, user_id: int, kind: str, item: _Item, who: _Concerned) -> bool:
+    level = settings_of(s, user_id).of(item.type).level
+    if not rules.wants_notification(level, kind, is_owner=user_id in who.owners):
+        return False
+    return not _muted(s, user_id, item, who.parent_id)
+
+
+def forget_mutes(s: Session, item_type: str, item_id: int) -> None:
+    """À appeler en supprimant un élément : ses « ne plus me notifier » disparaissent avec lui."""
+    for row in s.exec(
+        select(ItemMute).where(ItemMute.item_type == item_type, ItemMute.item_id == item_id)
+    ).all():
+        s.delete(row)
 
 
 def record(s: Session, actor_id: int, label: str, changes) -> None:
     """Crée (ou regroupe) les notifications d'une action de ``actor_id`` (voir le module)."""
-    found: dict[int, tuple[str, _Item, str]] = {}  # destinataire → (type, élément, titre)
+    found: dict[int, tuple[str, _Item, _Concerned]] = {}  # destinataire → (type, élément, concernés)
     items = _items(changes)
     conversion = any(i.deleted for i in items.values()) and any(
         i.row is not None and not i.deleted for i in items.values()
     )
     for item in items.values():
-        title, after, before = _concerned(s, item)
-        for user_id in (after | before) - {actor_id}:
+        who = _concerned(s, item)
+        before = who.before
+        for user_id in (who.after | before) - {actor_id}:
             if item.deleted:
                 kind = "delete"
             elif user_id in item.added and user_id not in before and not conversion:
@@ -152,11 +208,14 @@ def record(s: Session, actor_id: int, label: str, changes) -> None:
             previous = found.get(user_id)
             # Une conversion supprime l'un et crée l'autre : on retient l'élément qui existe toujours.
             if previous is None or _KIND_ORDER[kind] < _KIND_ORDER[previous[0]]:
-                found[user_id] = (kind, item, title)
+                found[user_id] = (kind, item, who)
     if not found:
         return
     now = utcnow()
-    for user_id, (kind, item, title) in found.items():
+    for user_id, (kind, item, who) in found.items():
+        if not _wanted(s, user_id, kind, item, who):
+            continue
+        title = who.title
         last = s.exec(
             select(Notification)
             .where(
@@ -201,17 +260,20 @@ def _aware(moment):
 class NotificationService(BaseService):
     """Les notifications de l'utilisateur courant."""
 
-    def list(self, limit: int = LIST_LIMIT) -> list[NotificationOut]:
-        """Les plus récentes d'abord (dernière action regroupée)."""
+    def list(self, limit: int = LIST_LIMIT, after: int | None = None) -> list[NotificationOut]:
+        """Les plus récentes d'abord (dernière action regroupée). ``after`` : seulement les **non lues** de
+        numéro supérieur (nouvelles depuis la dernière fois : pop-ups du client bureau), plus récentes
+        d'abord."""
         me = self.actor.id
         with self.uow() as w:
             s = w.session
-            rows = s.exec(
-                select(Notification)
-                .where(Notification.user_id == me)
-                .order_by(Notification.updated_at.desc(), Notification.id.desc())
-                .limit(limit)
-            ).all()
+            query = select(Notification).where(Notification.user_id == me)
+            if after is None:
+                query = query.order_by(Notification.updated_at.desc(), Notification.id.desc())
+            else:
+                query = query.where(Notification.id > after, Notification.read_at.is_(None))
+                query = query.order_by(Notification.id.desc())
+            rows = s.exec(query.limit(limit)).all()
             names = {u.id: u.display_name or u.username for u in s.exec(select(User)).all()}
             return [
                 NotificationOut(
@@ -279,6 +341,40 @@ class NotificationService(BaseService):
             return True
         parent_id = getattr(row, "parent_id", None)
         return parent_id is not None and self._visible(s, "task", parent_id)
+
+    # --- « ne plus me notifier » pour un élément ---
+
+    def _check_item(self, s: Session, item_type: str, item_id: int) -> str:
+        """Titre de l'élément (erreur s'il n'existe pas ou n'est pas visible)."""
+        if item_type not in _MAIN:
+            raise InvalidOperation(f"Type d'élément inconnu : {item_type}")
+        if not self._visible(s, item_type, item_id):
+            raise NotFound("Élément introuvable.")
+        return s.get(_MAIN[item_type][0], item_id).title
+
+    def muted(self, item_type: str, item_id: int) -> bool:
+        """L'utilisateur a-t-il coupé les notifications de cet élément ?"""
+        with self.uow() as w:
+            self._check_item(w.session, item_type, item_id)
+            return w.session.get(ItemMute, (self.actor.id, item_type, item_id)) is not None
+
+    def set_muted(self, item_type: str, item_id: int, muted: bool) -> bool:
+        """Coupe (``muted``) ou rétablit les notifications d'un élément pour soi ; renvoie le nouvel état.
+        Annulable (Ctrl+Z), comme une épingle."""
+        with self.uow() as probe:
+            title = self._check_item(probe.session, item_type, item_id)
+            current = probe.session.get(ItemMute, (self.actor.id, item_type, item_id)) is not None
+        if current == muted:
+            return muted
+        verb = "Couper" if muted else "Rétablir"
+        with self.uow(label=f"{verb} les notifications de {quoted(title)}") as w:
+            s = w.session
+            row = s.get(ItemMute, (self.actor.id, item_type, item_id))
+            if muted and row is None:
+                s.add(ItemMute(user_id=self.actor.id, item_type=item_type, item_id=item_id))
+            elif not muted and row is not None:
+                s.delete(row)
+        return muted
 
     def unread_count(self) -> int:
         with self.uow() as w:

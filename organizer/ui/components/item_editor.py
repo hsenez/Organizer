@@ -32,6 +32,7 @@ from organizer.ui.components.file_drop import (
     reusable_upload,
 )
 from organizer.ui.components.markdown_editor import MarkdownEditor
+from organizer.ui.components.mute_button import concerns_others, mute_button
 from organizer.ui.components.ref_links import RefLinks, as_ref, open_ref
 from organizer.ui.components.tag_chips import color_tag_select
 from organizer.ui.context import UiContext
@@ -364,6 +365,8 @@ class ItemEditor:
                 "text-sm text-green-600 transition-opacity duration-500 opacity-0"
             )
             if not self.is_draft and getattr(item, "id", 0):
+                if concerns_others(self.ctx, item.owner_id, item.shared_with):
+                    mute_button(self.ctx, self.kind, item.id, mark="editor-mute")
                 copy_link_button(self.ctx, self.kind, item.id, mark="editor-copy-link")
             ui.button(icon="close", on_click=self.dialog.close).props("flat round dense").tooltip(
                 "Fermer (Échap)"

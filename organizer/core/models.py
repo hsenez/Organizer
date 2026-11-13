@@ -146,6 +146,7 @@ class Event(ItemBase, table=True):
     end_date: date = Field(index=True)
     end_time: time | None = None
     location: str = ""  # texte libre ou lien (Google Maps…)
+    reminder_minutes: int | None = None  # rappel N minutes avant le début (None : pas de rappel)
     color: str | None = None  # couleur choisie ; sinon celle du projet
     is_public: bool = False  # visible (en lecture) par tous les comptes
 
@@ -211,6 +212,18 @@ class NotePin(SQLModel, table=True):
 
     note_id: int = Field(foreign_key="note.id", primary_key=True)
     user_id: int = Field(foreign_key="user.id", primary_key=True)
+
+
+class ItemMute(SQLModel, table=True):
+    """« 🔕 Ne plus me notifier » pour une tâche, un événement ou une note (personnel). Supprimée avec
+    l'élément (un identifiant peut resservir)."""
+
+    __tablename__ = "item_mute"
+    __undoable__ = True
+
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    item_type: str = Field(primary_key=True)  # task | event | note
+    item_id: int = Field(primary_key=True)
 
 
 class Board(SQLModel, table=True):
@@ -401,5 +414,6 @@ UNDOABLE_TABLES: dict[str, type[SQLModel]] = {
         NoteTag,
         NoteShare,
         NotePin,
+        ItemMute,
     )
 }

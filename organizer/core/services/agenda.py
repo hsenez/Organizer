@@ -9,11 +9,16 @@ Droits :
 
 Les dates et heures sont locales ; :func:`rules.event_span` normalise début et fin (toute la journée sans
 heure de début, une heure par défaut, fin après le début).
+
+**Rappel** (``reminder_minutes``, facultatif) : N minutes avant le début (toute la journée : avant 9 h le
+premier jour) ; il concerne le propriétaire et ceux avec qui l'événement est partagé (pas les simples
+lecteurs d'un événement public). À la création, le rappel par défaut des réglages du compte s'applique si
+aucun n'est fourni.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import or_
 from sqlmodel import Session, select
@@ -23,6 +28,7 @@ from organizer.core.enums import EVENT_DEFAULT_COLOR
 from organizer.core.errors import Forbidden, InvalidOperation, NotFound
 from organizer.core.models import Event, EventLink, EventShare, EventTag, Task, TaskShare, User
 from organizer.core.schemas import (
+    MAX_REMINDER_MINUTES,
     EventCreate,
     EventFilter,
     EventOut,
@@ -35,6 +41,7 @@ from organizer.core.schemas import (
 from organizer.core.services.base import ServiceContext, quoted
 from organizer.core.services.items import ItemService
 from organizer.core.services.labels import ProjectService, TagService
+from organizer.core.services.notifications import forget_mutes, settings_of
 from organizer.core.services.tasks import TaskService
 
 _REQUIRED_FIELDS = {"title", "start_date", "end_date", "location", "notes", "is_public"}
@@ -122,6 +129,7 @@ class AgendaService(ItemService):
                     end_time=e.end_time,
                     all_day=e.start_time is None,
                     location=e.location,
+                    reminder_minutes=e.reminder_minutes,
                     color=e.color,
                     display_color=e.color or (project.color if project else EVENT_DEFAULT_COLOR),
                     is_public=e.is_public,
@@ -173,6 +181,31 @@ class AgendaService(ItemService):
             outs, key=lambda e: (e.start_date, e.start_time is not None, e.start_time, e.title.lower())
         )
 
+    def reminders_due(self, now: datetime) -> list[EventOut]:
+        """Événements dont le rappel est atteint à ``now`` (heure locale du poste) et qui ne sont pas finis,
+        parmi les miens et ceux partagés avec moi ; par début."""
+        me = self.actor.id
+        with self.uow() as w:
+            s = w.session
+            query = select(Event).where(
+                self._visible_clause(),
+                Event.reminder_minutes.is_not(None),
+                Event.end_date >= now.date() - timedelta(days=1),
+                Event.start_date <= now.date() + timedelta(days=MAX_REMINDER_MINUTES // (24 * 60) + 1),
+            )
+            outs = self._build(s, list(s.exec(query).all()))
+        due = [
+            e
+            for e in outs
+            if (e.owner_id == me or me in e.shared_with)
+            and rules.event_reminder_due(
+                e.start_date, e.start_time, e.end_date, e.end_time, e.reminder_minutes, now
+            )
+        ]
+        return sorted(
+            due, key=lambda e: (e.start_date, e.start_time is not None, e.start_time, e.title.lower())
+        )
+
     # ==================================================================================================
     # Écriture
     # ==================================================================================================
@@ -184,6 +217,10 @@ class AgendaService(ItemService):
         span = rules.event_span(data.start_date, data.start_time, data.end_date, data.end_time)
         with self.uow(label=f"Créer l'événement {quoted(title)}") as w:
             s = w.session
+            if "reminder_minutes" in data.model_fields_set:
+                reminder = data.reminder_minutes
+            else:  # rappel par défaut choisi dans les réglages
+                reminder = settings_of(s, self.actor.id).event_reminder
             self._check_project(s, data.project_id)
             event = Event(
                 owner_id=self.actor.id,
@@ -191,6 +228,7 @@ class AgendaService(ItemService):
                 notes=data.notes,
                 project_id=data.project_id,
                 location=data.location.strip(),
+                reminder_minutes=reminder,
                 color=data.color,
                 is_public=data.is_public,
                 **dict(zip(_TIME_FIELDS, span, strict=True)),
@@ -238,7 +276,7 @@ class AgendaService(ItemService):
             span = rules.event_span(*(fields.get(key, getattr(event, key)) for key in _TIME_FIELDS))
             for key, value in zip(_TIME_FIELDS, span, strict=True):
                 setattr(event, key, value)
-        for key in ("notes", "color", "is_public"):
+        for key in ("notes", "color", "is_public", "reminder_minutes"):
             if key in fields:
                 setattr(event, key, fields[key])
         if "location" in fields:
@@ -254,6 +292,7 @@ class AgendaService(ItemService):
         for model in (EventTag, EventShare, EventLink):
             for row in s.exec(select(model).where(model.event_id == event.id)).all():
                 s.delete(row)
+        forget_mutes(s, "event", event.id)
         s.flush()
         s.delete(event)
 
@@ -388,4 +427,6 @@ def _update_label(title: str, fields: dict) -> str:
         return f"Renommer l'événement {name}"
     if keys == {"notes"}:
         return f"Modifier les notes de {name}"
+    if keys == {"reminder_minutes"}:
+        return f"Changer le rappel de {name}"
     return f"Modifier l'événement {name}"

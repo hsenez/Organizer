@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 
+from organizer.core.enums import EVENT_REMINDERS
+
 DAYS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
 MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
 DAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -111,3 +113,12 @@ def event_range(start_date: date, start_time: time | None, end_date: date, end_t
     if start_date == end_date:
         return f"{long_date(start_date)} · {start_time:%H:%M} → {end_time:%H:%M} ({span})"
     return f"{long_date(start_date)} {start_time:%H:%M} → {long_date(end_date)} {end_time:%H:%M} ({span})"
+
+
+def event_reminder(minutes: int | None) -> str:
+    """« 15 minutes avant », « 1 jour avant »… (« Pas de rappel » pour None)."""
+    if minutes is None:
+        return "Pas de rappel"
+    if minutes in EVENT_REMINDERS:
+        return EVENT_REMINDERS[minutes]
+    return f"{minutes} minutes avant"

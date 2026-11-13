@@ -73,7 +73,10 @@ recherche, partage, Ctrl+Z) avec des données d'exemple, dans une base séparée
   Obsidian avec barre de boutons, cases à cocher qui se rangent toutes seules, liens vers des notes / tâches /
   événements en tapant `[[`, « Cité dans », partage modifiable ou en lecture seule, publique, épingles,
   « copier le lien »), 🔍 Recherche (Ctrl+K), 🔔 Notifications (ce que les autres ont
-  partagé ou modifié qui vous concerne, bulle avec le nombre de non lues), ⚙️ Réglages.
+  partagé ou modifié qui vous concerne, bulle avec le nombre de non lues ; quatre niveaux par type
+  d'élément — 🔕 Rien, 🤝 Partages seulement, ✏️ Mes éléments, 📣 Tout — dans Réglages → 🔔 Notifications,
+  et 🔕 « Ne plus me notifier » pour un élément précis), ⚙️ Réglages. Un événement peut avoir un ⏰ rappel
+  (aucun par défaut).
 - **Documentation de l'API** (et essais en direct) : `http://<ip>:2603/docs` (une fois connecté).
 
 **🖥️ Client bureau** : au premier lancement, indiquer l'adresse du Pi (`raspberrypi.local` ou son IP : le
@@ -85,8 +88,10 @@ ouvrent directement l'application. Par rapport au site :
 
 - les **chemins de fichiers** s'ouvrent avec l'application par défaut du poste (au lieu d'être copiés), les
   liens web dans le navigateur, les pièces jointes sont téléchargées puis ouvertes ;
-- 🔔 **notifications système** quand la date de rappel d'un suivi est atteinte (une fois par jour ;
-  désactivables dans Réglages → 🔔 Rappels ; bouton de test dans Réglages → 🔌 Connexion) ;
+- 🔔 **notifications système** quand la date de rappel d'un suivi est atteinte (une fois par jour) ou
+  quand le rappel d'un événement tombe, et pour chaque nouvelle notification des types choisis (case
+  « 🖥️ Pop-up sur le bureau » dans Réglages → 🔔 Notifications ; bouton de test dans Réglages → 🔌
+  Connexion) ;
 - Réglages → 🔌 **Connexion** : se déconnecter ou changer de serveur.
 - 🏠 **Réseau local automatique** : connecté à l'adresse publique (`https://organizer.blou.top`), le client
   passe tout seul par le réseau local quand il est à la maison (≈ 20 ms par requête au lieu de ≈ 300 ms à

@@ -29,6 +29,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -44,8 +45,24 @@ from organizer.client.api import ApiClient
 from organizer.client.config import ClientConfig, ConfigStore, normalize_server_url
 from organizer.client.lan import LanSwitch, is_lan_url
 from organizer.client.live import EventListener
-from organizer.client.notifications import NotifiedLog, ReminderNotifier, make_sender
-from organizer.client.remote import RemoteAccount, RemoteDataSource, RemoteTasks
+from organizer.client.notifications import (
+    EventReminderLog,
+    EventReminderNotifier,
+    NotificationPopups,
+    NotifiedLog,
+    ReminderNotifier,
+    make_sender,
+    repeat,
+)
+from organizer.client.remote import (
+    RemoteAccount,
+    RemoteAgenda,
+    RemoteDataSource,
+    RemoteNotifications,
+    RemoteTasks,
+)
+from organizer.core import rules
+from organizer.core.enums import NOTIFICATIONS_PREF
 from organizer.core.errors import (
     InvalidOperation,
     NotAuthenticated,
@@ -54,7 +71,14 @@ from organizer.core.errors import (
     ServerUnreachable,
 )
 from organizer.core.events import ChangeEvent
-from organizer.core.schemas import LoginOut, TaskOut, UserOut
+from organizer.core.schemas import (
+    EventOut,
+    LoginOut,
+    NotificationOut,
+    NotificationSettings,
+    TaskOut,
+    UserOut,
+)
 from organizer.ui.auth_shell import auth_shell
 from organizer.ui.components.connection_badge import desktop_connection
 from organizer.ui.components.ref_links import open_ref
@@ -437,6 +461,32 @@ class DesktopClient:
         self.show_window()
         self._in_page(lambda ctx: ctx.editor.open(task_id), f"/?task={task_id}")
 
+    def _fetch_event_reminders(self, now: datetime) -> tuple[bool, list[EventOut]]:
+        api = self.api
+        if api is None or not RemoteAccount(api).me().desktop_notifications:
+            return False, []
+        return True, RemoteAgenda(api).reminders_due(now)
+
+    def _fetch_notifications(self, after: int) -> tuple[NotificationSettings, list[NotificationOut]]:
+        api = self.api
+        if api is None:
+            return NotificationSettings(), []
+        settings = rules.notification_settings(RemoteAccount(api).get_pref(NOTIFICATIONS_PREF))
+        return settings, RemoteNotifications(api).list(after=after)
+
+    def _open_notification(self, item: NotificationOut) -> None:
+        """Clic sur le pop-up d'une notification : ouvre l'élément et la marque comme lue."""
+        api = self.api
+        if api is not None:
+            threading.Thread(
+                target=lambda: RemoteNotifications(api).mark_read([item.id]), daemon=True
+            ).start()
+        if item.available:
+            self.open_item(item.item_type, item.item_id)
+        else:
+            self.show_window()
+            self._in_page(lambda ctx: ui.navigate.to("/notifications"), "/notifications")
+
     # --- fenêtre et commandes à distance ---
 
     def _window_call(self, method: str, *args) -> bool:
@@ -534,13 +584,44 @@ class DesktopClient:
         return JSONResponse({"ok": True})
 
     def start_notifier(self) -> None:
+        loop = asyncio.get_running_loop()
+        send = make_sender()
         notifier = ReminderNotifier(
             self._fetch_reminders,
             NotifiedLog(self.store.directory / "notified.json"),
-            make_sender(),
+            send,
             open_task=self._open_task,
         )
-        self._notifier_task = asyncio.get_running_loop().create_task(notifier.run())
+        events = EventReminderNotifier(
+            self._fetch_event_reminders,
+            EventReminderLog(self.store.directory / "notified-events.json"),
+            send,
+            open_event=lambda event_id: self.open_item("event", event_id),
+        )
+        popups = NotificationPopups(
+            self._fetch_notifications, send, open_notification=self._open_notification
+        )
+        self._popups_wake = asyncio.Event()
+        self._loop = loop
+        self._notifier_tasks = [
+            loop.create_task(notifier.run()),
+            loop.create_task(repeat(events.check, 60, first_delay=10, what="rappels des événements")),
+            loop.create_task(
+                repeat(popups.check, 60, first_delay=5, wake=self._popups_wake, what="notifications")
+            ),
+        ]
+
+    def _wake_popups(self, event: ChangeEvent | None) -> None:
+        """Une modification d'un autre utilisateur a pu créer une notification : vérifier tout de suite."""
+        wake, loop, api = getattr(self, "_popups_wake", None), getattr(self, "_loop", None), self.api
+        if wake is None or loop is None or api is None:
+            return
+        try:
+            if event is not None and event.user_id == RemoteAccount(api).me().id:
+                return  # ses propres actions ne notifient jamais
+        except OrganizerError:
+            return
+        loop.call_soon_threadsafe(wake.set)
 
     # --- installation ---
 
@@ -549,6 +630,7 @@ class DesktopClient:
         api = self.api
         if api is not None:
             api.cache.on_change(event.tables if event is not None else None)
+        self._wake_popups(event)
         for _client, ctx in list(self._pages):
             if ctx.live is not None:
                 ctx.live.notify(event)

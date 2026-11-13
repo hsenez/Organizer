@@ -64,8 +64,14 @@ def _baseline(_conn: Connection) -> None:
     (toutes les évolutions jusque-là ont pris la forme de nouvelles tables, créées par ``create_all``)."""
 
 
+def _event_reminder(conn: Connection) -> None:
+    """Version 2 : rappel des événements (minutes avant le début ; vide = pas de rappel)."""
+    add_column(conn, "event", "reminder_minutes", "INTEGER")
+
+
 MIGRATIONS: list[Migration] = [
     Migration(1, "Schéma de la version 1.0.0 (point de départ)", _baseline, changes_data=False),
+    Migration(2, "Rappel des événements", _event_reminder, changes_data=False),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1].version
 

@@ -274,6 +274,12 @@ logique) ; chacun a sa table (`task` / `event`) et ses tables de liaison (`event
   Google Maps. **Waze** : navigation vers l'adresse, ou vers les coordonnées d'un lien qui en contient
   (`…/@48.85,2.35,…`, `?q=48.85,2.35`) ; pas de Waze pour un lien court sans coordonnées.
 - **Couleur** : celle du projet, sinon un bleu par défaut ; une couleur choisie la remplace.
+- **⏰ Rappel** (facultatif, **aucun par défaut**) : à l'heure du début, 5 / 15 / 30 minutes, 1 / 2 heures,
+  1 / 2 jours ou 1 semaine avant (colonne `reminder_minutes`) ; pour un événement sur toute la journée,
+  compté depuis 9 h le premier jour. Les réglages peuvent fixer un rappel par défaut des nouveaux
+  événements. Il concerne le propriétaire et ceux avec qui l'événement est partagé (pas les simples
+  lecteurs d'un événement public) : de son moment jusqu'à la fin de l'événement, il apparaît sur
+  l'**accueil** (⏰ Événements) et le **client bureau** affiche une notification système (une fois).
 - **Visibilité et droits** : privé (par défaut), **partagé** avec des personnes — chacune **modifiable** ou
   en **lecture seule** —, et/ou **public** (visible en lecture par tous les comptes du serveur).
   **Supprimer** : le propriétaire et les partages modifiables (pas la lecture seule ni un public d'un
@@ -286,7 +292,8 @@ logique) ; chacun a sa table (`task` / `event`) et ses tables de liaison (`event
 - API : `/api/v1/agenda` (`/events` est déjà le flux temps réel) — `POST /agenda/query` (période, portée,
   texte, projets, tags), `POST /agenda`, `GET|PATCH|DELETE /agenda/{id}`, `PUT /agenda/{id}/shares`,
   `POST /agenda/{id}/links`, `PATCH|DELETE /agenda-links/{id}`, `POST /agenda/{id}/attachments`,
-  `POST /agenda/{id}/to-task`, `POST /tasks/{id}/to-event`.
+  `POST /agenda/{id}/to-task`, `POST /tasks/{id}/to-event`, `GET /agenda/reminders?now=…` (rappels
+  atteints à l'heure locale du poste).
 
 ### 4.8 📝 Notes
 
@@ -780,8 +787,23 @@ conversion tâche ↔ événement compte comme une modification.
 - **Non lues** mises en valeur (fond, liseré, point bleu) et comptées dans la **bulle** de la colonne de
   gauche ; un clic ouvre l'élément (s'il existe encore et m'est visible) et marque la notification comme
   lue ; « ✔ Tout marquer comme lu ».
-- API : `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read` (`{ids}` ou
-  toutes).
+- **Niveaux** (réglages → 🔔 Notifications), un par type d'élément (✅ tâches, 📅 événements, 📝 notes),
+  chacun comprenant les précédents : 🔕 **Rien** ; 🤝 **Partages seulement** (partage, fin de partage,
+  suppression) ; ✏️ **Mes éléments** (+ modifications de ce qui m'appartient — pour une sous-tâche, la tâche
+  parente compte) ; 📣 **Tout** (+ modifications de ce qu'on partage avec moi ; **par défaut**). Une
+  notification non voulue n'est jamais créée (revenir à « Tout » ne fait pas ressurgir les anciennes). Les
+  conflits de nom ⚠️ sont toujours signalés.
+- **🔕 Ne plus me notifier** pour un élément précis (bouton cloche dans l'éditeur d'une tâche ou d'un
+  événement et dans la barre d'une note, affiché quand d'autres peuvent agir dessus : élément partagé ou
+  d'un autre) : plus aucune notification de cet élément (ni de ses sous-tâches) ; personnel, annulable
+  (Ctrl+Z) ; table `item_mute`, effacée avec l'élément.
+- **Pop-ups du client bureau** : case « 🖥️ Pop-up sur le bureau » par type (cochée par défaut) — chaque
+  nouvelle notification de ce type s'affiche aussi en notification système ; un clic ouvre l'élément et la
+  marque comme lue (voir §10.1).
+- API : `GET /notifications` (`?after=<id>` : seulement les non lues plus récentes),
+  `GET /notifications/unread-count`, `POST /notifications/read` (`{ids}` ou toutes),
+  `GET|PUT /notifications/mute/{type}/{id}` (`{muted}`). Réglages : préférence `notifications` du compte
+  (`/users/me/prefs/notifications`).
 
 ### 8.5 Barre de filtres
 
@@ -802,7 +824,10 @@ Page `/settings` à onglets (onglet initial : `?tab=profile|appearance|reminders
 - 🎨 **Apparence** : thème 🖥️ comme le système / ☀️ clair / 🌙 sombre, appliqué immédiatement et mémorisé
   pour le compte ; **😀 emojis proposés** (notes et projets) : liste personnelle, séparés par des espaces,
   « ↺ Liste par défaut ».
-- 🔔 **Rappels** : décalage par défaut (jours avant l'échéance), notifications bureau oui/non.
+- 🔔 **Notifications** (`?tab=notifications`, ancien nom `reminders` accepté) : pour chaque type
+  d'élément, niveau (§8.4 ter) et case « 🖥️ Pop-up sur le bureau » ; légende des niveaux. **⏰ Rappels** :
+  décalage par défaut des suivis (jours avant l'échéance), rappel par défaut des nouveaux événements (aucun
+  au départ), pop-up sur le bureau pour les rappels oui / non.
 - 📁 **Projets** : créer, modifier (nom, emoji parmi les emojis proposés, couleur, description, 🌍 public / 🔒 privé),
   réordonner (↑ ↓), archiver / désarchiver, supprimer (les tâches restent, sans projet) ; les projets
   publics d'autres utilisateurs sont en lecture seule (sauf pour les admins).
@@ -882,7 +907,13 @@ Toutes les modifications de projets et de tags sont annulables (Ctrl+Z).
   téléchargée dans le cache puis ouverte.
 - **🔔 Rappels** : toutes les 5 minutes, les suivis dont le rappel est atteint sont notifiés (notification
   système, une fois par jour et par tâche, regroupées au-delà de 3) si l'option des réglages est active ; un
-  clic ouvre la tâche dans la fenêtre.
+  clic ouvre la tâche dans la fenêtre. **Événements** : chaque minute, ceux dont le rappel est atteint à
+  l'heure du poste, une fois chacun (de nouveau s'il est déplacé ou si son rappel change ; journal
+  `notified-events.json`).
+- **🔔 Nouvelles notifications** en pop-up (types cochés dans les réglages) : vérifiées chaque minute et dès
+  qu'un autre utilisateur modifie quelque chose (temps réel) ; celles déjà là au démarrage restent dans la
+  page sans pop-up ; regroupées au-delà de 3 ; un clic ouvre l'élément et marque la notification comme
+  lue.
 - **Réglages → 🔌 Connexion** : serveur, compte, appareil, emplacement de la configuration ; ouvrir le site
   dans le navigateur, tester une notification, se déconnecter / changer de serveur.
 - Pas de mode hors ligne ; les modifications faites ailleurs apparaissent au prochain affichage (temps réel :
@@ -1078,7 +1109,8 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 
 - **Numéro de schéma** dans l'en-tête de la base SQLite (`PRAGMA user_version`) : il voyage avec la base
   (sauvegardes, restaurations) et figure dans le `manifest.json` des sauvegardes (`schema_version`).
-  0 = base antérieure à la 1.0.0 ; **1 = schéma de la 1.0.0** (point de départ, aucune modification).
+  0 = base antérieure à la 1.0.0 ; **1 = schéma de la 1.0.0** (point de départ, aucune modification) ;
+  **2** = rappel des événements (colonne `event.reminder_minutes`).
 - **Base neuve** : créée directement au dernier schéma. **Base existante** : tables nouvelles créées, puis
   chaque étape manquante, dans l'ordre, **chacune dans sa transaction avec la mise à jour du numéro**
   (changements de structure compris : connexion dédiée qui émet `BEGIN` elle-même, le pilote `sqlite3` ne
@@ -1181,3 +1213,4 @@ Exemple de script borg quotidien (`curl … | borg import-tar … -`, `prune`, `
 | 2026-11-12 | 1.41.1 | Consignes pour Claude : `CLAUDE.md` réduit aux règles communes (675 → 118 lignes) ; détails par domaine déplacés tels quels dans `docs/claude/` (interface, calendrier-agenda, notes, client-bureau, serveur-deploiement) |
 | 2026-11-12 | 1.41.2 | Correction (téléphone) : toucher un bouton de la barre des notes fermait le clavier sans rien faire (le bouton Quasar prenait le focus au relâcher du doigt) ; le texte garde maintenant le focus, la barre défile toujours au doigt ; vérifié en émulation Android |
 | 2026-11-13 | 1.42 | **🍎 Client bureau sous macOS** (§10.1, §10.2) : `install/macos/install.sh` et `update.sh` ; `~/Applications/Organizer.app` (lanceur AppleScript, icône, protocole `organizer://`), démarrage par un agent launchd ; dans la fenêtre (`client/macshell.py`) : nom et icône dans le Dock, ⌘Q quitte, clic sur le Dock rouvre, raccourcis globaux par l'API Carbon ; rappels par `osascript` ; commande de mise à jour du bandeau selon le système ; 486 tests (installation simulée avec de faux outils macOS) — **pas encore essayé sur un vrai Mac** |
+| 2026-11-13 | 1.43 | **🔔 Réglages des notifications** (§8.4 ter, §8.6) : onglet « 🔔 Notifications » (remplace « Rappels ») ; quatre niveaux par type d'élément (🔕 Rien, 🤝 Partages seulement, ✏️ Mes éléments, 📣 Tout — par défaut), appliqués à la création des notifications (`rules.wants_notification`, préférence `notifications`) ; **🔕 Ne plus me notifier** pour un élément (table `item_mute`, annulable, effacée avec l'élément ; bouton dans l'éditeur et les notes) ; **pop-ups du client bureau** pour les nouvelles notifications (case par type, réveil par le temps réel) ; **⏰ rappel des événements** (§4.7, aucun par défaut, défaut réglable ; accueil + pop-up ; migration n° 2 : `event.reminder_minutes`) ; notifications sur le téléphone (push PWA) notées dans `TODO.md` ; 514 tests |

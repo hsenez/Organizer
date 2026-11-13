@@ -58,6 +58,16 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
   événements. Suppression / fusion de tags et de projets : traiter `TaskTag` **et** `EventTag`, `Task`
   **et** `Event`.
 - Tests : `tests/test_agenda.py` (services), `test_client.py::test_agenda_through_api_matches_local`.
+- **Rappel** : `Event.reminder_minutes` (migration n° 2), `EventCreate / EventPatch / EventOut` ;
+  `rules.event_reminder_at` (journée entière : depuis `ALL_DAY_REMINDER_TIME` = 9 h), `event_end_at`,
+  `event_reminder_due(…, now)` (du moment du rappel à la fin de l'événement). `AgendaService.create` applique
+  le rappel par défaut des réglages **si le champ n'est pas fourni** (`model_fields_set`) ;
+  `reminders_due(now)` : propriétaire et partages seulement (pas les lecteurs d'un public), `now` = heure
+  locale **passée par l'appelant** (le serveur ne prend jamais l'heure lui-même ; route `GET
+  /agenda/reminders?now=`). Choix proposés : `enums.EVENT_REMINDERS` ; `fmt.event_reminder`. Éditeur :
+  `EventEditor._reminder` (marqueur `editor-reminder`, `NO_REMINDER` = -1 ; brouillon : défaut des réglages
+  posé dans `_draft_out`). Accueil : section ⏰ Événements (`home-event-<id>`), heure locale =
+  `datetime.combine(ctx.today(), datetime.now().time())`.
 - Calendrier, grille : **placement explicite** de chaque case (`grid-row` / `grid-column`) — sinon le
   placement automatique de la grille contournerait les bandes. Bandes = éléments de la grille par-dessus
   les cases (`--lane`), pastilles décalées sous les bandes (`--lanes` par case) ; `body.dnd-active` coupe

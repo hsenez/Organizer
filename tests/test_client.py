@@ -7,7 +7,7 @@ import io
 import json
 import os
 import tarfile
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -233,6 +233,32 @@ def test_notifications_through_api_match_local(remote, local, state):
     assert remote.notifications.conflict_target("project", mine.id) == public.id
     assert remote.projects.merge(mine.id, public.id).id == public.id
     assert remote.notifications.conflict_target("project", mine.id) is None
+
+
+def test_mutes_and_event_reminders_through_api_match_local(remote, local, state):
+    bob_user = state.users.create_user("bob", "motdepasse-12", "Bob", by=local.actor)
+    bob = state.services_for(bob_user)
+    task = bob.tasks.create(TaskCreate(title="Commun"))
+    bob.tasks.set_shares(task.id, [local.actor.id])
+    [first] = remote.notifications.list()
+    assert remote.notifications.list(after=first.id) == local.notifications.list(after=first.id) == []
+    assert remote.notifications.muted("task", task.id) is False
+    assert remote.notifications.set_muted("task", task.id, True) is True
+    assert local.notifications.muted("task", task.id) is True
+    bob.tasks.update(task.id, TaskPatch(notes="silence"))
+    assert remote.notifications.list(after=first.id) == []
+    assert remote.undo.undo().label.startswith("Couper les notifications")
+    assert remote.notifications.muted("task", task.id) is False
+
+    start = date(2026, 11, 10)
+    event = remote.agenda.create(
+        EventCreate(title="Dentiste", start_date=start, start_time=time(14), reminder_minutes=30)
+    )
+    assert event.reminder_minutes == 30
+    now = datetime(2026, 11, 10, 13, 40)
+    assert remote.agenda.reminders_due(now) == local.agenda.reminders_due(now) == [local.agenda.get(event.id)]
+    assert remote.agenda.update(event.id, EventPatch(reminder_minutes=None)).reminder_minutes is None
+    assert remote.agenda.reminders_due(now) == []
 
 
 def test_subtasks_links_shares_and_errors(remote, state, local):

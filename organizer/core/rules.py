@@ -17,9 +17,11 @@ from typing import Any, Protocol, TypeVar
 from urllib.parse import parse_qs, quote, urlparse
 
 from organizer.core.enums import (
+    NOTIFY_ITEM_TYPES,
     DueBucket,
     Importance,
     LinkKind,
+    NotifyLevel,
     Ownership,
     Quadrant,
     Status,
@@ -27,6 +29,7 @@ from organizer.core.enums import (
     Urgency,
 )
 from organizer.core.errors import InvalidOperation
+from organizer.core.schemas import NotificationSettings, NotifyTypeSettings
 
 IMPORTANT_THRESHOLD = 3  # importance >= 3 → « important » dans la matrice
 URGENT_THRESHOLD = 3  # urgence >= 3 → « urgent »
@@ -440,6 +443,75 @@ def event_times_from_due(
     start = datetime.combine(due_date or fallback, due_time or DEFAULT_EVENT_START)
     end = start + DEFAULT_EVENT_DURATION
     return start.date(), start.time(), end.date(), end.time()
+
+
+# Un rappel d'événement « toute la journée » se compte à partir de 9 h le premier jour.
+ALL_DAY_REMINDER_TIME = time(9, 0)
+
+
+def event_reminder_at(start_date: date, start_time: time | None, minutes: int | None) -> datetime | None:
+    """Moment (local) du rappel d'un événement ``minutes`` avant son début ; None : pas de rappel."""
+    if minutes is None:
+        return None
+    return datetime.combine(start_date, start_time or ALL_DAY_REMINDER_TIME) - timedelta(minutes=minutes)
+
+
+def event_end_at(end_date: date, end_time: time | None) -> datetime:
+    """Fin (locale) d'un événement ; toute la journée : minuit après le dernier jour."""
+    if end_time is None:
+        return datetime.combine(end_date + timedelta(days=1), time(0))
+    return datetime.combine(end_date, end_time)
+
+
+def event_reminder_due(
+    start_date: date,
+    start_time: time | None,
+    end_date: date,
+    end_time: time | None,
+    minutes: int | None,
+    now: datetime,
+) -> bool:
+    """Le rappel est-il atteint ? De son moment à la fin de l'événement (rien pour un événement passé)."""
+    moment = event_reminder_at(start_date, start_time, minutes)
+    return moment is not None and moment <= now < event_end_at(end_date, end_time)
+
+
+# --- Notifications ----------------------------------------------------------------------------------------
+
+
+def notification_settings(raw: Any) -> NotificationSettings:
+    """Préférence enregistrée → réglages des notifications ; tolérante (absente, abîmée ou partielle :
+    valeurs par défaut pour ce qui manque)."""
+    if not isinstance(raw, dict):
+        return NotificationSettings()
+    values: dict[str, Any] = {}
+    for key in NOTIFY_ITEM_TYPES:
+        part = raw.get(key)
+        if isinstance(part, dict):
+            try:
+                values[key] = NotifyTypeSettings.model_validate(part)
+            except ValueError:
+                pass
+    reminder = raw.get("event_reminder")
+    if reminder is None or (isinstance(reminder, int) and not isinstance(reminder, bool) and reminder >= 0):
+        values["event_reminder"] = reminder
+    try:
+        return NotificationSettings(**values)
+    except ValueError:
+        values.pop("event_reminder", None)
+        return NotificationSettings(**values)
+
+
+def wants_notification(level: NotifyLevel, kind: str, *, is_owner: bool) -> bool:
+    """Une notification ``kind`` (share, unshare, change, delete) passe-t-elle le niveau choisi ?
+    ``is_owner`` : l'élément (ou la tâche parente d'une sous-tâche) appartient au destinataire."""
+    if level == NotifyLevel.NONE:
+        return False
+    if kind != "change":  # partage, fin de partage, suppression : dès « Partages seulement »
+        return True
+    if level == NotifyLevel.SHARES:
+        return False
+    return is_owner or level == NotifyLevel.ALL
 
 
 _COORDS_RE = re.compile(r"(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)")

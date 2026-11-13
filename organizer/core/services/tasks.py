@@ -37,6 +37,7 @@ from organizer.core.schemas import (
 )
 from organizer.core.services.base import quoted
 from organizer.core.services.items import ItemService
+from organizer.core.services.notifications import forget_mutes
 
 _REQUIRED_FIELDS = {"title", "importance", "urgency", "status", "kind", "notes"}
 
@@ -438,6 +439,7 @@ class TaskService(ItemService):
         for model in (TaskTag, TaskShare, TaskLink, TaskRank, BoardCard):
             for row in s.exec(select(model).where(model.task_id == task.id)).all():
                 s.delete(row)
+        forget_mutes(s, "task", task.id)
         s.flush()
         s.delete(task)
 

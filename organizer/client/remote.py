@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
 from urllib.parse import quote
@@ -149,6 +150,11 @@ class RemoteAgenda(_Part):
 
     def list(self, flt: EventFilter | None = None) -> list[EventOut]:
         return self.api.call("POST", "/agenda/query", list[EventOut], json=_full(flt or EventFilter()))
+
+    def reminders_due(self, now: datetime) -> list[EventOut]:
+        return self.api.call(
+            "GET", "/agenda/reminders", list[EventOut], params={"now": now.replace(tzinfo=None).isoformat()}
+        )
 
     def create(self, data: EventCreate) -> EventOut:
         return self.api.call("POST", "/agenda", EventOut, json=_sent(data))
@@ -291,8 +297,17 @@ class RemoteUndo(_Part):
 
 
 class RemoteNotifications(_Part):
-    def list(self) -> list[NotificationOut]:
-        return self.api.call("GET", "/notifications", list[NotificationOut])
+    def list(self, limit: int = 200, after: int | None = None) -> list[NotificationOut]:
+        params = {"after": after} if after is not None else None
+        return self.api.call("GET", "/notifications", list[NotificationOut], params=params)[:limit]
+
+    def muted(self, item_type: str, item_id: int) -> bool:
+        return self.api.call("GET", f"/notifications/mute/{quote(item_type)}/{item_id}", bool)
+
+    def set_muted(self, item_type: str, item_id: int, muted: bool) -> bool:
+        return self.api.call(
+            "PUT", f"/notifications/mute/{quote(item_type)}/{item_id}", bool, json={"muted": muted}
+        )
 
     def unread_count(self) -> int:
         # Demandé à chaque rafraîchissement de page (bulle de la colonne de gauche) : gardé en mémoire,

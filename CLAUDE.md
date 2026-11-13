@@ -114,5 +114,5 @@ Avant de proposer un commit : `ruff format .`, `ruff check .` et `pytest` doiven
 
 ## État actuel
 
-- Feuille de route terminée (étapes 0 à 8) ; **version 1.2.0** (11/11/2026). 486 tests (+1 Windows).
+- Feuille de route terminée (étapes 0 à 8) ; **version 1.2.0** (11/11/2026). 514 tests (+1 Windows).
 - Historique détaillé : `docs/claude/serveur-deploiement.md` et `specifications.md` §12.

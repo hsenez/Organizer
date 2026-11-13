@@ -1,8 +1,8 @@
-"""⚙️ Réglages : profil, apparence, rappels, projets, tags, appareils connectés, utilisateurs et données
-(admin).
+"""⚙️ Réglages : profil, apparence, notifications et rappels, projets, tags, appareils connectés,
+utilisateurs et données (admin).
 
-Onglet initial choisi par ``?tab=`` (profile, appearance, reminders, projects, tags, devices, users, data, et
-sur le client bureau connection).
+Onglet initial choisi par ``?tab=`` (profile, appearance, notifications — ou reminders, son ancien nom —,
+projects, tags, devices, users, data, et sur le client bureau connection).
 """
 
 from __future__ import annotations
@@ -13,7 +13,14 @@ from nicegui import run, ui
 from pydantic import ValidationError
 
 from organizer.core import rules
-from organizer.core.enums import DEFAULT_EMOJIS, EMOJIS_PREF
+from organizer.core.enums import (
+    DEFAULT_EMOJIS,
+    EMOJIS_PREF,
+    EVENT_REMINDERS,
+    NOTIFICATIONS_PREF,
+    NOTIFY_ITEM_TYPES,
+    NotifyLevel,
+)
 from organizer.core.errors import OrganizerError
 from organizer.core.schemas import (
     AdminUserPatch,
@@ -34,7 +41,7 @@ from organizer.ui.layout import THEMES, app_frame, empty_state
 TABS = {
     "profile": "👤 Profil",
     "appearance": "🎨 Apparence",
-    "reminders": "🔔 Rappels",
+    "notifications": "🔔 Notifications",
     "projects": "📁 Projets",
     "tags": "🏷️ Tags",
     "devices": "💻 Appareils",
@@ -42,6 +49,8 @@ TABS = {
     "data": "🗄️ Données",
 }
 ADMIN_TABS = {"users", "data"}
+TAB_ALIASES = {"reminders": "notifications"}  # ancien nom de l'onglet
+NO_REMINDER = -1  # valeur « Pas de rappel » des listes (un select n'accepte pas None comme clé)
 
 
 def page(make_context):
@@ -56,6 +65,7 @@ def page(make_context):
             tabs_shown = {k: v for k, v in TABS.items() if k not in ADMIN_TABS or ctx.user.is_admin}
             tabs_shown |= {key: label for key, (label, _) in ctx.extra_settings.items()}
             initial = request.query_params.get("tab")
+            initial = TAB_ALIASES.get(initial, initial)
             initial = initial if initial in tabs_shown else "profile"
             with (
                 ui.tabs(value=initial)
@@ -68,7 +78,7 @@ def page(make_context):
                 builders = {
                     "profile": _profile,
                     "appearance": _appearance,
-                    "reminders": _reminders,
+                    "notifications": _notifications,
                     "projects": _projects,
                     "tags": _tags,
                     "devices": _devices,
@@ -221,10 +231,56 @@ def _emojis(ctx: UiContext) -> None:
             ).mark("emojis-reset")
 
 
-def _reminders(ctx: UiContext) -> None:
+def _notifications(ctx: UiContext) -> None:
+    """Réglages → 🔔 Notifications : niveau et pop-up par type d'élément, puis rappels."""
+    state = {"settings": rules.notification_settings(ctx.ds.account.get_pref(NOTIFICATIONS_PREF))}
+
+    def save(change) -> None:
+        """``change(réglages)`` modifie une copie, enregistrée aussitôt."""
+        settings = state["settings"].model_copy(deep=True)
+        change(settings)
+
+        def action():
+            ctx.ds.account.set_pref(NOTIFICATIONS_PREF, settings.model_dump(mode="json"))
+            state["settings"] = settings
+
+        _try(action)
+
+    levels = {level.value: level.meta.text for level in NotifyLevel}
     with _card(
-        "🔔 Rappels des suivis", "Pour une tâche de type 👁️ Suivi, le rappel tombe N jours avant l'échéance."
+        "🔔 Notifications",
+        "Ce que les autres font sur vos tâches, événements et notes (page 🔔 Notifications et sa bulle).",
     ):
+        for item_type, label in NOTIFY_ITEM_TYPES.items():
+            current = state["settings"].of(item_type)
+            with ui.row().classes("w-full items-center gap-x-4 gap-y-1"):
+                ui.label(label).classes("w-32 font-medium")
+                ui.select(
+                    levels,
+                    value=current.level.value,
+                    on_change=lambda e, t=item_type: save(
+                        lambda st: setattr(st.of(t), "level", NotifyLevel(e.value))
+                    ),
+                ).props("outlined dense options-dense").classes("w-60").mark(f"notify-level-{item_type}")
+                ui.checkbox(
+                    "🖥️ Pop-up sur le bureau",
+                    value=current.desktop,
+                    on_change=lambda e, t=item_type: save(
+                        lambda st: setattr(st.of(t), "desktop", bool(e.value))
+                    ),
+                ).tooltip(
+                    "Le client bureau affiche aussi chaque nouvelle notification de ce type en notification "
+                    "système (un clic ouvre l'élément)."
+                ).mark(f"notify-desktop-{item_type}")
+        with ui.column().classes("gap-0.5 text-xs text-gray-500"):
+            for level in NotifyLevel:
+                ui.label(f"{level.meta.text} : {level.meta.tooltip}.")
+            ui.label(
+                "Pour un élément précis : bouton 🔕 « Ne plus me notifier » dans sa fenêtre. Les conflits de "
+                "nom entre tags ou projets sont toujours signalés."
+            ).classes("mt-1")
+
+    with _card("⏰ Rappels", "Pour les tâches de type 👁️ Suivi et pour les événements."):
 
         def offset_changed(e) -> None:
             if e.value is None:
@@ -236,7 +292,7 @@ def _reminders(ctx: UiContext) -> None:
             _try(action, "✔ Enregistré (pour les prochains suivis)")
 
         ui.number(
-            "Décalage par défaut (jours avant l'échéance)",
+            "Suivis : rappel par défaut (jours avant l'échéance)",
             value=ctx.user.reminder_offset_days,
             min=0,
             max=365,
@@ -245,7 +301,18 @@ def _reminders(ctx: UiContext) -> None:
             on_change=offset_changed,
         ).props("outlined dense debounce=600").classes("w-full max-w-md")
 
-        def notifications_changed(e) -> None:
+        reminders = {NO_REMINDER: "Pas de rappel", **EVENT_REMINDERS}
+        default = state["settings"].event_reminder
+        ui.select(
+            reminders,
+            label="Événements : rappel par défaut des nouveaux événements",
+            value=default if default in reminders else NO_REMINDER,
+            on_change=lambda e: save(
+                lambda st: setattr(st, "event_reminder", None if e.value == NO_REMINDER else int(e.value))
+            ),
+        ).props("outlined dense options-dense").classes("w-full max-w-md").mark("notify-event-reminder")
+
+        def desktop_changed(e) -> None:
             def action():
                 _set_user(
                     ctx, ctx.ds.account.update_profile(ProfilePatch(desktop_notifications=bool(e.value)))
@@ -254,13 +321,13 @@ def _reminders(ctx: UiContext) -> None:
             _try(action)
 
         ui.switch(
-            "Notifications système sur le client bureau",
+            "🖥️ Pop-up sur le bureau pour les rappels",
             value=ctx.user.desktop_notifications,
-            on_change=notifications_changed,
-        )
+            on_change=desktop_changed,
+        ).mark("notify-desktop-reminders")
         ui.label(
-            "Le client bureau affiche une notification quand la date de rappel d'un suivi est atteinte "
-            "(une fois par jour et par tâche)."
+            "Le client bureau affiche une notification quand le rappel d'un suivi est atteint (une fois "
+            "par jour et par tâche) et quand celui d'un événement tombe (une fois)."
         ).classes("text-xs text-gray-500")
 
 

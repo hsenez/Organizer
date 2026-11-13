@@ -208,6 +208,55 @@ OWNERSHIP_META: dict[Ownership, Meta] = {
 }
 
 
+class NotifyLevel(StrEnum):
+    """Ce qui est notifié pour un type d'élément (réglages → 🔔 Notifications), du plus discret au plus
+    bavard ; chaque niveau comprend les précédents."""
+
+    NONE = "none"  # rien
+    SHARES = "shares"  # partages, fins de partage, suppressions
+    MINE = "mine"  # + modifications de ce qui m'appartient
+    ALL = "all"  # + modifications de ce qu'on partage avec moi
+
+    @property
+    def meta(self) -> Meta:
+        return NOTIFY_LEVEL_META[self]
+
+
+NOTIFY_LEVEL_META: dict[NotifyLevel, Meta] = {
+    NotifyLevel.NONE: Meta("Rien", "🔕", "Aucune notification pour ce type d'élément", "#adb5bd"),
+    NotifyLevel.SHARES: Meta(
+        "Partages seulement",
+        "🤝",
+        "Partage, fin de partage et suppression ; pas les modifications",
+        "#4dabf7",
+    ),
+    NotifyLevel.MINE: Meta(
+        "Mes éléments",
+        "✏️",
+        "En plus : les modifications faites par les autres sur ce qui vous appartient",
+        "#40c057",
+    ),
+    NotifyLevel.ALL: Meta(
+        "Tout", "📣", "En plus : les modifications de ce qu'on partage avec vous", "#fd7e14"
+    ),
+}
+# Préférence du compte qui garde les réglages des notifications (``schemas.NotificationSettings``).
+NOTIFICATIONS_PREF = "notifications"
+# Types d'élément réglables, dans l'ordre d'affichage.
+NOTIFY_ITEM_TYPES = {"task": "✅ Tâches", "event": "📅 Événements", "note": "📝 Notes"}
+# Rappels d'événement proposés : minutes avant le début → libellé (0 : à l'heure du début).
+EVENT_REMINDERS: dict[int, str] = {
+    0: "À l'heure du début",
+    5: "5 minutes avant",
+    15: "15 minutes avant",
+    30: "30 minutes avant",
+    60: "1 heure avant",
+    120: "2 heures avant",
+    1440: "1 jour avant",
+    2880: "2 jours avant",
+    10080: "1 semaine avant",
+}
+
 # Couleur d'un événement sans couleur choisie ni projet.
 EVENT_DEFAULT_COLOR = "#4c6ef5"
 

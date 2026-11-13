@@ -89,6 +89,9 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
 - Ajouter une colonne : modèle + `Migration(n + 1, "…", lambda conn: add_column(conn, "task", "x", "DATE"))`
   à la fin de `MIGRATIONS` ; `NOT NULL` exige un `DEFAULT` en SQL. Ne jamais modifier une étape publiée ;
   une étape doit tolérer une table déjà au dernier schéma.
+- Étapes publiées : 1 = 1.0.0 (point de départ) ; **2** (13/11/2026, branche `cloclo`) =
+  `event.reminder_minutes`. Une base passée au schéma 2 refuse le retour sur `main` tant que `main` n'a pas
+  cette étape (`install_test.sh --main`).
 - Garde-fou : `tests/fixtures/organizer-0.9.0.db`, créée par le **vrai code de la v0.9.0** (`git worktree`
   sur l'étiquette, script hors dépôt) ; `test_old_database_reaches_the_current_schema` compare son schéma
   migré (`table_columns`) à celui d'une base neuve. Ne jamais modifier ce fichier.
@@ -131,7 +134,7 @@ Complément de `CLAUDE.md` (à la racine), à lire avant de modifier ce domaine.
 - ✅ Étape 1 : cœur métier (`organizer/core/`).
 - ✅ Étape 2 : serveur (`organizer/server/`) — sessions, API REST, pièces jointes, pages provisoires
   /login, /setup, service systemd.
-- 486 tests au total (+1 réservé à Windows).
+- 514 tests au total (+1 réservé à Windows).
 - ✅ Étape 3 : interface (`organizer/ui/`) — thème, layout, cartes, éditeur, accueil, liste.
 - ✅ Étape 4 : éditeur markdown façon Obsidian (`components/markdown_editor.*`).
 - ✅ Étape 5 : liste filtrable / triable / regroupable, recherche Ctrl+K, réglages, dupliquer, heure.

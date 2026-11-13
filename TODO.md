@@ -72,6 +72,15 @@ suivant la disposition du clavier (AZERTY) plutôt que la position des touches.
 
 ## 🧩 Autres points en attente (relevés pendant le développement)
 
+- 📱 **Notifications sur le téléphone** (demandé le 13/11/2026, reporté) : aujourd'hui, seul le client
+  bureau affiche des notifications système (rappels, pop-ups). Sur le téléphone, il faudrait des
+  **notifications push** de la PWA : service worker qui les reçoit, abonnement du navigateur (Web Push,
+  clés VAPID, bibliothèque côté serveur à annoncer — `pywebpush`), envoi par le serveur à la création d'une
+  notification et à l'heure des rappels (tâche planifiée), réglage « 📱 sur le téléphone » par type. Exige
+  HTTPS (Cloudflare) ; sur iPhone, seulement pour la PWA installée sur l'écran d'accueil (iOS ≥ 16.4).
+- 🔕 Notifications : convertir une tâche en événement (et inversement) ne garde pas son « ne plus me
+  notifier » (le nouvel élément a un autre identifiant) — à reprendre si gênant.
+
 - ↕️ Réordonner les sous-tâches par glisser-déposer dans l'éditeur (le service le permet déjà).
 - 📊 Boards personnalisés : réordonner les boards eux-mêmes ; choisir les colonnes de départ à la création.
 - 🎯 Matrice : reclasser les cartes dans une case (comme au kanban) ; pleine largeur comme les kanbans ?

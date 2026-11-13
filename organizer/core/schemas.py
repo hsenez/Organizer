@@ -13,7 +13,7 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from organizer.core.enums import DueBucket, Importance, LinkKind, Status, TaskKind, Urgency
+from organizer.core.enums import DueBucket, Importance, LinkKind, NotifyLevel, Status, TaskKind, Urgency
 
 
 class _Schema(BaseModel):
@@ -209,6 +209,8 @@ class TaskSort(_Schema):
 
 # --- Événements (agenda) ------------------------------------------------------------------------------
 
+MAX_REMINDER_MINUTES = 60 * 24 * 30  # rappel au plus un mois avant
+
 
 class EventTimes(_Schema):
     """Début et fin d'un événement. Sans ``start_time`` : toute la journée, de ``start_date`` à ``end_date``
@@ -223,6 +225,7 @@ class EventTimes(_Schema):
 class EventCreate(EventTimes):
     title: str = Field(min_length=1, max_length=300)
     location: str = ""
+    reminder_minutes: int | None = Field(default=None, ge=0, le=MAX_REMINDER_MINUTES)  # None : pas de rappel
     color: str | None = None  # None : couleur du projet (ou couleur par défaut)
     is_public: bool = False
     notes: str = ""
@@ -239,6 +242,7 @@ class EventPatch(_Schema):
     end_date: date | None = None
     end_time: time | None = None
     location: str | None = None
+    reminder_minutes: int | None = Field(default=None, ge=0, le=MAX_REMINDER_MINUTES)  # None : sans rappel
     color: str | None = None
     is_public: bool | None = None
     notes: str | None = None
@@ -260,6 +264,7 @@ class EventOut(ItemOut):
     end_time: time | None
     all_day: bool
     location: str = ""
+    reminder_minutes: int | None = None  # rappel N minutes avant le début (None : pas de rappel)
     color: str | None = None  # couleur choisie (None : celle du projet)
     display_color: str  # couleur affichée : choisie, sinon projet, sinon couleur par défaut
     is_public: bool = False
@@ -341,6 +346,27 @@ class NotificationOut(_Schema):
     updated_at: datetime  # dernière action regroupée
     read: bool
     available: bool  # l'élément existe et est visible : on peut l'ouvrir
+
+
+class NotifyTypeSettings(_Schema):
+    """Réglage des notifications d'un type d'élément (tâches, événements ou notes)."""
+
+    level: NotifyLevel = NotifyLevel.ALL
+    desktop: bool = True  # aussi en notification système sur le client bureau
+
+
+class NotificationSettings(_Schema):
+    """Réglages → 🔔 Notifications (préférence ``NOTIFICATIONS_PREF`` du compte)."""
+
+    task: NotifyTypeSettings = Field(default_factory=NotifyTypeSettings)
+    event: NotifyTypeSettings = Field(default_factory=NotifyTypeSettings)
+    note: NotifyTypeSettings = Field(default_factory=NotifyTypeSettings)
+    event_reminder: int | None = Field(default=None, ge=0, le=MAX_REMINDER_MINUTES)  # nouveaux événements
+
+    def of(self, item_type: str) -> NotifyTypeSettings:
+        """Réglage d'un type d'élément (celui des tâches pour un type inconnu)."""
+        value = getattr(self, item_type, None)
+        return value if isinstance(value, NotifyTypeSettings) else self.task
 
 
 # --- Boards personnalisés ---------------------------------------------------------------------------------
